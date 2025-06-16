@@ -1,0 +1,73 @@
+package repository
+
+import (
+	"DarkCS/internal/config"
+	"DarkCS/internal/lib/sl"
+	"context"
+	"errors"
+	"fmt"
+	_ "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"log/slog"
+)
+
+const (
+	usersCollection      = "users"
+	assistantsCollection = "assistants"
+	codesCollection      = "codes"
+	dialogsCollection    = "dialogs"
+)
+
+type MongoDB struct {
+	ctx           context.Context
+	clientOptions *options.ClientOptions
+	database      string
+	log           *slog.Logger
+}
+
+func NewMongoClient(conf *config.Config, logger *slog.Logger) (*MongoDB, error) {
+	if !conf.Mongo.Enabled {
+		return nil, nil
+	}
+	//connectionUri := fmt.Sprintf("mongodb://%s:%s", conf.Mongo.Host, conf.Mongo.Port)
+	//clientOptions := options.Client().ApplyURI(connectionUri)
+	//if conf.Mongo.User != "" {
+	//	clientOptions.SetAuth(options.Credential{
+	//		Username:   conf.Mongo.User,
+	//		Password:   conf.Mongo.Password,
+	//		AuthSource: conf.Mongo.Database,
+	//	})
+	//}
+	client := &MongoDB{
+		ctx: context.Background(),
+		//clientOptions: clientOptions,
+		//database:      conf.Mongo.Database,
+		log: logger.With(sl.Module("mongodb")),
+	}
+	return client, nil
+}
+
+func (m *MongoDB) connect() (*mongo.Client, error) {
+	connection, err := mongo.Connect(m.ctx, m.clientOptions)
+	if err != nil {
+		return nil, fmt.Errorf("mongodb connect error: %w", err)
+	}
+	return connection, nil
+}
+
+func (m *MongoDB) disconnect(connection *mongo.Client) {
+	_ = connection.Disconnect(m.ctx)
+}
+
+func (m *MongoDB) findError(err error) error {
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil
+	}
+	return fmt.Errorf("mongodb find error: %w", err)
+}
+
+func (m *MongoDB) CheckApiKey(key string) (string, error) {
+
+	return "testUser", nil
+}

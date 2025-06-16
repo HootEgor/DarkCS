@@ -1,0 +1,85 @@
+#name: Deploy to Digital Ocean Droplet
+#
+#on:
+#  push:
+#    branches:
+#      - master
+#
+#jobs:
+#  build:
+#    name: Build and Deploy
+#    runs-on: ubuntu-22.04
+#
+#    steps:
+#      - name: Checkout repository
+#        uses: actions/checkout@v4
+#
+#      - name: Prepare configuration file
+#        run: |
+#          sed -i 's|${LISTEN_PORT}|'"$LISTEN_PORT"'|g' ocapi-config.yml
+#          sed -i 's|${API_KEY}|'"$API_KEY"'|g' ocapi-config.yml
+#          sed -i 's|${TELEGRAM_API_KEY}|'"$TELEGRAM_API_KEY"'|g' darkcs-conf.yml
+#          sed -i 's|${OPENAI_API_KEY}|'"$OPENAI_API_KEY"'|g' darkcs-conf.yml
+#          sed -i 's|${ASSISTANT_ID}|'"$ASSISTANT_ID"'|g' darkcs-conf.yml
+#          sed -i 's|${MONGO_HOST}|'"$MONGO_HOST"'|g' darkcs-conf.yml
+#          sed -i 's|${MONGO_PORT}|'"$MONGO_PORT"'|g' darkcs-conf.yml
+#          sed -i 's|${MONGO_USER}|'"$MONGO_USER"'|g' darkcs-conf.yml
+#          sed -i 's|${MONGO_PASSWORD}|'"$MONGO_PASSWORD"'|g' darkcs-conf.yml
+#          sed -i 's|${MONGO_DATABASE}|'"$MONGO_DATABASE"'|g' darkcs-conf.yml
+#          sed -i 's|${REPO_LOGIN}|'"$REPO_LOGIN"'|g' darkcs-conf.yml
+#          sed -i 's|${REPO_PASSWORD}|'"$REPO_PASSWORD"'|g' darkcs-conf.yml
+#          sed -i 's|${REPO_BASE_URL}|'"$REPO_BASE_URL"'|g' darkcs-conf.yml
+#        env:
+#          LISTEN_PORT: ${{ vars.LISTEN_PORT }}
+#          API_KEY: ${{ secrets.API_KEY }}LISTEN_PORT: ${{ vars.LISTEN_PORT }}
+#          LISTEN_PORT: ${{ vars.LISTEN_PORT }}
+#          API_KEY: ${{ secrets.API_KEY }}API_KEY: ${{ secrets.API_KEY }}
+#          TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
+#          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#          ASSISTANT_ID: ${{ secrets.ASSISTANT_ID }}
+#          MONGO_HOST: ${{ secrets.MONGO_HOST }}
+#          MONGO_PORT: ${{ secrets.MONGO_PORT }}
+#          MONGO_USER: ${{ secrets.MONGO_USER }}
+#          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+#          MONGO_DATABASE: ${{ secrets.MONGO_DATABASE }}
+#          REPO_LOGIN: ${{ secrets.REPO_LOGIN }}
+#          REPO_PASSWORD: ${{ secrets.REPO_PASSWORD }}
+#          REPO_BASE_URL: ${{ secrets.REPO_BASE_URL }}
+#
+#      - name: Copy Configuration to Server
+#        uses: appleboy/scp-action@master
+#        with:
+#          host: ${{ secrets.SERVER_IP }}
+#          username: ${{ secrets.SERVER_USER }}
+#          key: ${{ secrets.SSH_PRIVATE_KEY }}
+#          source: "darkcs-conf.yml"
+#          target: "/etc/conf/"
+#
+#      - name: Set up Go
+#        uses: actions/setup-go@v5
+#        with:
+#          go-version: '1.22.3'
+#
+#      - name: Build Go application
+#        run: |
+#          go build -v -o darkbot
+#
+#      - name: Deploy to server
+#        uses: appleboy/scp-action@master
+#        with:
+#          host: ${{ secrets.SERVER_IP }}
+#          username: ${{ secrets.SERVER_USER }}
+#          key: ${{ secrets.SSH_PRIVATE_KEY }}
+#          port: 22
+#          source: "darkbot"
+#          target: "/usr/local/bin/"
+#
+#      - name: Restart Application
+#        uses: appleboy/ssh-action@master
+#        with:
+#          host: ${{ secrets.SERVER_IP }}
+#          username: ${{ secrets.SERVER_USER }}
+#          key: ${{ secrets.SSH_PRIVATE_KEY }}
+#          port: 22
+#          script: |
+#            systemctl restart darkbot.service

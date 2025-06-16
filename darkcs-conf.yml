@@ -1,0 +1,24 @@
+---
+
+env: dev
+telegram_api_key: ${TELEGRAM_API_KEY}
+openai_api_key: ${OPENAI_API_KEY}
+assistant_id: ${ASSISTANT_ID}
+dev_prefix: Dev
+img_path: /var/lib/darkbot
+mongo:
+  enabled: true
+  host: ${MONGO_HOST}
+  port: ${MONGO_PORT}
+  user: ${MONGO_USER}
+  password: ${MONGO_PASSWORD}
+  database: ${MONGO_DATABASE}
+  expired_days: 7
+prod-service:
+  login: ${REPO_LOGIN}
+  password: ${REPO_PASSWORD}
+  base_url: ${REPO_BASE_URL}
+listen:
+  bind_ip: 0.0.0.0
+  port: ${LISTEN_PORT}
+  key: ${API_KEY}
