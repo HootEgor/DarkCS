@@ -10,12 +10,15 @@ import (
 type Config struct {
 	Env            string `yaml:"env" env-default:"local"`
 	TelegramApiKey string `yaml:"telegram_api_key" env-default:""`
-	OpenAIApiKey   string `yaml:"openai_api_key" env-default:""`
-	AssistantID    string `yaml:"assistant_id" env-default:""`
-	Username       string `yaml:"username" env-default:""`
-	DevPrefix      string `yaml:"dev_prefix" env-default:""`
-	ImgPath        string `yaml:"img_path" env-default:""`
-	Mongo          struct {
+	OpenAI         struct {
+		ApiKey     string `yaml:"api_key" env-default:""`
+		OverseerID string `yaml:"overseer_id" env-default:""`
+		LoggerID   string `yaml:"logger_id" env-default:""`
+		DevPrefix  string `yaml:"dev_prefix" env-default:""`
+	} `yaml:"openai"`
+	Username string `yaml:"username" env-default:""`
+	ImgPath  string `yaml:"img_path" env-default:""`
+	Mongo    struct {
 		Enabled     bool   `yaml:"enabled" env-default:"false"`
 		Host        string `yaml:"host" env-default:"127.0.0.1"`
 		Port        string `yaml:"port" env-default:"27017"`

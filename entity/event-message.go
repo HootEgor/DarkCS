@@ -7,7 +7,7 @@ import (
 )
 
 type EventMessage struct {
-	Sender   *User       `json:"sender,omitempty" bson:"sender"`
+	Sender   *UserAuth   `json:"sender,omitempty" bson:"sender"`
 	Type     string      `json:"type" bson:"type" validate:"required,min=1"`
 	Subject  string      `json:"subject" bson:"subject" validate:"required,min=1"`
 	Time     time.Time   `json:"time,omitempty" bson:"time"`

@@ -15,7 +15,7 @@ import (
 )
 
 type Authenticate interface {
-	AuthenticateByToken(token string) (*entity.User, error)
+	AuthenticateByToken(token string) (*entity.UserAuth, error)
 }
 
 func New(log *slog.Logger, auth Authenticate) func(next http.Handler) http.Handler {

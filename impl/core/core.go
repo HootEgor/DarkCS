@@ -20,13 +20,24 @@ type MessageService interface {
 	SendEventMessage(msg *entity.EventMessage) error
 }
 
+type Assistant interface {
+	ComposeResponse(userId, systemMsg, userMsg string) (string, error)
+}
+
+type AuthService interface {
+	RegisterUser(chatId int64) error
+	GetUser(chatId int64) (*entity.User, error)
+}
+
 type Core struct {
-	repo    Repository
-	ms      MessageService
-	ps      ProductService
-	authKey string
-	keys    map[string]string
-	log     *slog.Logger
+	repo        Repository
+	ms          MessageService
+	ps          ProductService
+	ass         Assistant
+	authService AuthService
+	authKey     string
+	keys        map[string]string
+	log         *slog.Logger
 }
 
 func New(log *slog.Logger) *Core {
@@ -50,6 +61,14 @@ func (c *Core) SetMessageService(ms MessageService) {
 
 func (c *Core) SetProductService(ps ProductService) {
 	c.ps = ps
+}
+
+func (c *Core) SetAuthService(auth AuthService) {
+	c.auth = auth
+}
+
+func (c *Core) SetAssistant(ass Assistant) {
+	c.ass = ass
 }
 
 func (c *Core) SendMail(message *entity.MailMessage) (interface{}, error) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"DarkCS/ai/gpt"
 	"DarkCS/impl/core"
 	"DarkCS/internal/config"
 	"DarkCS/internal/database"
@@ -50,6 +51,15 @@ func main() {
 			slog.String("login", conf.ProdService.Login),
 			slog.String("url", conf.ProdService.BaseURL),
 		).Info("product service initialized")
+	}
+
+	overseer := gpt.NewOverseer(conf, lg)
+	if overseer != nil {
+		handler.SetAssistant(overseer)
+		lg.With(
+			sl.Secret("openai_key", conf.OpenAI.ApiKey),
+			sl.Secret("overseer_id", conf.OpenAI.OverseerID),
+		).Info("overseer initialized")
 	}
 
 	//if conf.Telegram.Enabled {

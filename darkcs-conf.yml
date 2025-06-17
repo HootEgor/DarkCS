@@ -2,9 +2,11 @@
 
 env: dev
 telegram_api_key: ${TELEGRAM_API_KEY}
-openai_api_key: ${OPENAI_API_KEY}
-assistant_id: ${ASSISTANT_ID}
-dev_prefix: Dev
+openai:
+  api_key: ${OPENAI_API_KEY}
+  overseer_id: ${OVERSEER_ID}
+  logger_id: ${LOGGER_ID}
+  dev_prefix: Dev
 img_path: /var/lib/darkbot
 mongo:
   enabled: true

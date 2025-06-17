@@ -4,6 +4,7 @@ import (
 	"DarkCS/internal/config"
 	"DarkCS/internal/http-server/handlers/errors"
 	"DarkCS/internal/http-server/handlers/product"
+	"DarkCS/internal/http-server/handlers/response"
 	"DarkCS/internal/http-server/handlers/service"
 	"DarkCS/internal/http-server/middleware/authenticate"
 	"DarkCS/internal/http-server/middleware/timeout"
@@ -27,6 +28,7 @@ type Handler interface {
 	authenticate.Authenticate
 	service.Service
 	product.Core
+	response.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -48,7 +50,10 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 
 	router.Route("/api/v1", func(v1 chi.Router) {
 		v1.Route("/products", func(r chi.Router) {
-			r.Get("/info", product.ProductsInfo(log, handler))
+			r.Post("/info", product.ProductsInfo(log, handler))
+		})
+		v1.Route("/response", func(r chi.Router) {
+			r.Post("/", response.ComposeResponse(log, handler))
 		})
 	})
 
