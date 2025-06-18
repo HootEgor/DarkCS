@@ -9,8 +9,7 @@ import (
 
 type Repository interface {
 	UpsertUser(user entity.User) error
-	GetUser(userId int64) (*entity.User, error)
-	SetAssistantForUser(id int64, assistantId string) error
+	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 }
 
 type Service struct {
@@ -35,17 +34,17 @@ func (s *Service) SetRepository(repository Repository) {
 
 func (s *Service) updateUser(user entity.User) {
 	for i, u := range s.users {
-		if u.UID == user.UID {
+		if user.SameUser(&u) {
 			s.users[i] = user
 		}
 	}
 }
 
-func (s *Service) RegisterUser(chatId int64) error {
-	user, _ := s.GetUser(chatId)
+func (s *Service) RegisterUser(email, phone string, telegramId int64) error {
+	user, _ := s.GetUser(email, phone, telegramId)
 
 	if user == nil {
-		user = entity.NewUser(chatId)
+		user = entity.NewUser(email, phone, telegramId)
 		err := s.repository.UpsertUser(*user)
 		if err != nil {
 			return err
@@ -56,8 +55,8 @@ func (s *Service) RegisterUser(chatId int64) error {
 	return nil
 }
 
-func (s *Service) UpdateUser(chatId int64) error {
-	user, err := s.repository.GetUser(chatId)
+func (s *Service) UpdateUser(email, phone string, telegramId int64) error {
+	user, err := s.repository.GetUser(email, phone, telegramId)
 	if err != nil {
 		return err
 	}
@@ -67,13 +66,13 @@ func (s *Service) UpdateUser(chatId int64) error {
 	return nil
 }
 
-func (s *Service) GetUser(chatId int64) (*entity.User, error) {
+func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
 	for _, user := range s.users {
-		if user.TelegramId == chatId {
+		if user.TelegramId == telegramId {
 			return &user, nil
 		}
 	}
-	user, err := s.repository.GetUser(chatId)
+	user, err := s.repository.GetUser(email, phone, telegramId)
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +80,11 @@ func (s *Service) GetUser(chatId int64) (*entity.User, error) {
 		s.users = append(s.users, *user)
 		return user, nil
 	}
-	return nil, fmt.Errorf("user %d not found", chatId)
+	return nil, fmt.Errorf("user not found: email=%s, phone=%s, telegramId=%d", email, phone, telegramId)
 }
 
-func (s *Service) IsUserGuest(chatId int64) bool {
-	user, err := s.GetUser(chatId)
+func (s *Service) IsUserGuest(email, phone string, telegramId int64) bool {
+	user, err := s.GetUser(email, phone, telegramId)
 	if err != nil {
 		s.log.Error("getting user", sl.Err(err))
 		return true
@@ -94,8 +93,8 @@ func (s *Service) IsUserGuest(chatId int64) bool {
 	return user.IsGuest()
 }
 
-func (s *Service) IsUserAdmin(chatId int64) bool {
-	user, err := s.GetUser(chatId)
+func (s *Service) IsUserAdmin(email, phone string, telegramId int64) bool {
+	user, err := s.GetUser(email, phone, telegramId)
 	if err != nil {
 		s.log.Error("getting user", sl.Err(err))
 		return false

@@ -9,39 +9,28 @@ import (
 	"log/slog"
 )
 
-func (o *Overseer) askLogger(userId, msg string) (string, error) {
-	var thread openai.Thread
-	var err error
+type ConsultantResponse struct {
+	Response string   `json:"response"`
+	Codes    []string `json:"codes"`
+}
 
-	threadId := o.threads[userId]
-	if threadId != "" {
-		thread, err = o.client.RetrieveThread(context.Background(), threadId)
-		if err != nil {
-			o.log.With(slog.String("thread", threadId)).Error("retrieving thread", sl.Err(err))
-		}
-	} else {
-		err = fmt.Errorf("threadId is empty")
-	}
-
+func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
+	defer o.locker.Unlock(userId)
+	thread, err := o.getOrCreateThread(userId)
 	if err != nil {
-		thread, err = o.client.CreateThread(context.Background(), openai.ThreadRequest{})
-		if err != nil {
-			return "", fmt.Errorf("error creating thread: %v", err)
-		}
-		o.threads[userId] = thread.ID
-		o.log.With(slog.String("thread", thread.ID)).Info("created new thread")
+		return "", err
 	}
 
 	// Send the user message to the assistant
 	_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
 		Role:    string(openai.ThreadMessageRoleUser),
-		Content: msg,
+		Content: userMsg,
 	})
 	if err != nil {
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(thread.ID, o.loggerID)
+	completed := o.handleRun(thread.ID, o.consultantID)
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
 	}
@@ -58,17 +47,21 @@ func (o *Overseer) askLogger(userId, msg string) (string, error) {
 
 	responseText := msgs.Messages[0].Content[0].Text.Value
 
-	var response OverseerResponse
+	var response ConsultantResponse
 	err = json.Unmarshal([]byte(responseText), &response)
 	if err != nil {
 		o.log.With(
 			slog.String("user", userId),
-			slog.Int("text_length", len(responseText)),
 			slog.String("response", responseText),
-		).Debug("chat response")
-		o.log.Error("error unmarshalling response", sl.Err(err))
+			sl.Err(err),
+		).Error("unmarshalling response")
 		return responseText, nil
 	}
 
-	return response.Assistant, nil
+	o.log.With(
+		slog.String("user", userId),
+		slog.Any("response", response),
+	).Debug("chat response")
+
+	return response.Response, nil
 }

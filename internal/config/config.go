@@ -11,10 +11,10 @@ type Config struct {
 	Env            string `yaml:"env" env-default:"local"`
 	TelegramApiKey string `yaml:"telegram_api_key" env-default:""`
 	OpenAI         struct {
-		ApiKey     string `yaml:"api_key" env-default:""`
-		OverseerID string `yaml:"overseer_id" env-default:""`
-		LoggerID   string `yaml:"logger_id" env-default:""`
-		DevPrefix  string `yaml:"dev_prefix" env-default:""`
+		ApiKey       string `yaml:"api_key" env-default:""`
+		OverseerID   string `yaml:"overseer_id" env-default:""`
+		ConsultantID string `yaml:"consultant_id" env-default:""`
+		DevPrefix    string `yaml:"dev_prefix" env-default:""`
 	} `yaml:"openai"`
 	Username string `yaml:"username" env-default:""`
 	ImgPath  string `yaml:"img_path" env-default:""`

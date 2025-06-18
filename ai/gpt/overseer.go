@@ -10,6 +10,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 	_ "image/jpeg"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -19,7 +20,6 @@ type ProductService interface {
 }
 
 const (
-	Logger     = "Logger"
 	Consultant = "Consultant"
 	Calculator = "Calculator"
 )
@@ -27,12 +27,18 @@ const (
 type Overseer struct {
 	client         *openai.Client
 	overseerID     string
-	loggerID       string
+	consultantID   string
 	apiKey         string
 	threads        map[string]string
 	productService ProductService
 	imgPath        string
+	locker         *LockThreads
 	log            *slog.Logger
+}
+
+type LockThreads struct {
+	mutex   sync.Mutex
+	threads map[string]*sync.Mutex
 }
 
 type OverseerResponse struct {
@@ -42,13 +48,42 @@ type OverseerResponse struct {
 func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 	client := openai.NewClient(conf.OpenAI.ApiKey)
 	return &Overseer{
-		client:     client,
-		overseerID: conf.OpenAI.OverseerID,
-		apiKey:     conf.OpenAI.ApiKey,
-		threads:    make(map[string]string),
-		imgPath:    conf.ImgPath,
-		log:        logger.With(sl.Module("overseer")),
+		client:       client,
+		overseerID:   conf.OpenAI.OverseerID,
+		consultantID: conf.OpenAI.ConsultantID,
+		apiKey:       conf.OpenAI.ApiKey,
+		threads:      make(map[string]string),
+		imgPath:      conf.ImgPath,
+		locker:       &LockThreads{threads: make(map[string]*sync.Mutex)},
+		log:          logger.With(sl.Module("overseer")),
 	}
+}
+
+func (l *LockThreads) Lock(userId string) {
+	l.mutex.Lock()
+
+	mutex, exists := l.threads[userId]
+	if !exists {
+		mutex = &sync.Mutex{}
+		l.threads[userId] = mutex
+	}
+
+	l.mutex.Unlock()
+
+	mutex.Lock()
+}
+
+func (l *LockThreads) Unlock(userId string) {
+	l.mutex.Lock()
+
+	mutex, exists := l.threads[userId]
+	if !exists {
+		l.mutex.Unlock()
+		return
+	}
+	l.mutex.Unlock()
+
+	mutex.Unlock()
 }
 
 func (o *Overseer) SetProductService(productService ProductService) {
@@ -57,38 +92,32 @@ func (o *Overseer) SetProductService(productService ProductService) {
 
 func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (string, error) {
 
-	if userId == "" {
-		return o.askLogger(userId, userMsg)
+	assistantName, err := o.determineAssistant(userId, systemMsg, userMsg)
+	if err != nil {
+		o.log.With(
+			slog.String("user", userId),
+			slog.String("system_msg", systemMsg),
+			slog.String("user_msg", userMsg),
+		).Error("determining assistant", sl.Err(err))
+		return "", err
 	}
 
-	return o.determineAssistant(userId, systemMsg, userMsg)
+	switch assistantName {
+	case Consultant:
+		return o.askConsultant(userId, userMsg)
+	case Calculator:
+		break
+	}
+
+	return o.askConsultant(userId, userMsg)
 }
 
 func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string, error) {
-	var thread openai.Thread
-	var err error
-
-	threadId := o.threads[userId]
-	if threadId != "" {
-		thread, err = o.client.RetrieveThread(context.Background(), threadId)
-		if err != nil {
-			o.log.With(slog.String("thread", threadId)).Error("retrieving thread", sl.Err(err))
-		}
-	} else {
-		err = fmt.Errorf("threadId is empty")
-	}
-
+	defer o.locker.Unlock(userId)
+	thread, err := o.getOrCreateThread(userId)
 	if err != nil {
-		thread, err = o.client.CreateThread(context.Background(), openai.ThreadRequest{})
-		if err != nil {
-			return "", fmt.Errorf("error creating thread: %v", err)
-		}
-		o.threads[userId] = thread.ID
-		o.log.With(slog.String("thread", thread.ID)).Info("created new thread")
+		return "", err
 	}
-
-	// Compose the prompt based on the user question
-	//prompt := c.composePrompt(userId, question)
 
 	question := fmt.Sprintf("SystemMsg: %s, UserMsg: %s", systemMsg, userMsg)
 	// Send the user message to the assistant
@@ -187,6 +216,28 @@ func (o *Overseer) handleRun(threadID string, assistantID string) bool {
 	}
 
 	return completed
+}
+
+func (o *Overseer) getOrCreateThread(userId string) (openai.Thread, error) {
+	o.locker.Lock(userId)
+
+	if threadId, ok := o.threads[userId]; ok && threadId != "" {
+		thread, err := o.client.RetrieveThread(context.Background(), threadId)
+		if err == nil {
+			return thread, nil
+		}
+		o.log.With(slog.String("thread", threadId)).Error("retrieving thread", sl.Err(err))
+	}
+
+	thread, err := o.client.CreateThread(context.Background(), openai.ThreadRequest{})
+	if err != nil {
+		return openai.Thread{}, err
+	}
+
+	o.threads[userId] = thread.ID
+	o.log.With(slog.String("thread", thread.ID)).Info("created new thread")
+
+	return thread, nil
 }
 
 //

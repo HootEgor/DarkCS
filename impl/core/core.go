@@ -25,8 +25,7 @@ type Assistant interface {
 }
 
 type AuthService interface {
-	RegisterUser(chatId int64) error
-	GetUser(chatId int64) (*entity.User, error)
+	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 }
 
 type Core struct {
@@ -64,7 +63,7 @@ func (c *Core) SetProductService(ps ProductService) {
 }
 
 func (c *Core) SetAuthService(auth AuthService) {
-	c.auth = auth
+	c.authService = auth
 }
 
 func (c *Core) SetAssistant(ass Assistant) {
