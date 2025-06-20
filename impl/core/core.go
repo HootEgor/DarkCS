@@ -13,7 +13,7 @@ type Repository interface {
 
 type ProductService interface {
 	ProductSearch(article string) (interface{}, error)
-	GetProductInfo(articles []string) ([]entity.Product, error)
+	GetProductInfo(articles []string) ([]entity.ProductInfo, error)
 }
 
 type MessageService interface {

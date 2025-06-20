@@ -55,6 +55,7 @@ func main() {
 
 	overseer := gpt.NewOverseer(conf, lg)
 	if overseer != nil {
+		overseer.SetProductService(ps)
 		handler.SetAssistant(overseer)
 		lg.With(
 			sl.Secret("openai_key", conf.OpenAI.ApiKey),

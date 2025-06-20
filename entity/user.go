@@ -18,6 +18,12 @@ const (
 	AdminRole   = "admin"
 )
 
+const (
+	OverseerAss   = "Overseer"
+	ConsultantAss = "Consultant"
+	CalculatorAss = "Calculator"
+)
+
 func NewUser(email, phone string, telegramId int64) *User {
 	return &User{
 		Email:      email,
@@ -54,4 +60,20 @@ func (u *User) SameUser(other *User) bool {
 	}
 
 	return false
+}
+
+func (u *User) GetAssistants() []string {
+
+	switch u.Role {
+	case GuestRole:
+		return []string{OverseerAss, ConsultantAss}
+	case UserRole:
+		return []string{OverseerAss, ConsultantAss}
+	case ManagerRole:
+		return []string{OverseerAss, ConsultantAss}
+	case AdminRole:
+		return []string{OverseerAss, ConsultantAss}
+	}
+
+	return []string{OverseerAss, ConsultantAss}
 }

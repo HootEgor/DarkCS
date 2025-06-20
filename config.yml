@@ -5,6 +5,7 @@ openai:
   api_key: your-openai-api-key
   overseer_id: your-overseer-id
   consultant_id: your-logger-id
+  calculator_id: your-calculator-id
   dev_prefix: Dev
 img_path: your-path-to-imgs
 mongo:

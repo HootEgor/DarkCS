@@ -10,12 +10,12 @@ import (
 	"log/slog"
 )
 
-type ConsultantResponse struct {
+type CalculatorResponse struct {
 	Response string   `json:"response"`
 	Codes    []string `json:"codes"`
 }
 
-func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
+func (o *Overseer) askCalculator(userId, userMsg string) (string, error) {
 	defer o.locker.Unlock(userId)
 	thread, err := o.getOrCreateThread(userId)
 	if err != nil {
@@ -31,7 +31,7 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(thread.ID, o.assistants[entity.ConsultantAss])
+	completed := o.handleRun(thread.ID, o.assistants[entity.CalculatorAss])
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
 	}
@@ -48,7 +48,7 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
 
 	responseText := msgs.Messages[0].Content[0].Text.Value
 
-	var response ConsultantResponse
+	var response CalculatorResponse
 	err = json.Unmarshal([]byte(responseText), &response)
 	if err != nil {
 		o.log.With(

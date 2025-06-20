@@ -16,10 +16,8 @@ import (
 )
 
 const (
-	usersCollection      = "users"
-	assistantsCollection = "assistants"
-	codesCollection      = "codes"
-	dialogsCollection    = "dialogs"
+	usersCollection   = "users"
+	dialogsCollection = "dialogs"
 )
 
 type MongoDB struct {

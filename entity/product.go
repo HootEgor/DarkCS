@@ -1,13 +1,13 @@
 package entity
 
-type Product struct {
+type ProductInfo struct {
 	Code  string `json:"code"`
 	Name  string `json:"name"`
 	Price string `json:"price"`
 	Url   string `json:"url"`
 }
 
-type ProductInfo struct {
+type Product struct {
 	Product     string `json:"product"`
 	Group       string `json:"group"`
 	Code        string `json:"code"`

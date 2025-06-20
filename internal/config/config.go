@@ -14,6 +14,7 @@ type Config struct {
 		ApiKey       string `yaml:"api_key" env-default:""`
 		OverseerID   string `yaml:"overseer_id" env-default:""`
 		ConsultantID string `yaml:"consultant_id" env-default:""`
+		CalculatorID string `yaml:"calculator_id" env-default:""`
 		DevPrefix    string `yaml:"dev_prefix" env-default:""`
 	} `yaml:"openai"`
 	Username string `yaml:"username" env-default:""`

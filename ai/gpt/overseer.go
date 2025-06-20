@@ -15,19 +15,13 @@ import (
 )
 
 type ProductService interface {
-	GetProductInfo(articles []string) ([]entity.Product, error)
-	GetAvailableProducts() ([]entity.ProductInfo, error)
+	GetProductInfo(articles []string) ([]entity.ProductInfo, error)
+	GetAvailableProducts() ([]entity.Product, error)
 }
-
-const (
-	Consultant = "Consultant"
-	Calculator = "Calculator"
-)
 
 type Overseer struct {
 	client         *openai.Client
-	overseerID     string
-	consultantID   string
+	assistants     map[string]string
 	apiKey         string
 	threads        map[string]string
 	productService ProductService
@@ -47,15 +41,18 @@ type OverseerResponse struct {
 
 func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 	client := openai.NewClient(conf.OpenAI.ApiKey)
+	assistants := make(map[string]string)
+	assistants[entity.OverseerAss] = conf.OpenAI.OverseerID
+	assistants[entity.ConsultantAss] = conf.OpenAI.ConsultantID
+	assistants[entity.CalculatorAss] = conf.OpenAI.CalculatorID
 	return &Overseer{
-		client:       client,
-		overseerID:   conf.OpenAI.OverseerID,
-		consultantID: conf.OpenAI.ConsultantID,
-		apiKey:       conf.OpenAI.ApiKey,
-		threads:      make(map[string]string),
-		imgPath:      conf.ImgPath,
-		locker:       &LockThreads{threads: make(map[string]*sync.Mutex)},
-		log:          logger.With(sl.Module("overseer")),
+		client:     client,
+		assistants: assistants,
+		apiKey:     conf.OpenAI.ApiKey,
+		threads:    make(map[string]string),
+		imgPath:    conf.ImgPath,
+		locker:     &LockThreads{threads: make(map[string]*sync.Mutex)},
+		log:        logger.With(sl.Module("overseer")),
 	}
 }
 
@@ -102,11 +99,15 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (string, e
 		return "", err
 	}
 
+	o.log.With(
+		slog.String("name", assistantName),
+	).Debug("determining assistant")
+
 	switch assistantName {
-	case Consultant:
+	case entity.ConsultantAss:
 		return o.askConsultant(userId, userMsg)
-	case Calculator:
-		break
+	case entity.CalculatorAss:
+		return o.askCalculator(userId, userMsg)
 	}
 
 	return o.askConsultant(userId, userMsg)
@@ -119,7 +120,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 		return "", err
 	}
 
-	question := fmt.Sprintf("SystemMsg: %s, UserMsg: %s", systemMsg, userMsg)
+	question := fmt.Sprintf("%s, UserMsg: %s", systemMsg, userMsg)
 	// Send the user message to the assistant
 	_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
 		Role:    string(openai.ThreadMessageRoleUser),
@@ -129,7 +130,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(thread.ID, o.overseerID)
+	completed := o.handleRun(thread.ID, o.assistants[entity.OverseerAss])
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
 	}
@@ -164,9 +165,10 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 func (o *Overseer) handleRun(threadID string, assistantID string) bool {
 	maxRetries := 3
 	completed := false
+	ctx := context.Background()
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		run, err := o.client.CreateRun(context.Background(), threadID, openai.RunRequest{
+		run, err := o.client.CreateRun(ctx, threadID, openai.RunRequest{
 			AssistantID: assistantID,
 		})
 		if err != nil {
@@ -177,16 +179,48 @@ func (o *Overseer) handleRun(threadID string, assistantID string) bool {
 		nextPoll := false
 		for {
 			time.Sleep(1 * time.Second)
-			run, err = o.client.RetrieveRun(context.Background(), threadID, run.ID)
+			run, err = o.client.RetrieveRun(ctx, threadID, run.ID)
 			if err != nil {
 				o.log.Error(fmt.Sprintf("error retrieving run: %v", err))
 				break
 			}
 
+			o.log.With(
+				slog.Any("status", run.Status),
+			).Debug("run status")
+
 			switch run.Status {
 			case openai.RunStatusCompleted:
 				completed = true
 				nextPoll = true
+				break
+			case openai.RunStatusRequiresAction:
+				if run.RequiredAction.Type == openai.RequiredActionTypeSubmitToolOutputs {
+					cmdName := run.RequiredAction.SubmitToolOutputs.ToolCalls[0].Function.Name
+					cmdArgs := run.RequiredAction.SubmitToolOutputs.ToolCalls[0].Function.Arguments
+					output, err := o.handleCommand(cmdName, cmdArgs)
+					if err != nil {
+						o.log.With(
+							slog.String("command", cmdName),
+							slog.Any("args", cmdArgs),
+							sl.Err(err),
+						).Error("handling command")
+						continue
+					}
+					run, err = o.client.SubmitToolOutputs(ctx, threadID, run.ID, openai.SubmitToolOutputsRequest{
+						ToolOutputs: []openai.ToolOutput{
+							{
+								ToolCallID: run.RequiredAction.SubmitToolOutputs.ToolCalls[0].ID,
+								Output:     fmt.Sprintf("%s", output),
+							},
+						},
+					})
+					if err != nil {
+						o.log.With(
+							sl.Err(err),
+						).Error("submitting tool outputs")
+					}
+				}
 				break
 			case openai.RunStatusFailed, openai.RunStatusCancelled, openai.RunStatusExpired, openai.RunStatusIncomplete:
 				errorMsg := ""

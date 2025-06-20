@@ -41,7 +41,7 @@ func (r *Service) ProductSearch(article string) (interface{}, error) {
 	return prods, err
 }
 
-func (r *Service) GetProductInfo(articles []string) ([]entity.Product, error) {
+func (r *Service) GetProductInfo(articles []string) ([]entity.ProductInfo, error) {
 	url := fmt.Sprintf("%s", r.BaseURL)
 
 	requestBody, err := json.Marshal(articles)
@@ -79,7 +79,7 @@ func (r *Service) GetProductInfo(articles []string) ([]entity.Product, error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	response, err := ParseResponse(body)
+	response, err := ParseInfoResponse(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse response: %v", err)
 	}
