@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"DarkCS/entity"
 	"DarkCS/internal/config"
 	"DarkCS/internal/lib/sl"
 	"context"
@@ -12,12 +11,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log/slog"
-	"time"
 )
 
 const (
-	usersCollection   = "users"
-	dialogsCollection = "dialogs"
+	usersCollection    = "users"
+	messagesCollection = "messages"
+	apiKeysCollection  = "api_keys"
 )
 
 type MongoDB struct {
@@ -31,20 +30,20 @@ func NewMongoClient(conf *config.Config, logger *slog.Logger) (*MongoDB, error) 
 	if !conf.Mongo.Enabled {
 		return nil, nil
 	}
-	//connectionUri := fmt.Sprintf("mongodb://%s:%s", conf.Mongo.Host, conf.Mongo.Port)
-	//clientOptions := options.Client().ApplyURI(connectionUri)
-	//if conf.Mongo.User != "" {
-	//	clientOptions.SetAuth(options.Credential{
-	//		Username:   conf.Mongo.User,
-	//		Password:   conf.Mongo.Password,
-	//		AuthSource: conf.Mongo.Database,
-	//	})
-	//}
+	connectionUri := fmt.Sprintf("mongodb://%s:%s", conf.Mongo.Host, conf.Mongo.Port)
+	clientOptions := options.Client().ApplyURI(connectionUri)
+	if conf.Mongo.User != "" {
+		clientOptions.SetAuth(options.Credential{
+			Username:   conf.Mongo.User,
+			Password:   conf.Mongo.Password,
+			AuthSource: conf.Mongo.Database,
+		})
+	}
 	client := &MongoDB{
-		ctx: context.Background(),
-		//clientOptions: clientOptions,
-		//database:      conf.Mongo.Database,
-		log: logger.With(sl.Module("mongodb")),
+		ctx:           context.Background(),
+		clientOptions: clientOptions,
+		database:      conf.Mongo.Database,
+		log:           logger.With(sl.Module("mongodb")),
 	}
 	return client, nil
 }
@@ -69,45 +68,26 @@ func (m *MongoDB) findError(err error) error {
 }
 
 func (m *MongoDB) CheckApiKey(key string) (string, error) {
-
-	return "testUser", nil
-}
-
-func (m *MongoDB) UpsertUser(user entity.User) error {
 	connection, err := m.connect()
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer m.disconnect(connection)
 
-	user.LastSeen = time.Now()
+	collection := connection.Database(m.database).Collection(apiKeysCollection)
+	filter := bson.D{{"key", key}}
 
-	collection := connection.Database(m.database).Collection(usersCollection)
-	filter := bson.D{{"email", user.Email}, {"phone", user.Phone}, {"telegram_id", user.TelegramId}}
-	update := bson.M{"$set": user}
-
-	_, err = collection.UpdateOne(m.ctx, filter, update, options.Update().SetUpsert(true))
-	if err != nil {
-		return fmt.Errorf("mongodb upsert error: %w", err)
+	var result struct {
+		Username string `bson:"username"`
 	}
-	return nil
-}
-
-func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
-	connection, err := m.connect()
+	err = collection.FindOne(m.ctx, filter).Decode(&result)
 	if err != nil {
-		return nil, err
-	}
-	defer m.disconnect(connection)
-
-	collection := connection.Database(m.database).Collection(usersCollection)
-	filter := bson.D{{"email", email}, {"phone", phone}, {"telegram_id", telegramId}}
-
-	var user entity.User
-	err = collection.FindOne(m.ctx, filter).Decode(&user)
-	if err != nil {
-		return nil, m.findError(err)
+		return "", m.findError(err)
 	}
 
-	return &user, nil
+	if result.Username == "" {
+		return "", fmt.Errorf("api key not found")
+	}
+
+	return result.Username, nil
 }

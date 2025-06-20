@@ -8,9 +8,8 @@ import (
 )
 
 type Config struct {
-	Env            string `yaml:"env" env-default:"local"`
-	TelegramApiKey string `yaml:"telegram_api_key" env-default:""`
-	OpenAI         struct {
+	Env    string `yaml:"env" env-default:"local"`
+	OpenAI struct {
 		ApiKey       string `yaml:"api_key" env-default:""`
 		OverseerID   string `yaml:"overseer_id" env-default:""`
 		ConsultantID string `yaml:"consultant_id" env-default:""`

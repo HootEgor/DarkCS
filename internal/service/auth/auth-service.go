@@ -3,7 +3,6 @@ package auth
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
-	"fmt"
 	"log/slog"
 )
 
@@ -40,19 +39,19 @@ func (s *Service) updateUser(user entity.User) {
 	}
 }
 
-func (s *Service) RegisterUser(email, phone string, telegramId int64) error {
+func (s *Service) RegisterUser(email, phone string, telegramId int64) (*entity.User, error) {
 	user, _ := s.GetUser(email, phone, telegramId)
 
 	if user == nil {
 		user = entity.NewUser(email, phone, telegramId)
 		err := s.repository.UpsertUser(*user)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		s.users = append(s.users, *user)
 	}
 
-	return nil
+	return user, nil
 }
 
 func (s *Service) UpdateUser(email, phone string, telegramId int64) error {
@@ -67,8 +66,9 @@ func (s *Service) UpdateUser(email, phone string, telegramId int64) error {
 }
 
 func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
+	filterUser := entity.NewUser(email, phone, telegramId)
 	for _, user := range s.users {
-		if user.TelegramId == telegramId {
+		if user.SameUser(filterUser) {
 			return &user, nil
 		}
 	}
@@ -80,7 +80,10 @@ func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, 
 		s.users = append(s.users, *user)
 		return user, nil
 	}
-	return nil, fmt.Errorf("user not found: email=%s, phone=%s, telegramId=%d", email, phone, telegramId)
+
+	user, err = s.RegisterUser(email, phone, telegramId)
+
+	return user, err
 }
 
 func (s *Service) IsUserGuest(email, phone string, telegramId int64) bool {

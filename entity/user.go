@@ -8,6 +8,7 @@ type User struct {
 	Phone      string    `json:"phone" bson:"phone" validate:"omitempty"`
 	TelegramId int64     `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
 	Role       string    `json:"role" bson:"role" validate:"omitempty"`
+	Blocked    bool      `json:"blocked" bson:"blocked" validate:"omitempty"`
 	LastSeen   time.Time `json:"last_seen" bson:"lastSeen"`
 }
 
@@ -30,6 +31,7 @@ func NewUser(email, phone string, telegramId int64) *User {
 		Phone:      phone,
 		TelegramId: telegramId,
 		Role:       GuestRole,
+		Blocked:    false,
 		LastSeen:   time.Now(),
 	}
 }

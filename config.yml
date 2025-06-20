@@ -1,6 +1,5 @@
 ---
 
-telegram_api_key: your-telegram-api-key
 openai:
   api_key: your-openai-api-key
   overseer_id: your-overseer-id

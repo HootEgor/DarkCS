@@ -9,6 +9,7 @@ import (
 
 type Repository interface {
 	CheckApiKey(key string) (string, error)
+	SaveMessage(message entity.Message) error
 }
 
 type ProductService interface {
@@ -21,7 +22,7 @@ type MessageService interface {
 }
 
 type Assistant interface {
-	ComposeResponse(userId, systemMsg, userMsg string) (string, error)
+	ComposeResponse(userId, systemMsg, userMsg string) (entity.AiAnswer, error)
 }
 
 type AuthService interface {

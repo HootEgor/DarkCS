@@ -1,11 +1,10 @@
 ---
 
 env: dev
-telegram_api_key: ${TELEGRAM_API_KEY}
 openai:
   api_key: ${OPENAI_API_KEY}
   overseer_id: ${OVERSEER_ID}
-  consultant_id: ${LOGGER_ID}
+  consultant_id: ${CONSULTANT_ID}
   calculator_id: ${CALCULATOR_ID}
   dev_prefix: Dev
 img_path: /var/lib/darkbot
@@ -22,6 +21,6 @@ prod-service:
   password: ${REPO_PASSWORD}
   base_url: ${REPO_BASE_URL}
 listen:
-  bind_ip: 0.0.0.0
+  bind_ip: 127.0.0.1
   port: ${LISTEN_PORT}
   key: ${API_KEY}

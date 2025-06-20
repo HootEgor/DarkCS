@@ -87,7 +87,11 @@ func (o *Overseer) SetProductService(productService ProductService) {
 	o.productService = productService
 }
 
-func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (string, error) {
+func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.AiAnswer, error) {
+	answer := entity.AiAnswer{
+		Text:      "",
+		Assistant: "",
+	}
 
 	assistantName, err := o.determineAssistant(userId, systemMsg, userMsg)
 	if err != nil {
@@ -96,21 +100,31 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (string, e
 			slog.String("system_msg", systemMsg),
 			slog.String("user_msg", userMsg),
 		).Error("determining assistant", sl.Err(err))
-		return "", err
+		return answer, err
 	}
 
 	o.log.With(
 		slog.String("name", assistantName),
 	).Debug("determining assistant")
 
+	answer.Assistant = assistantName
+
+	text := ""
+
 	switch assistantName {
 	case entity.ConsultantAss:
-		return o.askConsultant(userId, userMsg)
+		text, err = o.askConsultant(userId, userMsg)
+		break
 	case entity.CalculatorAss:
-		return o.askCalculator(userId, userMsg)
+		text, err = o.askCalculator(userId, userMsg)
+		break
+	default:
+		text, err = o.askConsultant(userId, userMsg)
 	}
 
-	return o.askConsultant(userId, userMsg)
+	answer.Text = text
+
+	return answer, err
 }
 
 func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string, error) {
@@ -120,7 +134,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 		return "", err
 	}
 
-	question := fmt.Sprintf("%s, UserMsg: %s", systemMsg, userMsg)
+	question := fmt.Sprintf("%s, HttpUserMsg: %s", systemMsg, userMsg)
 	// Send the user message to the assistant
 	_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
 		Role:    string(openai.ThreadMessageRoleUser),

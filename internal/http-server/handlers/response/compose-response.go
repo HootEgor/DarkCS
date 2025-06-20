@@ -27,7 +27,7 @@ func ComposeResponse(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		var req entity.UserMsg
+		var req entity.HttpUserMsg
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			logger.Error("failed to decode request body", sl.Err(err))
 			render.JSON(w, r, response.Error("Invalid request body"))
