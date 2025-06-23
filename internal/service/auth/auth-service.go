@@ -38,7 +38,7 @@ func (s *Service) updateUser(user entity.User) {
 }
 
 func (s *Service) RegisterUser(email, phone string, telegramId int64) (*entity.User, error) {
-	user, _ := s.GetUser(email, phone, telegramId)
+	user, _ := s.repository.GetUser(email, phone, telegramId)
 
 	if user == nil {
 		user = entity.NewUser(email, phone, telegramId)

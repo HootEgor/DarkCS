@@ -22,8 +22,6 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		return "user is nil", nil
 	}
 
-	return user, nil
-
 	if user.Blocked {
 		return nil, fmt.Errorf("user is blocked")
 	}
@@ -33,8 +31,6 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	for _, a := range assistants {
 		systemMsg = fmt.Sprintf("%s %s,", systemMsg, a)
 	}
-
-	return systemMsg, nil
 
 	answer, err := c.ass.ComposeResponse(user.GetId(), systemMsg, msg.Message)
 	if err != nil {
