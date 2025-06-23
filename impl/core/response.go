@@ -20,6 +20,10 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		return nil, err
 	}
 
+	if user == nil {
+		return "user is nil", nil
+	}
+
 	return user, nil
 
 	if user.Blocked {
