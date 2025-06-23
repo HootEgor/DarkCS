@@ -18,10 +18,6 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		return nil, err
 	}
 
-	if user == nil {
-		return "user is nil", nil
-	}
-
 	if user.Blocked {
 		return nil, fmt.Errorf("user is blocked")
 	}
