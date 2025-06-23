@@ -35,8 +35,8 @@ type Config struct {
 	} `yaml:"prod-service"`
 	Listen struct {
 		BindIP string `yaml:"bind_ip" env-default:"127.0.0.1"`
-		Port   string `yaml:"port" env-default:"9800"`
-		ApiKey string `yaml:"key" env-default:"314159265358"`
+		Port   string `yaml:"port" env-default:"9100"`
+		ApiKey string `yaml:"key" env-default:""`
 	} `yaml:"listen"`
 }
 
