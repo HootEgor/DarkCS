@@ -16,8 +16,8 @@ jobs:
 
       - name: Prepare configuration file
         run: |
-          sed -i 's|${LISTEN_PORT}|'"$LISTEN_PORT"'|g' darkcs-config.yml
-          sed -i 's|${API_KEY}|'"$API_KEY"'|g' darkcs-config.yml
+          sed -i 's|${LISTEN_PORT}|'"$LISTEN_PORT"'|g' darkcs-conf.yml
+          sed -i 's|${API_KEY}|'"$API_KEY"'|g' darkcs-conf.yml
           sed -i 's|${OPENAI_API_KEY}|'"$OPENAI_API_KEY"'|g' darkcs-conf.yml
           sed -i 's|${OVERSEER_ID}|'"$OVERSEER_ID"'|g' darkcs-conf.yml
           sed -i 's|${CONSULTANT_ID}|'"CONSULTANT_ID"'|g' darkcs-conf.yml

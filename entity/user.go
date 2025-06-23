@@ -1,6 +1,9 @@
 package entity
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type User struct {
 	Name       string    `json:"name" bson:"name" validate:"omitempty"`
@@ -34,6 +37,10 @@ func NewUser(email, phone string, telegramId int64) *User {
 		Blocked:    false,
 		LastSeen:   time.Now(),
 	}
+}
+
+func (u *User) GetId() string {
+	return fmt.Sprintf("%s:%s:%d", u.Email, u.Phone, u.TelegramId)
 }
 
 func (u *User) IsGuest() bool {
