@@ -23,7 +23,7 @@ func main() {
 	conf := config.MustLoad(*configPath)
 	lg := logger.SetupLogger(conf.Env, *logPath)
 
-	lg.Info("starting ocapi", slog.String("config", *configPath), slog.String("env", conf.Env))
+	lg.Info("starting darkcs", slog.String("config", *configPath), slog.String("env", conf.Env))
 	lg.Debug("debug messages enabled")
 
 	handler := core.New(lg)
