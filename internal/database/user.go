@@ -49,7 +49,7 @@ func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, 
 	var user entity.User
 	err = collection.FindOne(m.ctx, filter).Decode(&user)
 	if err != nil {
-		return nil, err
+		return nil, m.findError(err)
 	}
 
 	return &user, nil
