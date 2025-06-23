@@ -20,8 +20,8 @@ jobs:
           sed -i 's|${API_KEY}|'"$API_KEY"'|g' darkcs-conf.yml
           sed -i 's|${OPENAI_API_KEY}|'"$OPENAI_API_KEY"'|g' darkcs-conf.yml
           sed -i 's|${OVERSEER_ID}|'"$OVERSEER_ID"'|g' darkcs-conf.yml
-          sed -i 's|${CONSULTANT_ID}|'"CONSULTANT_ID"'|g' darkcs-conf.yml
-          sed -i 's|${CALCULATOR_ID}|'"CALCULATOR_ID"'|g' darkcs-conf.yml
+          sed -i 's|${CONSULTANT_ID}|'"$CONSULTANT_ID"'|g' darkcs-conf.yml
+          sed -i 's|${CALCULATOR_ID}|'"$CALCULATOR_ID"'|g' darkcs-conf.yml
           sed -i 's|${MONGO_HOST}|'"$MONGO_HOST"'|g' darkcs-conf.yml
           sed -i 's|${MONGO_PORT}|'"$MONGO_PORT"'|g' darkcs-conf.yml
           sed -i 's|${MONGO_USER}|'"$MONGO_USER"'|g' darkcs-conf.yml
