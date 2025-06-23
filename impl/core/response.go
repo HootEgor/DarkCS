@@ -5,7 +5,6 @@ import (
 	"DarkCS/internal/lib/sl"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 )
 
@@ -14,8 +13,7 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		return nil, fmt.Errorf("assistant not initialized")
 	}
 
-	id, _ := strconv.Atoi(msg.TelegramId)
-	user, err := c.authService.GetUser(msg.Email, msg.Phone, int64(id))
+	user, err := c.authService.GetUser(msg.Email, msg.Phone, msg.TelegramId)
 	if err != nil {
 		return nil, err
 	}
