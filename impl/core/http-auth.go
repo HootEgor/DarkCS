@@ -21,12 +21,12 @@ func (c *Core) AuthenticateByToken(token string) (*entity.UserAuth, error) {
 		return &entity.UserAuth{Username: userName}, nil
 	}
 
-	//if c.authKey == token {
-	//	userName = "internal"
-	//	c.log.With("username", userName).Debug("user authenticated from config")
-	//	c.keys[token] = userName
-	//	return &entity.UserAuth{Username: userName}, nil
-	//}
+	if c.authKey == token {
+		userName = "internal"
+		c.log.With("username", userName).Debug("user authenticated from config")
+		c.keys[token] = userName
+		return &entity.UserAuth{Username: userName}, nil
+	}
 
 	return nil, fmt.Errorf("invalid token")
 }

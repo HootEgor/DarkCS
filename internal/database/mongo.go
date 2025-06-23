@@ -83,7 +83,7 @@ func (m *MongoDB) CheckApiKey(key string) (string, error) {
 	}
 	err = collection.FindOne(m.ctx, filter).Decode(&result)
 	if err != nil {
-		return "", m.findError(err)
+		return "", err
 	}
 
 	if result.Username == "" {
