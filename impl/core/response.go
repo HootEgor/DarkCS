@@ -14,6 +14,8 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		return nil, fmt.Errorf("assistant not initialized")
 	}
 
+	return msg, nil
+
 	id, _ := strconv.Atoi(msg.TelegramId)
 	user, err := c.authService.GetUser(msg.Email, msg.Phone, int64(id))
 	if err != nil {
