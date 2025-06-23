@@ -11,7 +11,7 @@ const (
 	envLocal    = "local"
 	envDev      = "dev"
 	envProd     = "prod"
-	logFileName = "ocapi.log"
+	logFileName = "darkcs.log"
 )
 
 func SetupLogger(env, path string) *slog.Logger {
