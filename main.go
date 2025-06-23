@@ -8,6 +8,7 @@ import (
 	"DarkCS/internal/http-server/api"
 	"DarkCS/internal/lib/logger"
 	"DarkCS/internal/lib/sl"
+	"DarkCS/internal/service/auth"
 	"DarkCS/internal/service/product"
 	"flag"
 	"log/slog"
@@ -28,6 +29,8 @@ func main() {
 	handler := core.New(lg)
 	handler.SetAuthKey(conf.Listen.ApiKey)
 
+	authService := auth.NewAuthService(lg)
+
 	db, err := repository.NewMongoClient(conf, lg)
 	if err != nil {
 		lg.With(
@@ -35,7 +38,9 @@ func main() {
 		).Error("mongo client")
 	}
 	if db != nil {
+		authService.SetRepository(db)
 		handler.SetRepository(db)
+		handler.SetAuthService(authService)
 		lg.With(
 			slog.String("host", conf.Mongo.Host),
 			slog.String("port", conf.Mongo.Port),

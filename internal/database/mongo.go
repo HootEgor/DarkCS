@@ -16,7 +16,7 @@ import (
 const (
 	usersCollection    = "users"
 	messagesCollection = "messages"
-	apiKeysCollection  = "api_keys"
+	apiKeysCollection  = "api-keys"
 )
 
 type MongoDB struct {
@@ -79,6 +79,7 @@ func (m *MongoDB) CheckApiKey(key string) (string, error) {
 
 	var result struct {
 		Username string `bson:"username"`
+		Kay      string `bson:"key"`
 	}
 	err = collection.FindOne(m.ctx, filter).Decode(&result)
 	if err != nil {

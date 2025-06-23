@@ -14,15 +14,13 @@ type Repository interface {
 type Service struct {
 	repository Repository
 	users      []entity.User
-	devPrefix  string
 	log        *slog.Logger
 }
 
-func NewAuthService(logger *slog.Logger, devPrefix string) *Service {
+func NewAuthService(logger *slog.Logger) *Service {
 	return &Service{
 		repository: nil,
 		users:      make([]entity.User, 0),
-		devPrefix:  devPrefix,
 		log:        logger.With(sl.Module("auth-service")),
 	}
 }

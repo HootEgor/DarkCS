@@ -10,6 +10,7 @@ import (
 type Repository interface {
 	CheckApiKey(key string) (string, error)
 	SaveMessage(message entity.Message) error
+	BlockUser(email, phone string, telegramId int64, block bool) error
 }
 
 type ProductService interface {
@@ -80,4 +81,8 @@ func (c *Core) SendEvent(message *entity.EventMessage) (interface{}, error) {
 		return nil, fmt.Errorf("not set MessageService")
 	}
 	return nil, c.ms.SendEventMessage(message)
+}
+
+func (c *Core) BlockUser(email, phone string, telegramId int64, block bool) error {
+	return c.repo.BlockUser(email, phone, telegramId, block)
 }
