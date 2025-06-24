@@ -201,10 +201,6 @@ func (o *Overseer) handleRun(threadID string, assistantID string) bool {
 				break
 			}
 
-			o.log.With(
-				slog.Any("status", run.Status),
-			).Debug("run status")
-
 			switch run.Status {
 			case openai.RunStatusCompleted:
 				completed = true
