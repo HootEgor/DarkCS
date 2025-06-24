@@ -10,6 +10,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 	_ "image/jpeg"
 	"log/slog"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -122,7 +123,8 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.Ai
 		text, err = o.askConsultant(userId, userMsg)
 	}
 
-	answer.Text = text
+	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)
+	answer.Text = re.ReplaceAllString(text, "")
 
 	return answer, err
 }
