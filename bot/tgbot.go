@@ -126,7 +126,7 @@ func (t *TgBot) level(b *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	// Parse the level
-	levelStr := strings.ToLower(args[0])
+	levelStr := strings.ToLower(args[1])
 	var level slog.Level
 	switch levelStr {
 	case "debug":
