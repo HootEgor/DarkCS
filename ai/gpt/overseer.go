@@ -212,24 +212,29 @@ func (o *Overseer) handleRun(threadID string, assistantID string) bool {
 				break
 			case openai.RunStatusRequiresAction:
 				if run.RequiredAction.Type == openai.RequiredActionTypeSubmitToolOutputs {
-					cmdName := run.RequiredAction.SubmitToolOutputs.ToolCalls[0].Function.Name
-					cmdArgs := run.RequiredAction.SubmitToolOutputs.ToolCalls[0].Function.Arguments
-					output, err := o.handleCommand(cmdName, cmdArgs)
-					if err != nil {
-						o.log.With(
-							slog.String("command", cmdName),
-							slog.Any("args", cmdArgs),
-							sl.Err(err),
-						).Error("handling command")
-						continue
+					var toolOutputs []openai.ToolOutput
+
+					for _, toolCall := range run.RequiredAction.SubmitToolOutputs.ToolCalls {
+						cmdName := toolCall.Function.Name
+						cmdArgs := toolCall.Function.Arguments
+						output, err := o.handleCommand(cmdName, cmdArgs)
+						if err != nil {
+							o.log.With(
+								slog.String("command", cmdName),
+								slog.Any("args", cmdArgs),
+								sl.Err(err),
+							).Error("handling command")
+							continue
+						}
+
+						toolOutputs = append(toolOutputs, openai.ToolOutput{
+							ToolCallID: toolCall.ID,
+							Output:     fmt.Sprintf("%s", output),
+						})
 					}
+
 					run, err = o.client.SubmitToolOutputs(ctx, threadID, run.ID, openai.SubmitToolOutputsRequest{
-						ToolOutputs: []openai.ToolOutput{
-							{
-								ToolCallID: run.RequiredAction.SubmitToolOutputs.ToolCalls[0].ID,
-								Output:     fmt.Sprintf("%s", output),
-							},
-						},
+						ToolOutputs: toolOutputs,
 					})
 					if err != nil {
 						o.log.With(
