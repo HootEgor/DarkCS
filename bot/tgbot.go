@@ -118,12 +118,11 @@ func (t *TgBot) level(b *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	// Get the level argument
-	args := ctx.Args()
-	if len(args) < 1 {
-		// If no level is provided, show the current level for this admin
+	args := strings.Fields(ctx.EffectiveMessage.Text)
+	if len(args) < 2 {
 		currentLevel := t.adminLevels[userId]
-		_, err := ctx.EffectiveMessage.Reply(b, fmt.Sprintf("Your current log level: %s\nAvailable levels: debug, info, warn, error", currentLevel.String()), nil)
-		return err
+		t.plainResponse(userId, fmt.Sprintf("Your current log level: %s\nAvailable levels: debug, info, warn, error", currentLevel.String()))
+		return nil
 	}
 
 	// Parse the level
@@ -139,14 +138,14 @@ func (t *TgBot) level(b *tgbotapi.Bot, ctx *ext.Context) error {
 	case "error":
 		level = slog.LevelError
 	default:
-		_, err := ctx.EffectiveMessage.Reply(b, fmt.Sprintf("Invalid level: %s\nAvailable levels: debug, info, warn, error", levelStr), nil)
-		return err
+		t.plainResponse(userId, fmt.Sprintf("Invalid level: %s\nAvailable levels: debug, info, warn, error", levelStr))
+		return nil
 	}
 
 	// Set the level for this specific admin
 	t.SetAdminLogLevel(userId, level)
-	_, err := ctx.EffectiveMessage.Reply(b, fmt.Sprintf("Your log level set to: %s", level.String()), nil)
-	return err
+	t.plainResponse(userId, fmt.Sprintf("Your log level set to: %s", level.String()))
+	return nil
 }
 
 func (t *TgBot) SendMessage(msg string) {
