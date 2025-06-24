@@ -54,19 +54,3 @@ func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, 
 
 	return &user, nil
 }
-
-func (m *MongoDB) BlockUser(email, phone string, telegramId int64, block bool) error {
-
-	user, err := m.GetUser(email, phone, telegramId)
-	if err != nil {
-		return fmt.Errorf("get user for blocking: %w", err)
-	}
-
-	user.Blocked = block
-	err = m.UpsertUser(*user)
-	if err != nil {
-		return fmt.Errorf("block user: %w", err)
-	}
-
-	return nil
-}

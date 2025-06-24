@@ -10,7 +10,6 @@ import (
 type Repository interface {
 	CheckApiKey(key string) (string, error)
 	SaveMessage(message entity.Message) error
-	BlockUser(email, phone string, telegramId int64, block bool) error
 }
 
 type ProductService interface {
@@ -28,6 +27,7 @@ type Assistant interface {
 
 type AuthService interface {
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+	BlockUser(email, phone string, telegramId int64, block bool) error
 }
 
 type Core struct {
@@ -84,5 +84,5 @@ func (c *Core) SendEvent(message *entity.EventMessage) (interface{}, error) {
 }
 
 func (c *Core) BlockUser(email, phone string, telegramId int64, block bool) error {
-	return c.repo.BlockUser(email, phone, telegramId, block)
+	return c.authService.BlockUser(email, phone, telegramId, block)
 }

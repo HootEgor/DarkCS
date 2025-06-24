@@ -104,6 +104,24 @@ func (s *Service) IsUserAdmin(email, phone string, telegramId int64) bool {
 	return user.IsAdmin()
 }
 
+func (s *Service) BlockUser(email, phone string, telegramId int64, block bool) error {
+	user, err := s.GetUser(email, phone, telegramId)
+	if err != nil {
+		return err
+	}
+
+	user.Blocked = block
+
+	err = s.repository.UpsertUser(*user)
+	if err != nil {
+		return err
+	}
+
+	s.updateUser(*user)
+
+	return nil
+}
+
 //func (a *Service) getAssistantsBySection(section string) []entity.AssistantData {
 //
 //	var assistants []entity.AssistantData

@@ -48,6 +48,6 @@ func BlockUser(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 		logger.Debug("block user")
 
-		render.JSON(w, r, response.Ok("User blocked successfully"))
+		render.JSON(w, r, response.Ok(fmt.Sprintf("User block: %t", req.Block)))
 	}
 }
