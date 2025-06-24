@@ -5,6 +5,7 @@ import (
 	"fmt"
 	tgbotapi "github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers"
 	"log"
 	"log/slog"
 	"strings"
@@ -15,14 +16,27 @@ type TgBot struct {
 	log         *slog.Logger
 	api         *tgbotapi.Bot
 	botUsername string
-	adminId     int64
+	adminIds    []int64
+	minLogLevel slog.Level
+	adminLevels map[int64]slog.Level
 }
 
-func NewTgBot(botName, apiKey string, adminId int64, log *slog.Logger) (*TgBot, error) {
+func NewTgBot(botName, apiKey string, adminIds []int64, log *slog.Logger) (*TgBot, error) {
+	// Default to warn level if not specified
+	minLogLevel := slog.LevelDebug
+
+	// Initialize admin levels map with default level for each admin
+	adminLevels := make(map[int64]slog.Level)
+	for _, adminId := range adminIds {
+		adminLevels[adminId] = slog.LevelWarn
+	}
+
 	tgBot := &TgBot{
 		log:         log.With(sl.Module("tgbot")),
-		adminId:     adminId,
+		adminIds:    adminIds,
 		botUsername: botName,
+		minLogLevel: minLogLevel,
+		adminLevels: adminLevels,
 	}
 
 	api, err := tgbotapi.NewBot(apiKey, nil)
@@ -46,6 +60,8 @@ func (t *TgBot) Start() error {
 	})
 	updater := ext.NewUpdater(dispatcher, nil)
 
+	dispatcher.AddHandler(handlers.NewCommand("level", t.level))
+
 	// Start receiving updates.
 	err := updater.StartPolling(t.api, &ext.PollingOpts{
 		DropPendingUpdates: true,
@@ -67,9 +83,93 @@ func (t *TgBot) Start() error {
 	return nil
 }
 
-func (t *TgBot) SendMessage(msg string) {
+// SetMinLogLevel sets the minimum log level for all admin notifications
+func (t *TgBot) SetMinLogLevel(level slog.Level) {
+	t.minLogLevel = level
 
-	t.plainResponse(t.adminId, msg)
+	// Update log level for all admins
+	for _, adminId := range t.adminIds {
+		t.adminLevels[adminId] = level
+	}
+}
+
+// SetAdminLogLevel sets the minimum log level for a specific admin
+func (t *TgBot) SetAdminLogLevel(adminId int64, level slog.Level) {
+	t.adminLevels[adminId] = level
+}
+
+// level handles the /level command to set the minimum log level for admin notifications
+func (t *TgBot) level(b *tgbotapi.Bot, ctx *ext.Context) error {
+	// Get the user ID
+	userId := ctx.EffectiveUser.Id
+
+	// Check if the user is an admin
+	isAdmin := false
+	for _, adminId := range t.adminIds {
+		if userId == adminId {
+			isAdmin = true
+			break
+		}
+	}
+
+	if !isAdmin {
+		_, err := ctx.EffectiveMessage.Reply(b, "You are not authorized to use this command.", nil)
+		return err
+	}
+
+	// Get the level argument
+	args := ctx.Args()
+	if len(args) < 1 {
+		// If no level is provided, show the current level for this admin
+		currentLevel := t.adminLevels[userId]
+		_, err := ctx.EffectiveMessage.Reply(b, fmt.Sprintf("Your current log level: %s\nAvailable levels: debug, info, warn, error", currentLevel.String()), nil)
+		return err
+	}
+
+	// Parse the level
+	levelStr := strings.ToLower(args[0])
+	var level slog.Level
+	switch levelStr {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		_, err := ctx.EffectiveMessage.Reply(b, fmt.Sprintf("Invalid level: %s\nAvailable levels: debug, info, warn, error", levelStr), nil)
+		return err
+	}
+
+	// Set the level for this specific admin
+	t.SetAdminLogLevel(userId, level)
+	_, err := ctx.EffectiveMessage.Reply(b, fmt.Sprintf("Your log level set to: %s", level.String()), nil)
+	return err
+}
+
+func (t *TgBot) SendMessage(msg string) {
+	// Send message to all admins (using default log level)
+	t.SendMessageWithLevel(msg, t.minLogLevel)
+}
+
+// SendMessageWithLevel sends a message to all admins with the specified log level
+func (t *TgBot) SendMessageWithLevel(msg string, level slog.Level) {
+	// Send message to all admins who have a log level that allows this message
+	for _, adminId := range t.adminIds {
+		// Check if this admin's log level allows this message
+		adminLevel, exists := t.adminLevels[adminId]
+		if !exists {
+			// If admin doesn't have a specific level, use the default
+			adminLevel = t.minLogLevel
+		}
+
+		// Only send if the message level is >= the admin's minimum level
+		if level >= adminLevel {
+			t.plainResponse(adminId, msg)
+		}
+	}
 }
 
 func (t *TgBot) plainResponse(chatId int64, text string) {

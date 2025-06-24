@@ -34,9 +34,9 @@ func main() {
 		} else {
 			// Set up Telegram handler for the logger
 			lg = logger.SetupTelegramHandler(lg, tgBot, slog.LevelDebug)
-			lg.Info("telegram bot initialized",
+			lg.With(
 				slog.String("bot_name", conf.Telegram.BotName),
-				slog.Int64("admin_id", conf.Telegram.AdminId))
+			).Info("telegram bot initialized")
 
 			// Start the bot in a goroutine
 			go func() {

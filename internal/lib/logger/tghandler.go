@@ -68,9 +68,9 @@ func (h *TelegramHandler) Handle(ctx context.Context, record slog.Record) error 
 			return true
 		})
 
-		// Send to Telegram
+		// Send to Telegram with the record's log level
 		if h.bot != nil {
-			h.bot.SendMessage(msg)
+			h.bot.SendMessageWithLevel(msg, record.Level)
 		}
 	}
 

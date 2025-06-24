@@ -10,10 +10,11 @@ import (
 type Config struct {
 	Env      string `yaml:"env" env-default:"local"`
 	Telegram struct {
-		ApiKey  string `yaml:"api_key" env-default:""`
-		AdminId int64  `yaml:"admin_id" env-default:"0"`
-		BotName string `yaml:"bot_name" env-default:"DarkCSBot"`
-		Enabled bool   `yaml:"enabled" env-default:"false"`
+		ApiKey      string  `yaml:"api_key" env-default:""`
+		AdminId     []int64 `yaml:"admin_id" env-default:"[]"`
+		BotName     string  `yaml:"bot_name" env-default:"DarkCSBot"`
+		Enabled     bool    `yaml:"enabled" env-default:"false"`
+		MinLogLevel string  `yaml:"min_log_level" env-default:"debug"`
 	} `yaml:"telegram"`
 	OpenAI struct {
 		ApiKey       string `yaml:"api_key" env-default:""`

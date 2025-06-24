@@ -1,7 +1,11 @@
 ---
 telegram:
   api_key: your-telegram-api-key
-  admin_id: 0
+  admin_id:
+    # egor
+    - 653782769
+    # ruslan
+    - 64156944
   bot_name: Dark Logger
   enabled: false
 openai:

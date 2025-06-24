@@ -17,7 +17,6 @@ jobs:
       - name: Prepare configuration file
         run: |
           sed -i 's|${TELEGRAM_API_KEY}|'"$TELEGRAM_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${TELEGRAM_ADMIN_ID}|'"$TELEGRAM_ADMIN_ID"'|g' darkcs-conf.yml
           sed -i 's|${LISTEN_PORT}|'"$LISTEN_PORT"'|g' darkcs-conf.yml
           sed -i 's|${API_KEY}|'"$API_KEY"'|g' darkcs-conf.yml
           sed -i 's|${OPENAI_API_KEY}|'"$OPENAI_API_KEY"'|g' darkcs-conf.yml
@@ -34,7 +33,6 @@ jobs:
           sed -i 's|${REPO_BASE_URL}|'"$REPO_BASE_URL"'|g' darkcs-conf.yml
         env:
           TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
-          TELEGRAM_ADMIN_ID: ${{ secrets.TELEGRAM_ADMIN_ID }}
           LISTEN_PORT: ${{ vars.LISTEN_PORT }}
           API_KEY: ${{ secrets.API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
