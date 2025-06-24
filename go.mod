@@ -3,10 +3,10 @@ module DarkCS
 go 1.24
 
 require (
+	github.com/PaulSonOfLars/gotgbot/v2 v2.0.0-rc.32
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/render v1.0.3
 	github.com/go-playground/validator/v10 v10.26.0
-	github.com/google/uuid v1.6.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/sashabaranov/go-openai v1.40.2
 	go.mongodb.org/mongo-driver v1.17.4

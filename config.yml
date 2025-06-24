@@ -1,5 +1,9 @@
 ---
-
+telegram:
+  api_key: your-telegram-api-key
+  admin_id: 0
+  bot_name: Dark Logger
+  enabled: false
 openai:
   api_key: your-openai-api-key
   overseer_id: your-overseer-id

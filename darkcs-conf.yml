@@ -1,6 +1,11 @@
 ---
 
 env: dev
+telegram:
+  api_key: ${TELEGRAM_API_KEY}
+  admin_id: ${TELEGRAM_ADMIN_ID}
+  bot_name: Dark Logger
+  enabled: true
 openai:
   api_key: ${OPENAI_API_KEY}
   overseer_id: ${OVERSEER_ID}

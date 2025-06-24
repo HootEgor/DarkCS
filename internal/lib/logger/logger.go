@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"DarkCS/bot"
 	"log"
 	"log/slog"
 	"os"
@@ -50,4 +51,20 @@ func SetupLogger(env, path string) *slog.Logger {
 
 func logFilePath(path string) string {
 	return filepath.Join(path, logFileName)
+}
+
+// SetupTelegramHandler adds a Telegram handler to the logger
+func SetupTelegramHandler(logger *slog.Logger, tgBot *bot.TgBot, minLevel slog.Level) *slog.Logger {
+	if tgBot == nil {
+		return logger
+	}
+
+	// Get the existing handler from the logger
+	existingHandler := logger.Handler()
+
+	// Create a new Telegram handler that wraps the existing handler
+	tgHandler := NewTelegramHandler(existingHandler, tgBot, minLevel)
+
+	// Create a new logger with the Telegram handler
+	return slog.New(tgHandler)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"DarkCS/ai/gpt"
+	"DarkCS/bot"
 	"DarkCS/impl/core"
 	"DarkCS/internal/config"
 	"DarkCS/internal/database"
@@ -22,6 +23,29 @@ func main() {
 
 	conf := config.MustLoad(*configPath)
 	lg := logger.SetupLogger(conf.Env, *logPath)
+
+	// Initialize Telegram bot if enabled
+	var tgBot *bot.TgBot
+	if conf.Telegram.Enabled {
+		var err error
+		tgBot, err = bot.NewTgBot(conf.Telegram.BotName, conf.Telegram.ApiKey, conf.Telegram.AdminId, lg)
+		if err != nil {
+			lg.Error("failed to initialize telegram bot", slog.String("error", err.Error()))
+		} else {
+			// Set up Telegram handler for the logger
+			lg = logger.SetupTelegramHandler(lg, tgBot, slog.LevelDebug)
+			lg.Info("telegram bot initialized",
+				slog.String("bot_name", conf.Telegram.BotName),
+				slog.Int64("admin_id", conf.Telegram.AdminId))
+
+			// Start the bot in a goroutine
+			go func() {
+				if err := tgBot.Start(); err != nil {
+					lg.Error("telegram bot error", slog.String("error", err.Error()))
+				}
+			}()
+		}
+	}
 
 	lg.Info("starting darkcs", slog.String("config", *configPath), slog.String("env", conf.Env))
 	lg.Debug("debug messages enabled")
@@ -67,19 +91,6 @@ func main() {
 			sl.Secret("overseer_id", conf.OpenAI.OverseerID),
 		).Info("overseer initialized")
 	}
-
-	//if conf.Telegram.Enabled {
-	//	tg, e := telegram.New(conf.Telegram.ApiKey, lg)
-	//	if e != nil {
-	//		lg.Error("telegram api", sl.Err(e))
-	//	}
-	//	//if mongo != nil {
-	//	//	tg.SetDatabase(mongo)
-	//	//}
-	//	tg.Start()
-	//	lg.Info("telegram api initialized")
-	//	handler.SetMessageService(tg)
-	//}
 
 	// *** blocking start with http server ***
 	err = api.New(conf, lg, handler)
