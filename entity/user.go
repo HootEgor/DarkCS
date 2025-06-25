@@ -2,6 +2,8 @@ package entity
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -47,13 +49,24 @@ func GetUserDataFromId(id string) (string, string, int64, error) {
 	var email, phone string
 	var telegramId int64
 
-	var n, err = fmt.Sscanf(id, "%s:%s:%d", &email, &phone, &telegramId)
-	if err != nil {
-		return "", "", 0, fmt.Errorf("failed to parse user id: %w", err)
+	// Split the string by colons
+	parts := strings.Split(id, ":")
+	if len(parts) != 3 {
+		return "", "", 0, fmt.Errorf("invalid user id format: expected 3 parts separated by colons")
 	}
 
-	if n != 3 {
-		return "", "", 0, fmt.Errorf("invalid user id format")
+	email = parts[0]
+	phone = parts[1]
+
+	// Parse the telegram ID
+	if parts[2] == "" {
+		return "", "", 0, fmt.Errorf("telegram ID cannot be empty")
+	}
+
+	var err error
+	telegramId, err = strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to parse telegram ID: %w", err)
 	}
 
 	return email, phone, telegramId, nil
