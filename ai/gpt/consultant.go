@@ -59,10 +59,5 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
 		return responseText, nil
 	}
 
-	o.log.With(
-		slog.String("user", userId),
-		slog.Any("response", response),
-	).Debug("chat response")
-
 	return response.Response, nil
 }
