@@ -229,7 +229,7 @@ func (o *Overseer) handleRun(userId, threadID, assistantID string) bool {
 								slog.Any("args", cmdArgs),
 								sl.Err(err),
 							).Error("handling command")
-							continue
+							output = fmt.Sprintf("Error handling command %s: %v", cmdName, err)
 						}
 
 						toolOutputs = append(toolOutputs, openai.ToolOutput{
