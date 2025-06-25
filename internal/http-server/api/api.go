@@ -58,6 +58,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 			r.Post("/", response.ComposeResponse(log, handler))
 		})
 		v1.Route("/user", func(r chi.Router) {
+			r.Get("/", user.GetUser(log, handler))
 			r.Post("/block", user.BlockUser(log, handler))
 		})
 	})

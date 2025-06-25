@@ -19,9 +19,9 @@ func (m *MongoDB) UpsertUser(user entity.User) error {
 
 	collection := connection.Database(m.database).Collection(usersCollection)
 	filter := bson.D{{"$or", []bson.D{
+		{{"telegram_id", user.TelegramId}},
 		{{"email", user.Email}},
 		{{"phone", user.Phone}},
-		{{"telegram_id", user.TelegramId}},
 	}}}
 	update := bson.M{"$set": user}
 
@@ -41,9 +41,9 @@ func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, 
 
 	collection := connection.Database(m.database).Collection(usersCollection)
 	filter := bson.D{{"$or", []bson.D{
+		{{"telegram_id", telegramId}},
 		{{"email", email}},
 		{{"phone", phone}},
-		{{"telegram_id", telegramId}},
 	}}}
 
 	var user entity.User

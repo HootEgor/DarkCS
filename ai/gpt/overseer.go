@@ -20,12 +20,17 @@ type ProductService interface {
 	GetAvailableProducts() ([]entity.Product, error)
 }
 
+type AuthService interface {
+	UpdateUserPhone(email, phone string, telegramId int64) error
+}
+
 type Overseer struct {
 	client         *openai.Client
 	assistants     map[string]string
 	apiKey         string
 	threads        map[string]string
 	productService ProductService
+	authService    AuthService
 	imgPath        string
 	locker         *LockThreads
 	log            *slog.Logger
@@ -57,6 +62,14 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 	}
 }
 
+func (o *Overseer) SetProductService(productService ProductService) {
+	o.productService = productService
+}
+
+func (o *Overseer) SetAuthService(authService AuthService) {
+	o.authService = authService
+}
+
 func (l *LockThreads) Lock(userId string) {
 	l.mutex.Lock()
 
@@ -82,10 +95,6 @@ func (l *LockThreads) Unlock(userId string) {
 	l.mutex.Unlock()
 
 	mutex.Unlock()
-}
-
-func (o *Overseer) SetProductService(productService ProductService) {
-	o.productService = productService
 }
 
 func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.AiAnswer, error) {
@@ -146,7 +155,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(thread.ID, o.assistants[entity.OverseerAss])
+	completed := o.handleRun(userId, thread.ID, o.assistants[entity.OverseerAss])
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
 	}
@@ -178,7 +187,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 	return response.Assistant, nil
 }
 
-func (o *Overseer) handleRun(threadID string, assistantID string) bool {
+func (o *Overseer) handleRun(userId, threadID, assistantID string) bool {
 	maxRetries := 3
 	completed := false
 	ctx := context.Background()
@@ -213,7 +222,7 @@ func (o *Overseer) handleRun(threadID string, assistantID string) bool {
 					for _, toolCall := range run.RequiredAction.SubmitToolOutputs.ToolCalls {
 						cmdName := toolCall.Function.Name
 						cmdArgs := toolCall.Function.Arguments
-						output, err := o.handleCommand(cmdName, cmdArgs)
+						output, err := o.handleCommand(userId, cmdName, cmdArgs)
 						if err != nil {
 							o.log.With(
 								slog.String("command", cmdName),

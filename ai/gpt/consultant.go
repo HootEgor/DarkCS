@@ -31,7 +31,7 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(thread.ID, o.assistants[entity.ConsultantAss])
+	completed := o.handleRun(userId, thread.ID, o.assistants[entity.ConsultantAss])
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
 	}

@@ -86,3 +86,7 @@ func (c *Core) SendEvent(message *entity.EventMessage) (interface{}, error) {
 func (c *Core) BlockUser(email, phone string, telegramId int64, block bool) error {
 	return c.authService.BlockUser(email, phone, telegramId, block)
 }
+
+func (c *Core) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
+	return c.authService.GetUser(email, phone, telegramId)
+}

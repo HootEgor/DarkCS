@@ -43,6 +43,22 @@ func (u *User) GetId() string {
 	return fmt.Sprintf("%s:%s:%d", u.Email, u.Phone, u.TelegramId)
 }
 
+func GetUserDataFromId(id string) (string, string, int64, error) {
+	var email, phone string
+	var telegramId int64
+
+	var n, err = fmt.Sscanf(id, "%s:%s:%d", &email, &phone, &telegramId)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to parse user id: %w", err)
+	}
+
+	if n != 3 {
+		return "", "", 0, fmt.Errorf("invalid user id format")
+	}
+
+	return email, phone, telegramId, nil
+}
+
 func (u *User) IsGuest() bool {
 	return u.Role == GuestRole
 }
