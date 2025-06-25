@@ -42,8 +42,11 @@ func New(log *slog.Logger, auth Authenticate) func(next http.Handler) http.Handl
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
 			t1 := time.Now()
+			// Use a pointer to the logger so we can update it throughout the request
+			loggerPtr := &logger
 			defer func() {
-				logger.With(
+				// Use the final state of the logger with all accumulated fields
+				(*loggerPtr).With(
 					slog.Int("status", ww.Status()),
 					slog.Int("size", ww.BytesWritten()),
 					slog.Float64("duration", time.Since(t1).Seconds()),
@@ -53,7 +56,7 @@ func New(log *slog.Logger, auth Authenticate) func(next http.Handler) http.Handl
 			token := ""
 			header := r.Header.Get("Authorization")
 			if len(header) == 0 {
-				logger = logger.With(sl.Err(fmt.Errorf("authorization header not found")))
+				*loggerPtr = (*loggerPtr).With(sl.Err(fmt.Errorf("authorization header not found")))
 				authFailed(ww, r, "Authorization header not found")
 				return
 			}
@@ -61,11 +64,11 @@ func New(log *slog.Logger, auth Authenticate) func(next http.Handler) http.Handl
 				token = strings.Split(header, " ")[1]
 			}
 			if len(token) == 0 {
-				logger = logger.With(sl.Err(fmt.Errorf("token not found")))
+				*loggerPtr = (*loggerPtr).With(sl.Err(fmt.Errorf("token not found")))
 				authFailed(ww, r, "Token not found")
 				return
 			}
-			logger = logger.With(sl.Secret("token", token))
+			*loggerPtr = (*loggerPtr).With(sl.Secret("token", token))
 
 			if auth == nil {
 				authFailed(ww, r, "Unauthorized: authentication not enabled")
@@ -74,11 +77,11 @@ func New(log *slog.Logger, auth Authenticate) func(next http.Handler) http.Handl
 
 			user, err := auth.AuthenticateByToken(token)
 			if err != nil {
-				logger = logger.With(sl.Err(err))
+				*loggerPtr = (*loggerPtr).With(sl.Err(err))
 				authFailed(ww, r, "Unauthorized: token not found")
 				return
 			}
-			logger = logger.With(
+			*loggerPtr = (*loggerPtr).With(
 				slog.String("user", user.Username),
 			)
 			ctx := cont.PutUser(r.Context(), user)
