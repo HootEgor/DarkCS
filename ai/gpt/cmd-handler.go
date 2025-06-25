@@ -23,6 +23,10 @@ func (o *Overseer) handleCommand(userId, name, args string) (interface{}, error)
 	}
 }
 
+type stringResp struct {
+	Result string `json:"result"`
+}
+
 type getProductInfoResp struct {
 	Codes []string `json:"codes"`
 }
@@ -54,7 +58,10 @@ func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, erro
 	return productsInfo, nil
 }
 
-func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
+func (o *Overseer) handleUpdateUserPhone(userId, args string) (stringResp, error) {
+
+	cmdResp := stringResp{}
+
 	var resp *UpdateUserPhoneResp
 	err := json.Unmarshal([]byte(args), &resp)
 	if err != nil {
@@ -62,7 +69,8 @@ func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 			slog.String("args", args),
 			sl.Err(err),
 		).Error("unmarshalling response")
-		return fmt.Sprintf("error unmarshalling response: %v", err), nil
+		cmdResp.Result = fmt.Sprintf("Error unmarshalling response: %v", err)
+		return cmdResp, nil
 	}
 	phone := resp.Phone
 
@@ -73,7 +81,8 @@ func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 			slog.String("phone", phone),
 			sl.Err(err),
 		).Error("parsing user data")
-		return fmt.Sprintf("Error parsing user data: %v", err), nil
+		cmdResp.Result = fmt.Sprintf("Error parsing user data: %v", err)
+		return cmdResp, nil
 	}
 	err = o.authService.UpdateUserPhone(email, phone, telegramId)
 	if err != nil {
@@ -82,8 +91,10 @@ func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 			slog.String("phone", phone),
 			sl.Err(err),
 		).Error("updating user phone")
-		return fmt.Sprintf("Error updating phone: %v", err), nil
+		cmdResp.Result = fmt.Sprintf("Error updating phone: %v", err)
+		return cmdResp, nil
 	}
 
-	return "Phone updated successfully", nil
+	cmdResp.Result = "Phone updated successfully"
+	return cmdResp, nil
 }
