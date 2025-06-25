@@ -21,10 +21,6 @@ func (o *Overseer) handleCommand(userId, name, args string) (interface{}, error)
 	}
 }
 
-type stringResp struct {
-	Result string `json:"result"`
-}
-
 type getProductInfoResp struct {
 	Codes []string `json:"codes"`
 }
@@ -48,26 +44,23 @@ func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, erro
 	return productsInfo, nil
 }
 
-func (o *Overseer) handleUpdateUserPhone(userId, args string) (*stringResp, error) {
-
-	cmdResp := &stringResp{}
+func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 
 	var resp *UpdateUserPhoneResp
 	err := json.Unmarshal([]byte(args), &resp)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	phone := resp.Phone
 
 	email, _, telegramId, err := entity.GetUserDataFromId(userId)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	err = o.authService.UpdateUserPhone(email, phone, telegramId)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	cmdResp.Result = "Phone updated successfully"
-	return cmdResp, nil
+	return "Phone updated successfully", nil
 }

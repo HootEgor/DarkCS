@@ -48,5 +48,9 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		).Error("save message")
 	}
 
+	c.log.With(
+		slog.String("text", answer.Text),
+	).Debug("response")
+
 	return answer.Text, err
 }
