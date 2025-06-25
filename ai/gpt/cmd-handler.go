@@ -16,6 +16,8 @@ func (o *Overseer) handleCommand(userId, name, args string) (interface{}, error)
 		return o.handleGetProductInfo(args)
 	case "update_user_phone":
 		return o.handleUpdateUserPhone(userId, args)
+	case "create_order":
+		return o.handleCreateOrder(userId, args)
 	default:
 		return "", nil
 	}
@@ -25,8 +27,12 @@ type getProductInfoResp struct {
 	Codes []string `json:"codes"`
 }
 
-type UpdateUserPhoneResp struct {
+type updateUserPhoneResp struct {
 	Phone string `json:"phone"`
+}
+
+type createOrderResp struct {
+	Codes []string `json:"codes"`
 }
 
 func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, error) {
@@ -46,7 +52,7 @@ func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, erro
 
 func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 
-	var resp *UpdateUserPhoneResp
+	var resp *updateUserPhoneResp
 	err := json.Unmarshal([]byte(args), &resp)
 	if err != nil {
 		return "", err
@@ -63,4 +69,34 @@ func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 	}
 
 	return "Phone updated successfully", nil
+}
+
+func (o *Overseer) handleCreateOrder(userId, args string) (interface{}, error) {
+	var resp *createOrderResp
+	err := json.Unmarshal([]byte(args), &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	_, phone, _, err := entity.GetUserDataFromId(userId)
+	if err != nil {
+		return "", err
+	}
+
+	productsInfo, err := o.productService.GetProductInfo(resp.Codes)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := struct {
+		Products []entity.ProductInfo `json:"products"`
+		Msg      string               `json:"msg"`
+		Phone    string               `json:"phone,omitempty"`
+	}{}
+
+	msg.Products = productsInfo
+	msg.Msg = "Order created successfully"
+	msg.Phone = phone
+
+	return msg, nil
 }
