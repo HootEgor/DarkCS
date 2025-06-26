@@ -101,6 +101,7 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.Ai
 	answer := entity.AiAnswer{
 		Text:      "",
 		Assistant: "",
+		Products:  nil,
 	}
 
 	assistantName, err := o.determineAssistant(userId, systemMsg, userMsg)
@@ -123,13 +124,13 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.Ai
 
 	switch assistantName {
 	case entity.ConsultantAss:
-		text, err = o.askConsultant(userId, userMsg)
+		text, answer.Products, err = o.askConsultant(userId, userMsg)
 		break
 	case entity.CalculatorAss:
-		text, err = o.askCalculator(userId, userMsg)
+		text, answer.Products, err = o.askCalculator(userId, userMsg)
 		break
 	default:
-		text, err = o.askConsultant(userId, userMsg)
+		text, answer.Products, err = o.askConsultant(userId, userMsg)
 	}
 
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)

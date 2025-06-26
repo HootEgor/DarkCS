@@ -15,11 +15,11 @@ type ConsultantResponse struct {
 	Codes    []string `json:"codes"`
 }
 
-func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
+func (o *Overseer) askConsultant(userId, userMsg string) (string, []entity.ProductInfo, error) {
 	defer o.locker.Unlock(userId)
 	thread, err := o.getOrCreateThread(userId)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// Send the user message to the assistant
@@ -28,22 +28,22 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
 		Content: userMsg,
 	})
 	if err != nil {
-		return "", fmt.Errorf("error creating message: %v", err)
+		return "", nil, fmt.Errorf("error creating message: %v", err)
 	}
 
 	completed := o.handleRun(userId, thread.ID, o.assistants[entity.ConsultantAss])
 	if !completed {
-		return "", fmt.Errorf("max retries reached, unable to complete run")
+		return "", nil, fmt.Errorf("max retries reached, unable to complete run")
 	}
 
 	// Fetch the messages once the run is complete
 	msgs, err := o.client.ListMessage(context.Background(), thread.ID, nil, nil, nil, nil, nil)
 	if err != nil {
-		return "", fmt.Errorf("error listing messages: %v", err)
+		return "", nil, fmt.Errorf("error listing messages: %v", err)
 	}
 
 	if len(msgs.Messages) == 0 {
-		return "", fmt.Errorf("no messages found")
+		return "", nil, fmt.Errorf("no messages found")
 	}
 
 	responseText := msgs.Messages[0].Content[0].Text.Value
@@ -56,8 +56,17 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, error) {
 			slog.String("response", responseText),
 			sl.Err(err),
 		).Error("unmarshalling response")
-		return responseText, nil
+		return responseText, nil, nil
 	}
 
-	return response.Response, nil
+	productsInfo, err := o.productService.GetProductInfo(response.Codes)
+	if err != nil {
+		o.log.With(
+			slog.String("user", userId),
+			sl.Err(err),
+		).Error("ask consultant")
+		return response.Response, nil, nil
+	}
+
+	return response.Response, productsInfo, nil
 }

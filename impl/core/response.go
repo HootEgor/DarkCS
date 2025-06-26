@@ -53,5 +53,5 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		slog.Any("user", user),
 	).Debug("response")
 
-	return answer.Text, err
+	return answer, err
 }
