@@ -50,6 +50,7 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 
 	c.log.With(
 		slog.String("text", answer.Text),
+		slog.Any("user", user),
 	).Debug("response")
 
 	return answer.Text, err
