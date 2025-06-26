@@ -104,12 +104,12 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{
 		return nil, err
 	}
 
-	basket, err := o.authService.AddToBasket(user.UUID, resp.Products)
-	if err != nil {
-		return nil, err
-	}
+	//basket, err := o.authService.AddToBasket(user.UUID, resp.Products)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	return basket, nil
+	return "basket", nil
 }
 
 func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
