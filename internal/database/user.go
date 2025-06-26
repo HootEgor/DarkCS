@@ -18,11 +18,24 @@ func (m *MongoDB) UpsertUser(user entity.User) error {
 	user.LastSeen = time.Now()
 
 	collection := connection.Database(m.database).Collection(usersCollection)
-	filter := bson.D{{"$or", []bson.D{
-		{{"telegram_id", user.TelegramId}},
-		{{"email", user.Email}},
-		{{"phone", user.Phone}},
-	}}}
+
+	// Build dynamic $or filter
+	var orFilter []bson.D
+	if user.TelegramId != 0 {
+		orFilter = append(orFilter, bson.D{{"telegram_id", user.TelegramId}})
+	}
+	if user.Email != "" {
+		orFilter = append(orFilter, bson.D{{"email", user.Email}})
+	}
+	if user.Phone != "" {
+		orFilter = append(orFilter, bson.D{{"phone", user.Phone}})
+	}
+
+	if len(orFilter) == 0 {
+		return fmt.Errorf("no valid identifier fields to upsert")
+	}
+
+	filter := bson.D{{"$or", orFilter}}
 	update := bson.M{"$set": user}
 
 	_, err = collection.UpdateOne(m.ctx, filter, update, options.Update().SetUpsert(true))
@@ -40,11 +53,24 @@ func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, 
 	defer m.disconnect(connection)
 
 	collection := connection.Database(m.database).Collection(usersCollection)
-	filter := bson.D{{"$or", []bson.D{
-		{{"telegram_id", telegramId}},
-		{{"email", email}},
-		{{"phone", phone}},
-	}}}
+
+	// Build dynamic $or filter
+	var orFilter []bson.D
+	if telegramId != 0 {
+		orFilter = append(orFilter, bson.D{{"telegram_id", telegramId}})
+	}
+	if email != "" {
+		orFilter = append(orFilter, bson.D{{"email", email}})
+	}
+	if phone != "" {
+		orFilter = append(orFilter, bson.D{{"phone", phone}})
+	}
+
+	if len(orFilter) == 0 {
+		return nil, fmt.Errorf("no valid identifier fields to upsert")
+	}
+
+	filter := bson.D{{"$or", orFilter}}
 
 	var user entity.User
 	err = collection.FindOne(m.ctx, filter).Decode(&user)
