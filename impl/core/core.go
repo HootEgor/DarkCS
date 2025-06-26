@@ -22,7 +22,7 @@ type MessageService interface {
 }
 
 type Assistant interface {
-	ComposeResponse(userId, systemMsg, userMsg string) (entity.AiAnswer, error)
+	ComposeResponse(user *entity.User, systemMsg, userMsg string) (entity.AiAnswer, error)
 }
 
 type AuthService interface {

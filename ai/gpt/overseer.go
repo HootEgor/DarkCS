@@ -22,6 +22,10 @@ type ProductService interface {
 
 type AuthService interface {
 	UpdateUserPhone(email, phone string, telegramId int64) error
+
+	GetBasket(userUUID string) (*entity.Basket, error)
+	AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
+	RemoveFromBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 }
 
 type Overseer struct {
@@ -97,17 +101,17 @@ func (l *LockThreads) Unlock(userId string) {
 	mutex.Unlock()
 }
 
-func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.AiAnswer, error) {
+func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string) (entity.AiAnswer, error) {
 	answer := entity.AiAnswer{
 		Text:      "",
 		Assistant: "",
 		Products:  nil,
 	}
 
-	assistantName, err := o.determineAssistant(userId, systemMsg, userMsg)
+	assistantName, err := o.determineAssistant(user, systemMsg, userMsg)
 	if err != nil {
 		o.log.With(
-			slog.String("user", userId),
+			slog.String("userUUID", user.UUID),
 			slog.String("system_msg", systemMsg),
 			slog.String("user_msg", userMsg),
 		).Error("determining assistant", sl.Err(err))
@@ -124,13 +128,13 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.Ai
 
 	switch assistantName {
 	case entity.ConsultantAss:
-		text, answer.Products, err = o.askConsultant(userId, userMsg)
+		text, answer.Products, err = o.askConsultant(user, userMsg)
 		break
 	case entity.CalculatorAss:
-		text, answer.Products, err = o.askCalculator(userId, userMsg)
+		text, answer.Products, err = o.askCalculator(user, userMsg)
 		break
 	default:
-		text, answer.Products, err = o.askConsultant(userId, userMsg)
+		text, answer.Products, err = o.askConsultant(user, userMsg)
 	}
 
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)
@@ -139,9 +143,9 @@ func (o *Overseer) ComposeResponse(userId, systemMsg, userMsg string) (entity.Ai
 	return answer, err
 }
 
-func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string, error) {
-	defer o.locker.Unlock(userId)
-	thread, err := o.getOrCreateThread(userId)
+func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg string) (string, error) {
+	defer o.locker.Unlock(user.UUID)
+	thread, err := o.getOrCreateThread(user.UUID)
 	if err != nil {
 		return "", err
 	}
@@ -156,7 +160,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(userId, thread.ID, o.assistants[entity.OverseerAss])
+	completed := o.handleRun(user, thread.ID, o.assistants[entity.OverseerAss])
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
 	}
@@ -177,7 +181,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 	err = json.Unmarshal([]byte(responseText), &response)
 	if err != nil {
 		o.log.With(
-			slog.String("user", userId),
+			slog.String("userUUID", user.UUID),
 			slog.Int("text_length", len(responseText)),
 			slog.String("response", responseText),
 		).Debug("chat response")
@@ -188,7 +192,7 @@ func (o *Overseer) determineAssistant(userId, systemMsg, userMsg string) (string
 	return response.Assistant, nil
 }
 
-func (o *Overseer) handleRun(userId, threadID, assistantID string) bool {
+func (o *Overseer) handleRun(user *entity.User, threadID, assistantID string) bool {
 	maxRetries := 3
 	completed := false
 	ctx := context.Background()
@@ -223,7 +227,7 @@ func (o *Overseer) handleRun(userId, threadID, assistantID string) bool {
 					for _, toolCall := range run.RequiredAction.SubmitToolOutputs.ToolCalls {
 						cmdName := toolCall.Function.Name
 						cmdArgs := toolCall.Function.Arguments
-						output, err := o.handleCommand(userId, cmdName, cmdArgs)
+						output, err := o.handleCommand(user, cmdName, cmdArgs)
 						if err != nil {
 							o.log.With(
 								slog.String("command", cmdName),

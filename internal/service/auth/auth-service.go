@@ -9,6 +9,9 @@ import (
 type Repository interface {
 	UpsertUser(user entity.User) error
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+
+	UpsertBasket(basket *entity.Basket) (*entity.Basket, error)
+	GetBasket(userUUID string) (*entity.Basket, error)
 }
 
 type Service struct {

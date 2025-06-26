@@ -15,6 +15,7 @@ import (
 
 const (
 	usersCollection    = "users"
+	basketCollection   = "baskets"
 	messagesCollection = "messages"
 	apiKeysCollection  = "api-keys"
 )

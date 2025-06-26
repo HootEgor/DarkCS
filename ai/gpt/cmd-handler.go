@@ -6,7 +6,7 @@ import (
 	"log/slog"
 )
 
-func (o *Overseer) handleCommand(userId, name, args string) (interface{}, error) {
+func (o *Overseer) handleCommand(user *entity.User, name, args string) (interface{}, error) {
 	o.log.With(
 		slog.String("command", name),
 		slog.String("args", args),
@@ -15,9 +15,15 @@ func (o *Overseer) handleCommand(userId, name, args string) (interface{}, error)
 	case "get_products_info":
 		return o.handleGetProductInfo(args)
 	case "update_user_phone":
-		return o.handleUpdateUserPhone(userId, args)
+		return o.handleUpdateUserPhone(user, args)
+	case "get_basket":
+		return o.handleGetBasket(user)
+	case "add_to_basket":
+		return o.handleAddToBasket(user, args)
+	case "remove_from_basket":
+		return o.handleRemoveFromBasket(user, args)
 	case "create_order":
-		return o.handleCreateOrder(userId, args)
+		return o.handleCreateOrder(user)
 	default:
 		return "", nil
 	}
@@ -31,8 +37,8 @@ type updateUserPhoneResp struct {
 	Phone string `json:"phone"`
 }
 
-type createOrderResp struct {
-	Codes []string `json:"codes"`
+type orderResp struct {
+	Products []entity.OrderProduct `json:"products"`
 }
 
 func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, error) {
@@ -50,7 +56,7 @@ func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, erro
 	return productsInfo, nil
 }
 
-func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
+func (o *Overseer) handleUpdateUserPhone(user *entity.User, args string) (string, error) {
 
 	var resp *updateUserPhoneResp
 	err := json.Unmarshal([]byte(args), &resp)
@@ -59,11 +65,7 @@ func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 	}
 	phone := resp.Phone
 
-	email, _, telegramId, err := entity.GetUserDataFromId(userId)
-	if err != nil {
-		return "", err
-	}
-	err = o.authService.UpdateUserPhone(email, phone, telegramId)
+	err = o.authService.UpdateUserPhone(user.Email, phone, user.TelegramId)
 	if err != nil {
 		return "", err
 	}
@@ -71,32 +73,61 @@ func (o *Overseer) handleUpdateUserPhone(userId, args string) (string, error) {
 	return "Phone updated successfully", nil
 }
 
-func (o *Overseer) handleCreateOrder(userId, args string) (interface{}, error) {
-	var resp *createOrderResp
+func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {
+	basket, err := o.authService.GetBasket(user.UUID)
+	if err != nil {
+		return nil, err
+	}
+
+	return basket, nil
+}
+
+func (o *Overseer) handleRemoveFromBasket(user *entity.User, args string) (interface{}, error) {
+	var resp *orderResp
 	err := json.Unmarshal([]byte(args), &resp)
 	if err != nil {
 		return nil, err
 	}
 
-	_, phone, _, err := entity.GetUserDataFromId(userId)
+	basket, err := o.authService.RemoveFromBasket(user.UUID, resp.Products)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	productsInfo, err := o.productService.GetProductInfo(resp.Codes)
+	return basket, nil
+}
+
+func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{}, error) {
+	var resp *orderResp
+	err := json.Unmarshal([]byte(args), &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	basket, err := o.authService.AddToBasket(user.UUID, resp.Products)
+	if err != nil {
+		return nil, err
+	}
+
+	return basket, nil
+}
+
+func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
+
+	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {
 		return nil, err
 	}
 
 	msg := struct {
-		Products []entity.ProductInfo `json:"products"`
-		Msg      string               `json:"msg"`
-		Phone    string               `json:"phone,omitempty"`
+		Basket entity.Basket `json:"basket"`
+		Msg    string        `json:"msg"`
+		Phone  string        `json:"phone,omitempty"`
 	}{}
 
-	msg.Products = productsInfo
+	msg.Basket = *basket
 	msg.Msg = "Order created successfully"
-	msg.Phone = phone
+	msg.Phone = user.Phone
 
 	return msg, nil
 }

@@ -13,3 +13,8 @@ type Product struct {
 	Code        string `json:"code"`
 	Description string `json:"description"`
 }
+
+type OrderProduct struct {
+	Code     string `json:"code"`
+	Quantity int    `json:"quantity"`
+}

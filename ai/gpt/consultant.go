@@ -15,9 +15,9 @@ type ConsultantResponse struct {
 	Codes    []string `json:"codes"`
 }
 
-func (o *Overseer) askConsultant(userId, userMsg string) (string, []entity.ProductInfo, error) {
-	defer o.locker.Unlock(userId)
-	thread, err := o.getOrCreateThread(userId)
+func (o *Overseer) askConsultant(user *entity.User, userMsg string) (string, []entity.ProductInfo, error) {
+	defer o.locker.Unlock(user.UUID)
+	thread, err := o.getOrCreateThread(user.UUID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -31,7 +31,7 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, []entity.Produ
 		return "", nil, fmt.Errorf("error creating message: %v", err)
 	}
 
-	completed := o.handleRun(userId, thread.ID, o.assistants[entity.ConsultantAss])
+	completed := o.handleRun(user, thread.ID, o.assistants[entity.ConsultantAss])
 	if !completed {
 		return "", nil, fmt.Errorf("max retries reached, unable to complete run")
 	}
@@ -52,7 +52,7 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, []entity.Produ
 	err = json.Unmarshal([]byte(responseText), &response)
 	if err != nil {
 		o.log.With(
-			slog.String("user", userId),
+			slog.String("userUUID", user.UUID),
 			slog.String("response", responseText),
 			sl.Err(err),
 		).Error("unmarshalling response")
@@ -62,7 +62,7 @@ func (o *Overseer) askConsultant(userId, userMsg string) (string, []entity.Produ
 	productsInfo, err := o.productService.GetProductInfo(response.Codes)
 	if err != nil {
 		o.log.With(
-			slog.String("user", userId),
+			slog.String("userUUID", user.UUID),
 			sl.Err(err),
 		).Error("ask consultant")
 		return response.Response, nil, nil

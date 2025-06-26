@@ -28,7 +28,7 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		systemMsg = fmt.Sprintf("%s %s,", systemMsg, a)
 	}
 
-	answer, err := c.ass.ComposeResponse(user.GetId(), systemMsg, msg.Message)
+	answer, err := c.ass.ComposeResponse(user, systemMsg, msg.Message)
 	if err != nil {
 		return nil, err
 	}
