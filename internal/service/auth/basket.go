@@ -1,6 +1,9 @@
 package auth
 
-import "DarkCS/entity"
+import (
+	"DarkCS/entity"
+	"fmt"
+)
 
 func (s *Service) GetBasket(userUUID string) (*entity.Basket, error) {
 	return s.repository.GetBasket(userUUID)
@@ -9,7 +12,10 @@ func (s *Service) GetBasket(userUUID string) (*entity.Basket, error) {
 func (s *Service) AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error) {
 	basket, err := s.repository.GetBasket(userUUID)
 	if err != nil {
-		// If basket doesn't exist, create a new one
+		return nil, err
+	}
+
+	if basket == nil {
 		basket = &entity.Basket{
 			UserUUID: userUUID,
 			Products: []entity.OrderProduct{},
@@ -46,6 +52,10 @@ func (s *Service) RemoveFromBasket(userUUID string, products []entity.OrderProdu
 	basket, err := s.repository.GetBasket(userUUID)
 	if err != nil {
 		return nil, err
+	}
+
+	if basket == nil {
+		return nil, fmt.Errorf("the basket for user does not exist")
 	}
 
 	// Create a map for quick lookup of products to remove
