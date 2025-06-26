@@ -3,6 +3,7 @@ package auth
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"github.com/google/uuid"
 	"log/slog"
 )
 
@@ -78,6 +79,14 @@ func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, 
 		return nil, err
 	}
 	if user != nil {
+		if user.UUID == "" {
+			user.UUID = uuid.NewString()
+			err = s.repository.UpsertUser(*user)
+			if err != nil {
+				s.log.Error("upserting user", sl.Err(err))
+				return nil, err
+			}
+		}
 		s.users = append(s.users, *user)
 		return user, nil
 	}
