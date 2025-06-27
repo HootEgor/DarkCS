@@ -5,7 +5,6 @@ import (
 	"DarkCS/internal/lib/sl"
 	"fmt"
 	"log/slog"
-	"time"
 )
 
 type Repository interface {
@@ -77,33 +76,33 @@ func (c *Core) SetAssistant(ass Assistant) {
 
 func (c *Core) Init() {
 	go func() {
-		for {
-			now := time.Now()
-			//nextRun := time.Date(now.Year(), now.Month(), now.Day(), 19, 10, 0, 0, now.Location())
-			nextRun := now
-
-			// Якщо вже після 20:30, переходимо на наступний день
-			//if now.After(nextRun) {
-			//	nextRun = nextRun.Add(24 * time.Hour)
-			//}
-			c.log.With(
-				slog.Time("nextRun", nextRun),
-			).Info("next assistants product list update")
-
-			// Очікуємо до наступного запуску
-			time.Sleep(time.Until(nextRun))
-
-			err := c.ass.AttachNewFile()
-			if err != nil {
-				c.log.With(
-					sl.Err(err),
-				).Error("update assistants product list")
-			} else {
-				c.log.With(
-					slog.String("info", "success"),
-				).Info("update assistants product list")
-			}
-		}
+		_ = c.ass.AttachNewFile()
+		//for {
+		//	now := time.Now()
+		//	nextRun := time.Date(now.Year(), now.Month(), now.Day(), 19, 10, 0, 0, now.Location())
+		//
+		//	// Якщо вже після 20:30, переходимо на наступний день
+		//	if now.After(nextRun) {
+		//		nextRun = nextRun.Add(24 * time.Hour)
+		//	}
+		//	c.log.With(
+		//		slog.Time("nextRun", nextRun),
+		//	).Info("next assistants product list update")
+		//
+		//	// Очікуємо до наступного запуску
+		//	time.Sleep(time.Until(nextRun))
+		//
+		//	err := c.ass.AttachNewFile()
+		//	if err != nil {
+		//		c.log.With(
+		//			sl.Err(err),
+		//		).Error("update assistants product list")
+		//	} else {
+		//		c.log.With(
+		//			slog.String("info", "success"),
+		//		).Info("update assistants product list")
+		//	}
+		//}
 	}()
 }
 
