@@ -93,6 +93,8 @@ func main() {
 		).Info("overseer initialized")
 	}
 
+	handler.Init()
+
 	// *** blocking start with http server ***
 	err = api.New(conf, lg, handler)
 	if err != nil {
