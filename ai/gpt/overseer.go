@@ -401,7 +401,7 @@ func (o *Overseer) AttachNewFile() error {
 	}
 
 	// 7. Attach new vector store to assistant
-	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.OverseerAss], openai.AssistantRequest{
+	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.ConsultantAss], openai.AssistantRequest{
 		ToolResources: &openai.AssistantToolResource{
 			FileSearch: &openai.AssistantToolFileSearch{
 				VectorStoreIDs: []string{calculatorStore.ID},
