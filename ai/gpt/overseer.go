@@ -199,7 +199,8 @@ func (o *Overseer) handleRun(user *entity.User, threadID, assistantID string) bo
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		run, err := o.client.CreateRun(ctx, threadID, openai.RunRequest{
-			AssistantID: assistantID,
+			AssistantID:       assistantID,
+			ParallelToolCalls: false,
 		})
 		if err != nil {
 			o.log.Error(fmt.Sprintf("error creating run: %v", err))
