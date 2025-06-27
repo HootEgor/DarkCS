@@ -24,7 +24,7 @@ type Config struct {
 		DevPrefix    string `yaml:"dev_prefix" env-default:""`
 	} `yaml:"openai"`
 	Username string `yaml:"username" env-default:""`
-	ImgPath  string `yaml:"img_path" env-default:""`
+	SavePath string `yaml:"save_path" env-default:""`
 	Mongo    struct {
 		Enabled     bool   `yaml:"enabled" env-default:"false"`
 		Host        string `yaml:"host" env-default:"127.0.0.1"`

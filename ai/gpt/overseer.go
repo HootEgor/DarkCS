@@ -37,7 +37,7 @@ type Overseer struct {
 	threads        map[string]string
 	productService ProductService
 	authService    AuthService
-	imgPath        string
+	savePath       string
 	locker         *LockThreads
 	log            *slog.Logger
 }
@@ -62,7 +62,7 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 		assistants: assistants,
 		apiKey:     conf.OpenAI.ApiKey,
 		threads:    make(map[string]string),
-		imgPath:    conf.ImgPath,
+		savePath:   conf.SavePath,
 		locker:     &LockThreads{threads: make(map[string]*sync.Mutex)},
 		log:        logger.With(sl.Module("overseer")),
 	}
@@ -323,7 +323,7 @@ func (o *Overseer) AttachNewFile() error {
 	}
 
 	prefix := "products-"
-	fileName := fmt.Sprintf("%s/%s%s.json", o.imgPath, prefix, time.Now().Format("20060102"))
+	fileName := fmt.Sprintf("%s/%s%s.json", o.savePath, prefix, time.Now().Format("20060102"))
 
 	// 2. Create a temporary file
 	f, err := os.Create(fileName)
@@ -368,7 +368,7 @@ func (o *Overseer) AttachNewFile() error {
 	for _, file := range filesList.Files {
 		if file.Purpose == string(openai.PurposeAssistants) &&
 			file.ID != uploadedFile.ID &&
-			strings.HasPrefix(file.FileName, fmt.Sprintf("%s/%s", o.imgPath, prefix)) {
+			strings.HasPrefix(file.FileName, fmt.Sprintf("%s/%s", o.savePath, prefix)) {
 			if err := o.client.DeleteFile(ctx, file.ID); err != nil {
 				o.log.Warn("Failed to delete file", slog.String("file_id", file.ID), slog.String("error", err.Error()))
 			}

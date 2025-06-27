@@ -14,7 +14,7 @@ openai:
   consultant_id: your-logger-id
   calculator_id: your-calculator-id
   dev_prefix: Dev
-img_path: your-path-to-imgs
+save_path: your-path-to-imgs
 mongo:
   enabled: false
   host: 127.0.0.1

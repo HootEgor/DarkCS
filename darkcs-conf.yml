@@ -16,7 +16,7 @@ openai:
   consultant_id: ${CONSULTANT_ID}
   calculator_id: ${CALCULATOR_ID}
   dev_prefix: Dev
-img_path: /var/lib/darkbot
+save_path: /var/lib/darkcs
 mongo:
   enabled: true
   host: ${MONGO_HOST}
