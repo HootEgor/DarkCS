@@ -2,6 +2,7 @@ package gpt
 
 import (
 	"DarkCS/entity"
+	"DarkCS/internal/lib/sl"
 	"encoding/json"
 	"log/slog"
 )
@@ -128,6 +129,14 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 	msg.Basket = *basket
 	msg.Msg = "Order created successfully"
 	msg.Phone = user.Phone
+
+	err = o.authService.ClearBasket(user.UUID)
+	if err != nil {
+		o.log.With(
+			slog.String("user", user.UUID),
+			sl.Err(err),
+		).Error("clear basket after order creation")
+	}
 
 	return msg, nil
 }

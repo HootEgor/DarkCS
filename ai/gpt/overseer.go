@@ -26,6 +26,7 @@ type AuthService interface {
 	UpdateUserPhone(email, phone string, telegramId int64) error
 
 	GetBasket(userUUID string) (*entity.Basket, error)
+	ClearBasket(userUUID string) error
 	AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 	RemoveFromBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 }

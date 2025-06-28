@@ -9,6 +9,21 @@ func (s *Service) GetBasket(userUUID string) (*entity.Basket, error) {
 	return s.repository.GetBasket(userUUID)
 }
 
+func (s *Service) ClearBasket(userUUID string) error {
+	basket, err := s.repository.GetBasket(userUUID)
+	if err != nil {
+		return err
+	}
+
+	if basket == nil {
+		return nil
+	}
+
+	basket.Products = []entity.OrderProduct{}
+	_, err = s.repository.UpsertBasket(basket)
+	return err
+}
+
 func (s *Service) AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error) {
 	basket, err := s.repository.GetBasket(userUUID)
 	if err != nil {
