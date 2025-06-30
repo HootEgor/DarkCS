@@ -90,18 +90,24 @@ func (c *Core) Init() {
 
 			time.Sleep(time.Until(nextRun))
 
-			err := c.ass.AttachNewFile()
-			if err != nil {
-				c.log.With(
-					sl.Err(err),
-				).Error("update assistants product list")
-			} else {
-				c.log.With(
-					slog.String("info", "success"),
-				).Info("update assistants product list")
-			}
+			_ = c.AttachNewFile()
 		}
 	}()
+}
+
+func (c *Core) AttachNewFile() error {
+	err := c.ass.AttachNewFile()
+	if err != nil {
+		c.log.With(
+			sl.Err(err),
+		).Error("update assistants product list")
+	} else {
+		c.log.With(
+			slog.String("info", "success"),
+		).Info("update assistants product list")
+	}
+
+	return err
 }
 
 func (c *Core) SendMail(message *entity.MailMessage) (interface{}, error) {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"DarkCS/internal/config"
+	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/errors"
 	"DarkCS/internal/http-server/handlers/product"
 	"DarkCS/internal/http-server/handlers/response"
@@ -31,6 +32,7 @@ type Handler interface {
 	product.Core
 	response.Core
 	user.Core
+	assistant.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -60,6 +62,9 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Route("/user", func(r chi.Router) {
 			r.Get("/", user.GetUser(log, handler))
 			r.Post("/block", user.BlockUser(log, handler))
+		})
+		v1.Route("/assistant", func(r chi.Router) {
+			r.Get("/attach", assistant.AttachFile(log, handler))
 		})
 	})
 
