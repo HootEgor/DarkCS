@@ -28,7 +28,16 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		systemMsg = fmt.Sprintf("%s %s,", systemMsg, a)
 	}
 
-	answer, err := c.ass.ComposeResponse(user, systemMsg, msg.Message)
+	userMsg := msg.Message
+
+	if msg.VoiceMsgBase64 != "" {
+		userMsg, err = c.ass.GetAudioText(msg.VoiceMsgBase64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	answer, err := c.ass.ComposeResponse(user, systemMsg, userMsg)
 	if err != nil {
 		return nil, err
 	}

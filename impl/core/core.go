@@ -25,6 +25,8 @@ type MessageService interface {
 type Assistant interface {
 	ComposeResponse(user *entity.User, systemMsg, userMsg string) (entity.AiAnswer, error)
 
+	GetAudioText(fileURL string) (string, error)
+
 	AttachNewFile() error
 }
 
