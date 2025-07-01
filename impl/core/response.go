@@ -35,6 +35,10 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
+		c.log.With(
+			slog.String("text", userMsg),
+			slog.Any("user", user),
+		).Debug("audio to text")
 	}
 
 	answer, err := c.ass.ComposeResponse(user, systemMsg, userMsg)
