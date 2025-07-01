@@ -34,7 +34,7 @@ func ComposeResponse(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		if req.Message == "" || req.VoiceMsgBase64 == "" {
+		if req.Message == "" && req.VoiceMsgBase64 == "" {
 			logger.Error("no message/audio provided")
 			render.JSON(w, r, response.Error("No message/audio provided"))
 			return
