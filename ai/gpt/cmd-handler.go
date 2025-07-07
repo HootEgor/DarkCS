@@ -196,14 +196,18 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 	}
 
 	msg := struct {
-		Basket entity.Basket `json:"basket"`
-		Msg    string        `json:"msg"`
-		Phone  string        `json:"phone,omitempty"`
+		Basket  entity.Basket `json:"basket"`
+		Msg     string        `json:"msg"`
+		Phone   string        `json:"phone,omitempty"`
+		Email   string        `json:"email,omitempty"`
+		Address string        `json:"address,omitempty"`
 	}{}
 
 	msg.Basket = *basket
 	msg.Msg = "Order created successfully"
 	msg.Phone = user.Phone
+	msg.Email = user.Email
+	msg.Address = user.Address
 
 	err = o.authService.ClearBasket(user.UUID)
 	if err != nil {
