@@ -125,7 +125,7 @@ func (o *Overseer) handleUpdateUserAddress(user *entity.User, args string) (stri
 		return "", err
 	}
 
-	return "Email updated successfully", nil
+	return "Address updated successfully", nil
 }
 
 func (o *Overseer) handleUpdateUserName(user *entity.User, args string) (string, error) {
