@@ -3,6 +3,7 @@ package auth
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"fmt"
 	"github.com/google/uuid"
 	"log/slog"
 )
@@ -56,8 +57,12 @@ func (s *Service) RegisterUser(email, phone string, telegramId int64) (*entity.U
 	return user, nil
 }
 
-func (s *Service) UpdateUser(email, phone string, telegramId int64) error {
-	user, err := s.repository.GetUser(email, phone, telegramId)
+func (s *Service) UpdateUser(user *entity.User) error {
+	if user == nil {
+		return fmt.Errorf("user is nil")
+	}
+
+	err := s.repository.UpsertUser(*user)
 	if err != nil {
 		return err
 	}
@@ -123,28 +128,6 @@ func (s *Service) BlockUser(email, phone string, telegramId int64, block bool) e
 	}
 
 	user.Blocked = block
-
-	err = s.repository.UpsertUser(*user)
-	if err != nil {
-		return err
-	}
-
-	s.updateUser(*user)
-
-	return nil
-}
-
-func (s *Service) UpdateUserPhone(email, phone string, telegramId int64) error {
-	user, err := s.GetUser(email, phone, telegramId)
-	if err != nil {
-		return err
-	}
-
-	if user.Phone == phone {
-		return nil // No change needed
-	}
-
-	user.Phone = phone
 
 	err = s.repository.UpsertUser(*user)
 	if err != nil {

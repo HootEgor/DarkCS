@@ -23,7 +23,7 @@ type ProductService interface {
 }
 
 type AuthService interface {
-	UpdateUserPhone(email, phone string, telegramId int64) error
+	UpdateUser(user *entity.User) error
 
 	GetBasket(userUUID string) (*entity.Basket, error)
 	ClearBasket(userUUID string) error

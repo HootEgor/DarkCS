@@ -17,6 +17,14 @@ func (o *Overseer) handleCommand(user *entity.User, name, args string) (interfac
 		return o.handleGetProductInfo(args)
 	case "update_user_phone":
 		return o.handleUpdateUserPhone(user, args)
+	case "update_user_email":
+		return o.handleUpdateUserEmail(user, args)
+	case "update_user_address":
+		return o.handleUpdateUserAddress(user, args)
+	case "update_user_name":
+		return o.handleUpdateUserName(user, args)
+	case "get_user_info":
+		return o.handleGetUserInfo(user)
 	case "get_basket":
 		return o.handleGetBasket(user)
 	case "add_to_basket":
@@ -36,6 +44,18 @@ type getProductInfoResp struct {
 
 type updateUserPhoneResp struct {
 	Phone string `json:"phone"`
+}
+
+type updateUserEmailResp struct {
+	Email string `json:"email"`
+}
+
+type updateUserAddressResp struct {
+	Address string `json:"address"`
+}
+
+type updateUserNameResp struct {
+	Name string `json:"name"`
 }
 
 type orderResp struct {
@@ -64,14 +84,69 @@ func (o *Overseer) handleUpdateUserPhone(user *entity.User, args string) (string
 	if err != nil {
 		return "", err
 	}
-	phone := resp.Phone
+	user.Phone = resp.Phone
 
-	err = o.authService.UpdateUserPhone(user.Email, phone, user.TelegramId)
+	err = o.authService.UpdateUser(user)
 	if err != nil {
 		return "", err
 	}
 
 	return "Phone updated successfully", nil
+}
+
+func (o *Overseer) handleUpdateUserEmail(user *entity.User, args string) (string, error) {
+
+	var resp *updateUserEmailResp
+	err := json.Unmarshal([]byte(args), &resp)
+	if err != nil {
+		return "", err
+	}
+	user.Email = resp.Email
+
+	err = o.authService.UpdateUser(user)
+	if err != nil {
+		return "", err
+	}
+
+	return "Email updated successfully", nil
+}
+
+func (o *Overseer) handleUpdateUserAddress(user *entity.User, args string) (string, error) {
+
+	var resp *updateUserAddressResp
+	err := json.Unmarshal([]byte(args), &resp)
+	if err != nil {
+		return "", err
+	}
+	user.Address = resp.Address
+
+	err = o.authService.UpdateUser(user)
+	if err != nil {
+		return "", err
+	}
+
+	return "Email updated successfully", nil
+}
+
+func (o *Overseer) handleUpdateUserName(user *entity.User, args string) (string, error) {
+
+	var resp *updateUserNameResp
+	err := json.Unmarshal([]byte(args), &resp)
+	if err != nil {
+		return "", err
+	}
+	user.Name = resp.Name
+
+	err = o.authService.UpdateUser(user)
+	if err != nil {
+		return "", err
+	}
+
+	return "Name updated successfully", nil
+}
+
+func (o *Overseer) handleGetUserInfo(user *entity.User) (interface{}, error) {
+	return user.GetInfo(), nil
 }
 
 func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {

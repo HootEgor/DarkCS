@@ -10,10 +10,18 @@ type User struct {
 	Name       string    `json:"name" bson:"name" validate:"omitempty"`
 	Email      string    `json:"email" bson:"email" validate:"omitempty,email"`
 	Phone      string    `json:"phone" bson:"phone" validate:"omitempty"`
+	Address    string    `json:"address" bson:"address" validate:"omitempty"`
 	TelegramId int64     `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
 	Role       string    `json:"role" bson:"role" validate:"omitempty"`
 	Blocked    bool      `json:"blocked" bson:"blocked" validate:"omitempty"`
 	LastSeen   time.Time `json:"last_seen" bson:"lastSeen"`
+}
+
+type UserInfo struct {
+	Name    string `json:"name" bson:"name"`
+	Email   string `json:"email" bson:"email"`
+	Phone   string `json:"phone" bson:"phone"`
+	Address string `json:"address" bson:"address"`
 }
 
 const (
@@ -84,4 +92,13 @@ func (u *User) GetAssistants() []string {
 	}
 
 	return []string{OverseerAss, ConsultantAss}
+}
+
+func (u *User) GetInfo() *UserInfo {
+	return &UserInfo{
+		Name:    u.Name,
+		Email:   u.Email,
+		Phone:   u.Phone,
+		Address: u.Address,
+	}
 }
