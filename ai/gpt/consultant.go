@@ -11,8 +11,9 @@ import (
 )
 
 type ConsultantResponse struct {
-	Response string   `json:"response"`
-	Codes    []string `json:"codes"`
+	Response  string   `json:"response"`
+	Codes     []string `json:"codes"`
+	ShowCodes bool     `json:"show_codes"`
 }
 
 func (o *Overseer) askConsultant(user *entity.User, userMsg string) (string, []entity.ProductInfo, error) {
@@ -57,6 +58,10 @@ func (o *Overseer) askConsultant(user *entity.User, userMsg string) (string, []e
 			sl.Err(err),
 		).Error("unmarshalling response")
 		return responseText, nil, nil
+	}
+
+	if !response.ShowCodes {
+		return response.Response, nil, nil
 	}
 
 	productsInfo, err := o.productService.GetProductInfo(response.Codes)

@@ -20,6 +20,8 @@ import (
 type ProductService interface {
 	GetProductInfo(articles []string) ([]entity.ProductInfo, error)
 	GetAvailableProducts() ([]entity.Product, error)
+
+	ValidateOrder(order *entity.Order) (bool, error)
 }
 
 type AuthService interface {

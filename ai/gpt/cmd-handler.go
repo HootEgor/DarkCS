@@ -2,7 +2,6 @@ package gpt
 
 import (
 	"DarkCS/entity"
-	"DarkCS/internal/lib/sl"
 	"encoding/json"
 	"log/slog"
 )
@@ -195,27 +194,40 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 		return nil, err
 	}
 
-	msg := struct {
-		Basket  entity.Basket `json:"basket"`
-		Msg     string        `json:"msg"`
-		Phone   string        `json:"phone,omitempty"`
-		Email   string        `json:"email,omitempty"`
-		Address string        `json:"address,omitempty"`
-	}{}
-
-	msg.Basket = *basket
-	msg.Msg = "Order created successfully"
-	msg.Phone = user.Phone
-	msg.Email = user.Email
-	msg.Address = user.Address
-
-	err = o.authService.ClearBasket(user.UUID)
-	if err != nil {
-		o.log.With(
-			slog.String("user", user.UUID),
-			sl.Err(err),
-		).Error("clear basket after order creation")
+	codes := make([]string, 0, len(basket.Products))
+	for _, product := range basket.Products {
+		codes = append(codes, product.Code)
 	}
 
-	return msg, nil
+	productsInfo, err := o.productService.GetProductInfo(codes)
+	if err != nil {
+		return nil, err
+	}
+
+	var products []entity.OrderProduct
+	for _, product := range basket.Products {
+		for _, info := range productsInfo {
+			if product.Code == info.Code {
+				products = append(products, entity.OrderProduct{
+					Name:     info.Name,
+					Code:     product.Code,
+					Quantity: product.Quantity,
+					Price:    info.Price,
+				})
+				break
+			}
+		}
+	}
+
+	order := entity.Order{
+		User:     *user.GetInfo(),
+		Products: products,
+	}
+
+	valid, err := o.productService.ValidateOrder(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	return valid, nil
 }
