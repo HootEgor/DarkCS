@@ -183,8 +183,6 @@ func (t *TgBot) plainResponse(chatId int64, text string) {
 	// Send the response back to the user
 	sanitized := sanitize(text, false)
 
-	t.log.Debug("plain response")
-
 	if sanitized != "" {
 		defer func() {
 			if r := recover(); r != nil {

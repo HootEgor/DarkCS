@@ -11,6 +11,14 @@ import (
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	if msg.SmartSenderId != "" {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					c.log.With(
+						slog.Any("panic", r),
+					).Error("send smart msg")
+				}
+			}()
+
 			answer, err := c.processRequest(msg)
 			if err != nil {
 				c.log.With(
