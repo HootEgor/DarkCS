@@ -18,7 +18,7 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 				).Error("compose smart response")
 			}
 
-			err = c.smartService.SendMessage(answer.Text, msg.SmartSenderId)
+			err = c.smartService.SendMessage(msg.SmartSenderId, answer.Text)
 			c.log.With(
 				sl.Err(err),
 			).Error("send smart msg")
