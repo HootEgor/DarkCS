@@ -19,12 +19,12 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 				).Error("compose smart response")
 			}
 
-			c.log.Debug("smart sender")
-
 			err = c.smartService.SendMessage(msg.SmartSenderId, answer.Text)
-			c.log.With(
-				sl.Err(err),
-			).Error("send smart msg")
+			if err != nil {
+				c.log.With(
+					sl.Err(err),
+				).Error("send smart msg")
+			}
 		}(msg)
 
 		return nil, nil
