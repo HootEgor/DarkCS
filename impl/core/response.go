@@ -9,6 +9,28 @@ import (
 )
 
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
+	if msg.SmartSenderId != "" {
+		go func() {
+			answer, err := c.processRequest(msg)
+			if err != nil {
+				c.log.With(
+					sl.Err(err),
+				).Error("compose smart response")
+			}
+
+			err = c.smartService.SendMessage(answer.Text, msg.SmartSenderId)
+			c.log.With(
+				sl.Err(err),
+			).Error("send smart msg")
+		}()
+
+		return nil, nil
+	}
+
+	return c.processRequest(msg)
+}
+
+func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) {
 	if c.ass == nil {
 		return nil, fmt.Errorf("assistant not initialized")
 	}
@@ -75,5 +97,5 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		slog.Any("user", user),
 	).Debug("response")
 
-	return answer, err
+	return &answer, err
 }

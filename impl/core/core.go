@@ -35,15 +35,20 @@ type AuthService interface {
 	BlockUser(email, phone string, telegramId int64, block bool) error
 }
 
+type SmartService interface {
+	SendMessage(userId, text string) error
+}
+
 type Core struct {
-	repo        Repository
-	ms          MessageService
-	ps          ProductService
-	ass         Assistant
-	authService AuthService
-	authKey     string
-	keys        map[string]string
-	log         *slog.Logger
+	repo         Repository
+	ms           MessageService
+	ps           ProductService
+	ass          Assistant
+	authService  AuthService
+	smartService SmartService
+	authKey      string
+	keys         map[string]string
+	log          *slog.Logger
 }
 
 func New(log *slog.Logger) *Core {
@@ -75,6 +80,10 @@ func (c *Core) SetAuthService(auth AuthService) {
 
 func (c *Core) SetAssistant(ass Assistant) {
 	c.ass = ass
+}
+
+func (c *Core) SetSmartService(smart SmartService) {
+	c.smartService = smart
 }
 
 func (c *Core) Init() {

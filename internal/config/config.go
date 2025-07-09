@@ -40,6 +40,10 @@ type Config struct {
 		Password string `yaml:"password" env-default:""`
 		BaseURL  string `yaml:"base_url" env-default:""`
 	} `yaml:"prod-service"`
+	SmartSender struct {
+		ApiKey  string `yaml:"api_key" env-default:""`
+		BaseUrl string `yaml:"base_url" env-default:""`
+	} `yaml:"smart-sender"`
 	Listen struct {
 		BindIP string `yaml:"bind_ip" env-default:"127.0.0.1"`
 		Port   string `yaml:"port" env-default:"9100"`

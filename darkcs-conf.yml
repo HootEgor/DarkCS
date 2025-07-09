@@ -29,6 +29,9 @@ prod-service:
   login: ${REPO_LOGIN}
   password: ${REPO_PASSWORD}
   base_url: ${REPO_BASE_URL}
+smart-sender:
+  api_key: ${SMART_API_KEY}
+  send_msg_url: https://api.smartsender.com/v1
 listen:
   bind_ip: 0.0.0.0
   port: ${LISTEN_PORT}

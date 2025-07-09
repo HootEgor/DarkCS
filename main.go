@@ -11,6 +11,7 @@ import (
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/service/auth"
 	"DarkCS/internal/service/product"
+	smart_sender "DarkCS/internal/service/smart-sender"
 	"flag"
 	"log/slog"
 )
@@ -92,6 +93,9 @@ func main() {
 			sl.Secret("overseer_id", conf.OpenAI.OverseerID),
 		).Info("overseer initialized")
 	}
+
+	smartService := smart_sender.NewSmartSenderService(conf, lg)
+	handler.SetSmartService(smartService)
 
 	handler.Init()
 
