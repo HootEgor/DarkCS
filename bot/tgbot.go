@@ -176,13 +176,14 @@ func (t *TgBot) SendMessageWithLevel(msg string, level slog.Level) {
 }
 
 func (t *TgBot) plainResponse(chatId int64, text string) {
-
 	// ChatGPT uses ** for bold text, so we need to replace it
 	text = strings.ReplaceAll(text, "**", "*")
 	text = strings.ReplaceAll(text, "![", "[")
 
 	// Send the response back to the user
 	sanitized := sanitize(text, false)
+
+	t.log.Debug("plain response")
 
 	if sanitized != "" {
 		defer func() {
