@@ -11,13 +11,6 @@ import (
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	if msg.SmartSenderId != "" {
 		go func(msg entity.HttpUserMsg) {
-			defer func() {
-				if r := recover(); r != nil {
-					c.log.With(
-						slog.Any("panic", r),
-					).Error("send smart msg")
-				}
-			}()
 
 			answer, err := c.processRequest(msg)
 			if err != nil {
@@ -25,6 +18,8 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 					sl.Err(err),
 				).Error("compose smart response")
 			}
+
+			c.log.Debug("smart sender")
 
 			err = c.smartService.SendMessage(msg.SmartSenderId, answer.Text)
 			c.log.With(

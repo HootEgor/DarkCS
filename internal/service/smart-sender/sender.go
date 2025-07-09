@@ -30,8 +30,17 @@ type sendRequest struct {
 	Content string `json:"content"`
 }
 
-func (r *Service) SendMessage(userId, text string) error {
-	url := fmt.Sprintf("%s/contacts/%s/send", r.baseUrl, userId)
+func (s *Service) SendMessage(userId, text string) error {
+
+	defer func() {
+		if r := recover(); r != nil {
+			s.log.With(
+				slog.Any("panic", r),
+			).Error("send smart msg")
+		}
+	}()
+
+	url := fmt.Sprintf("%s/contacts/%s/send", s.baseUrl, userId)
 
 	reqBody := sendRequest{
 		Type:    "text",
@@ -40,7 +49,7 @@ func (r *Service) SendMessage(userId, text string) error {
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		r.log.With(
+		s.log.With(
 			sl.Err(err),
 		).Error("marshal request body")
 		return err
@@ -48,19 +57,19 @@ func (r *Service) SendMessage(userId, text string) error {
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		r.log.With(
+		s.log.With(
 			sl.Err(err),
 		).Error("create request")
 		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-KEY", r.apiKey)
+	req.Header.Set("X-API-KEY", s.apiKey)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		r.log.With(
+		s.log.With(
 			sl.Err(err),
 		).Error("send HTTP")
 		return err
@@ -68,13 +77,13 @@ func (r *Service) SendMessage(userId, text string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		r.log.With(
+		s.log.With(
 			sl.Err(err),
 		).Error("non-2xx response")
 		return fmt.Errorf("smart sender responded with %d", resp.StatusCode)
 	}
 
-	r.log.With(
+	s.log.With(
 		slog.String("user", userId),
 	).Info("message sent")
 	return nil
