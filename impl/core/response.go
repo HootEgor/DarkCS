@@ -10,7 +10,7 @@ import (
 
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	if msg.SmartSenderId != "" {
-		go func() {
+		go func(msg entity.HttpUserMsg) {
 			defer func() {
 				if r := recover(); r != nil {
 					c.log.With(
@@ -30,7 +30,7 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 			c.log.With(
 				sl.Err(err),
 			).Error("send smart msg")
-		}()
+		}(msg)
 
 		return nil, nil
 	}
