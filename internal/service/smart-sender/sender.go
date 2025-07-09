@@ -26,8 +26,9 @@ func NewSmartSenderService(conf *config.Config, logger *slog.Logger) *Service {
 }
 
 type sendRequest struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Watermark int64  `json:"watermark"`
 }
 
 func (s *Service) SendMessage(userId, text string) error {
@@ -43,8 +44,9 @@ func (s *Service) SendMessage(userId, text string) error {
 	url := fmt.Sprintf("%s/contacts/%s/send", s.baseUrl, userId)
 
 	reqBody := sendRequest{
-		Type:    "text",
-		Content: text,
+		Type:      "text",
+		Content:   text,
+		Watermark: time.Now().Unix(),
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -64,7 +66,7 @@ func (s *Service) SendMessage(userId, text string) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-KEY", s.apiKey)
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)

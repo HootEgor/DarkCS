@@ -21,11 +21,6 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 
 			c.log.Debug("smart sender")
 
-			if c.smartService == nil {
-				c.log.Debug("smart service is nil")
-				return
-			}
-
 			err = c.smartService.SendMessage(msg.SmartSenderId, answer.Text)
 			c.log.With(
 				sl.Err(err),
