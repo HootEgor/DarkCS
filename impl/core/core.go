@@ -31,6 +31,7 @@ type Assistant interface {
 }
 
 type AuthService interface {
+	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool) error
 }
@@ -138,4 +139,8 @@ func (c *Core) BlockUser(email, phone string, telegramId int64, block bool) erro
 
 func (c *Core) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
 	return c.authService.GetUser(email, phone, telegramId)
+}
+
+func (c *Core) CreateUser(name, email, phone string, telegramId int64) (*entity.User, error) {
+	return c.authService.RegisterUser(name, email, phone, telegramId)
 }

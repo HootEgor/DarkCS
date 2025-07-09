@@ -42,11 +42,12 @@ func (s *Service) updateUser(user entity.User) {
 	}
 }
 
-func (s *Service) RegisterUser(email, phone string, telegramId int64) (*entity.User, error) {
+func (s *Service) RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error) {
 	user, _ := s.repository.GetUser(email, phone, telegramId)
 
 	if user == nil {
 		user = entity.NewUser(email, phone, telegramId)
+		user.Name = name
 		err := s.repository.UpsertUser(*user)
 		if err != nil {
 			return nil, err
@@ -96,7 +97,7 @@ func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, 
 		return user, nil
 	}
 
-	user, err = s.RegisterUser(email, phone, telegramId)
+	user, err = s.RegisterUser("", email, phone, telegramId)
 
 	return user, err
 }
