@@ -37,7 +37,7 @@ type AuthService interface {
 }
 
 type SmartService interface {
-	SendMessage(userId, text string) error
+	EditLatestInputMessage(userId, text string) error
 }
 
 type Core struct {
