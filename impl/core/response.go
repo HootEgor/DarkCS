@@ -61,6 +61,15 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 		).Error("save message")
 	}
 
+	if msg.WithHtmlLinks {
+		if len(answer.Products) > 0 {
+			answer.Text += "\n"
+			for _, p := range answer.Products {
+				answer.Text += fmt.Sprintf("\n<a href=\"%s\">%s</a> - %s грн.", p.Url, p.Name, p.Price)
+			}
+		}
+	}
+
 	c.log.With(
 		slog.String("text", answer.Text),
 		slog.Any("user", user),
