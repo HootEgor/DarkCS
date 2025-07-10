@@ -85,11 +85,14 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 	var orderedItems []entity.OrderedItem
 
 	for _, d := range details {
+		if !d.Available {
+			continue
+		}
 		price, _ := strconv.ParseFloat(d.Price, 64)
 		item := entity.OrderedItem{
 			Product: entity.ZohoProduct{
-				ID:   d.ZohoId,
-				Name: d.Name,
+				ID: d.ZohoId,
+				//Name: d.Name,
 			},
 			Quantity:  d.Quantity,
 			Discount:  0,
