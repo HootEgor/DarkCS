@@ -17,6 +17,12 @@ type Response struct {
 	Message  string           `json:"message"`
 }
 
+type OrderValidateResponse struct {
+	Success  bool                  `json:"success"`
+	Products []entity.OrderProduct `json:"data"`
+	Message  string                `json:"message"`
+}
+
 func ParseInfoResponse(body []byte) (*InfoResponse, error) {
 	var response InfoResponse
 	err := json.Unmarshal(body, &response)
@@ -36,10 +42,10 @@ func ParseResponse(body []byte) (*Response, error) {
 }
 
 func ParseOrderValidateResponse(body []byte) ([]entity.OrderProduct, error) {
-	var response []entity.OrderProduct
+	var response OrderValidateResponse
 	err := json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, err
 	}
-	return response, nil
+	return response.Products, nil
 }
