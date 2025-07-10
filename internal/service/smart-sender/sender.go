@@ -158,13 +158,6 @@ func (s *Service) trigger(userId, name string) error {
 	fireReq.Header.Set("Authorization", "Bearer "+s.apiKey)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(fireReq)
-	if err != nil {
-		s.log.With(sl.Err(err)).Error("send GET HTTP")
-		return err
-	}
-	defer resp.Body.Close()
-
 	fireResp, err := client.Do(fireReq)
 	if err != nil {
 		s.log.With(sl.Err(err)).Error("send POST /fire")
