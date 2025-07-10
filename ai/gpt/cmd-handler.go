@@ -246,5 +246,10 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 		Products: basket.Products,
 	}
 
-	return "order created successfully", o.zohoService.CreateOrder(&order)
+	err = o.zohoService.CreateOrder(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	return "order created successfully", o.authService.ClearBasket(user.UUID)
 }
