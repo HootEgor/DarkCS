@@ -36,7 +36,7 @@ type OrderedItem struct {
 
 type ZohoProduct struct {
 	Name string `json:"name"`
-	ID   string `json:"id"`
+	ID   string `json:"id,omitempty"`
 }
 
 type ProductDetail struct {
