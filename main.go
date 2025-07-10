@@ -12,6 +12,7 @@ import (
 	"DarkCS/internal/service/auth"
 	"DarkCS/internal/service/product"
 	smart_sender "DarkCS/internal/service/smart-sender"
+	services "DarkCS/internal/service/zoho"
 	"flag"
 	"log/slog"
 )
@@ -83,8 +84,14 @@ func main() {
 		).Info("product service initialized")
 	}
 
+	zohoService := services.NewZohoService(conf, lg)
+	if zohoService != nil {
+		lg.Debug("zoho service initialized")
+	}
+
 	overseer := gpt.NewOverseer(conf, lg)
 	if overseer != nil {
+		overseer.SetZohoService(zohoService)
 		overseer.SetProductService(ps)
 		overseer.SetAuthService(authService)
 		handler.SetAssistant(overseer)

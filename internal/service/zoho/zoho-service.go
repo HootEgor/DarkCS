@@ -29,9 +29,9 @@ type ZohoService struct {
 	log            *slog.Logger
 }
 
-func NewZohoService(conf *config.Config, log *slog.Logger) (*ZohoService, error) {
+func NewZohoService(conf *config.Config, log *slog.Logger) *ZohoService {
 
-	service := &ZohoService{
+	return &ZohoService{
 		clientID:     conf.Zoho.ClientId,
 		clientSecret: conf.Zoho.ClientSecret,
 		refreshToken: conf.Zoho.RefreshToken,
@@ -41,8 +41,6 @@ func NewZohoService(conf *config.Config, log *slog.Logger) (*ZohoService, error)
 		apiVersion:   conf.Zoho.ApiVersion,
 		log:          log.With(sl.Module("zoho")),
 	}
-
-	return service, nil
 }
 
 func (s *ZohoService) refreshTokenCall() error {
