@@ -133,5 +133,51 @@ func (s *Service) EditLatestInputMessage(userId, newText string) error {
 		slog.String("user", userId),
 		slog.Int64("messageId", messageID),
 	).Info("message edited successfully")
+	return s.trigger(userId, "assistant_response")
+}
+
+func (s *Service) trigger(userId, name string) error {
+	fireURL := fmt.Sprintf("%s/contacts/%s/fire", s.baseUrl, userId)
+
+	fireBody := map[string]interface{}{
+		"name": name,
+	}
+	fireBytes, err := json.Marshal(fireBody)
+	if err != nil {
+		s.log.With(sl.Err(err)).Error("marshal fire body")
+		return err
+	}
+
+	fireReq, err := http.NewRequest("POST", fireURL, bytes.NewReader(fireBytes))
+	if err != nil {
+		s.log.With(sl.Err(err)).Error("create POST request for fire")
+		return err
+	}
+
+	fireReq.Header.Set("Content-Type", "application/json")
+	fireReq.Header.Set("Authorization", "Bearer "+s.apiKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(fireReq)
+	if err != nil {
+		s.log.With(sl.Err(err)).Error("send GET HTTP")
+		return err
+	}
+	defer resp.Body.Close()
+
+	fireResp, err := client.Do(fireReq)
+	if err != nil {
+		s.log.With(sl.Err(err)).Error("send POST /fire")
+		return err
+	}
+	defer fireResp.Body.Close()
+
+	if fireResp.StatusCode < 200 || fireResp.StatusCode >= 300 {
+		s.log.With(sl.Err(err)).Error("non-2xx on POST /fire")
+		return fmt.Errorf("failed to fire assistant_response event: status %d", fireResp.StatusCode)
+	}
+
+	s.log.With(slog.String("user", userId)).Info("assistant_response event fired")
+
 	return nil
 }
