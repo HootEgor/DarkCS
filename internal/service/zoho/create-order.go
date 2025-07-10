@@ -77,7 +77,7 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 		TermsAndConditions: "Standard terms apply.",
 		BillingCode:        "",
 		ProductDetails:     nil,
-		Subject:            "",
+		Subject:            fmt.Sprintf("Order from bot"),
 	}
 }
 

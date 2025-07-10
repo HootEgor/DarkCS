@@ -106,10 +106,14 @@ func (u *User) GetInfo() *UserInfo {
 
 func (u *UserInfo) ToContact() *Contact {
 	firstName := u.Name
-	lastName := ""
-	if parts := strings.SplitN(u.Name, " ", 2); len(parts) == 2 {
+	lastName := "-"
+	if parts := strings.SplitN(u.Name, " ", 2); len(parts) >= 2 {
 		firstName = parts[0]
 		lastName = parts[1]
+
+		if lastName == "" {
+			lastName = "-"
+		}
 	}
 	return &Contact{
 		FirstName: firstName,
