@@ -40,6 +40,9 @@ func (r *Service) ValidateOrder(products []entity.OrderProduct) ([]entity.OrderP
 
 	// Handle response
 	if resp.StatusCode != http.StatusOK {
+		r.Log.With(
+			slog.Any("response", resp),
+		).Error("invalid response code")
 		return nil, fmt.Errorf("request failed with status: %d", resp.StatusCode)
 	}
 
