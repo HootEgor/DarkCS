@@ -36,3 +36,11 @@ listen:
   bind_ip: 0.0.0.0
   port: ${LISTEN_PORT}
   key: ${API_KEY}
+zoho:
+  client_id: ${ZOHO_CLIENT_ID}
+  client_secret: ${ZOHO_CLIENT_SECRET}
+  refresh_token: ${ZOHO_REFRESH_TOKEN}
+  refresh_url: ${ZOHO_REFRESH_URL}
+  crm_url: ${ZOHO_CRM_URL}
+  scope: crm
+  api_version: v6

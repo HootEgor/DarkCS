@@ -30,6 +30,8 @@ func (o *Overseer) handleCommand(user *entity.User, name, args string) (interfac
 		return o.handleAddToBasket(user, args)
 	case "remove_from_basket":
 		return o.handleRemoveFromBasket(user, args)
+	case "validate_order":
+		return o.handleValidateOrder(user)
 	case "create_order":
 		return o.handleCreateOrder(user)
 	default:
@@ -154,7 +156,7 @@ func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {
 		return nil, err
 	}
 
-	return basket, nil
+	return entity.ProdForAssistant(basket.Products), nil
 }
 
 func (o *Overseer) handleRemoveFromBasket(user *entity.User, args string) (interface{}, error) {
@@ -169,7 +171,7 @@ func (o *Overseer) handleRemoveFromBasket(user *entity.User, args string) (inter
 		return nil, err
 	}
 
-	return basket, nil
+	return entity.ProdForAssistant(basket.Products), nil
 }
 
 func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{}, error) {
@@ -184,10 +186,10 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{
 		return nil, err
 	}
 
-	return basket, nil
+	return entity.ProdForAssistant(basket.Products), nil
 }
 
-func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
+func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 
 	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {
@@ -219,15 +221,30 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 		}
 	}
 
-	order := entity.Order{
-		User:     *user.GetInfo(),
-		Products: products,
-	}
-
-	valid, err := o.productService.ValidateOrder(&order)
+	validProducts, err := o.productService.ValidateOrder(products)
 	if err != nil {
 		return nil, err
 	}
 
-	return valid, nil
+	basket, err = o.authService.UpdateBasket(user.UUID, validProducts)
+	if err != nil {
+		return nil, err
+	}
+
+	return basket.Products, nil
+}
+
+func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
+
+	basket, err := o.authService.GetBasket(user.UUID)
+	if err != nil {
+		return nil, err
+	}
+
+	order := entity.Order{
+		User:     *user.GetInfo(),
+		Products: basket.Products,
+	}
+
+	return "order created successfully", o.zohoService.CreateOrder(&order)
 }

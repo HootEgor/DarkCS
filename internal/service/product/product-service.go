@@ -42,7 +42,7 @@ func (r *Service) ProductSearch(article string) (interface{}, error) {
 }
 
 func (r *Service) GetProductInfo(articles []string) ([]entity.ProductInfo, error) {
-	url := fmt.Sprintf("%s", r.BaseURL)
+	url := fmt.Sprintf("%s/%s", r.BaseURL, "products")
 
 	requestBody, err := json.Marshal(articles)
 	if err != nil {
@@ -96,7 +96,7 @@ func (r *Service) GetProductInfo(articles []string) ([]entity.ProductInfo, error
 }
 
 func (r *Service) GetAvailableProducts() ([]entity.Product, error) {
-	url := fmt.Sprintf("%s", r.BaseURL)
+	url := fmt.Sprintf("%s/%s", r.BaseURL, "products")
 
 	// Create request
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer(nil))

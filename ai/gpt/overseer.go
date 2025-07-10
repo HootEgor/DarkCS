@@ -21,16 +21,21 @@ type ProductService interface {
 	GetProductInfo(articles []string) ([]entity.ProductInfo, error)
 	GetAvailableProducts() ([]entity.Product, error)
 
-	ValidateOrder(order *entity.Order) (bool, error)
+	ValidateOrder([]entity.OrderProduct) ([]entity.OrderProduct, error)
 }
 
 type AuthService interface {
 	UpdateUser(user *entity.User) error
 
+	UpdateBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 	GetBasket(userUUID string) (*entity.Basket, error)
 	ClearBasket(userUUID string) error
 	AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 	RemoveFromBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
+}
+
+type ZohoService interface {
+	CreateOrder(order *entity.Order) error
 }
 
 type Overseer struct {
@@ -40,6 +45,7 @@ type Overseer struct {
 	threads        map[string]string
 	productService ProductService
 	authService    AuthService
+	zohoService    ZohoService
 	savePath       string
 	locker         *LockThreads
 	log            *slog.Logger
@@ -77,6 +83,10 @@ func (o *Overseer) SetProductService(productService ProductService) {
 
 func (o *Overseer) SetAuthService(authService AuthService) {
 	o.authService = authService
+}
+
+func (o *Overseer) SetZohoService(zohoService ZohoService) {
+	o.zohoService = zohoService
 }
 
 func (l *LockThreads) Lock(userId string) {

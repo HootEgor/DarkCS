@@ -24,6 +24,24 @@ func (s *Service) ClearBasket(userUUID string) error {
 	return err
 }
 
+func (s *Service) UpdateBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error) {
+	basket, err := s.repository.GetBasket(userUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	if basket == nil {
+		basket = &entity.Basket{
+			UserUUID: userUUID,
+			Products: []entity.OrderProduct{},
+		}
+	}
+
+	basket.Products = products
+
+	return s.repository.UpsertBasket(basket)
+}
+
 func (s *Service) AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error) {
 	basket, err := s.repository.GetBasket(userUUID)
 	if err != nil {

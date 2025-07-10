@@ -32,6 +32,11 @@ jobs:
           sed -i 's|${REPO_PASSWORD}|'"$REPO_PASSWORD"'|g' darkcs-conf.yml
           sed -i 's|${REPO_BASE_URL}|'"$REPO_BASE_URL"'|g' darkcs-conf.yml
           sed -i 's|${SMART_API_KEY}|'"$SMART_API_KEY"'|g' darkcs-conf.yml
+          sed -i 's|${ZOHO_CLIENT_ID}|'"$ZOHO_CLIENT_ID"'|g' darkcs-config.yml
+          sed -i 's|${ZOHO_CLIENT_SECRET}|'"$ZOHO_CLIENT_SECRET"'|g' darkcs-config.yml
+          sed -i 's|${ZOHO_REFRESH_TOKEN}|'"$ZOHO_REFRESH_TOKEN"'|g' darkcs-config.yml
+          sed -i 's|${ZOHO_REFRESH_URL}|'"$ZOHO_REFRESH_URL"'|g' darkcs-config.yml
+          sed -i 's|${ZOHO_CRM_URL}|'"$ZOHO_CRM_URL"'|g' darkcs-config.yml
         env:
           TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
           LISTEN_PORT: ${{ vars.LISTEN_PORT }}
@@ -49,6 +54,11 @@ jobs:
           REPO_PASSWORD: ${{ secrets.REPO_PASSWORD }}
           REPO_BASE_URL: ${{ secrets.REPO_BASE_URL }}
           SMART_API_KEY: ${{ secrets.SMART_API_KEY }}
+          ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          ZOHO_REFRESH_URL: ${{ vars.ZOHO_REFRESH_URL }}
+          ZOHO_CRM_URL: ${{ vars.ZOHO_CRM_URL }}
 
       - name: Copy Configuration to Server
         uses: appleboy/scp-action@master

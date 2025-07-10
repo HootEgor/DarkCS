@@ -49,6 +49,15 @@ type Config struct {
 		Port   string `yaml:"port" env-default:"9100"`
 		ApiKey string `yaml:"key" env-default:""`
 	} `yaml:"listen"`
+	Zoho struct {
+		ClientId     string `yaml:"client_id" env-default:""`
+		ClientSecret string `yaml:"client_secret" env-default:""`
+		RefreshToken string `yaml:"refresh_token" env-default:""`
+		RefreshUrl   string `yaml:"refresh_url" env-default:""`
+		CrmUrl       string `yaml:"crm_url" env-default:""`
+		Scope        string `yaml:"scope" env-default:""`
+		ApiVersion   string `yaml:"api_version" env-default:""`
+	} `yaml:"zoho"`
 }
 
 var instance *Config

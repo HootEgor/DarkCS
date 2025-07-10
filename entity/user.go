@@ -2,6 +2,7 @@ package entity
 
 import (
 	"github.com/google/uuid"
+	"strings"
 	"time"
 )
 
@@ -100,5 +101,21 @@ func (u *User) GetInfo() *UserInfo {
 		Email:   u.Email,
 		Phone:   u.Phone,
 		Address: u.Address,
+	}
+}
+
+func (u *UserInfo) ToContact() *Contact {
+	firstName := u.Name
+	lastName := ""
+	if parts := strings.SplitN(u.Name, " ", 2); len(parts) == 2 {
+		firstName = parts[0]
+		lastName = parts[1]
+	}
+	return &Contact{
+		FirstName: firstName,
+		LastName:  lastName,
+		Email:     u.Email,
+		Field2:    u.Address,
+		Phone:     u.Phone,
 	}
 }

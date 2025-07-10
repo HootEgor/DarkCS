@@ -34,3 +34,12 @@ func ParseResponse(body []byte) (*Response, error) {
 	}
 	return &response, nil
 }
+
+func ParseOrderValidateResponse(body []byte) ([]entity.OrderProduct, error) {
+	var response []entity.OrderProduct
+	err := json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
