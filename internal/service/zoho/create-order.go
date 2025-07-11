@@ -93,6 +93,7 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 			Product: entity.ZohoProduct{
 				ID: d.ZohoId,
 				//Name: d.Name,
+				Country: "Україна",
 			},
 			Quantity:  d.Quantity,
 			Discount:  0,
