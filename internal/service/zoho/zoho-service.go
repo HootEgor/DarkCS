@@ -18,28 +18,30 @@ import (
 )
 
 type ZohoService struct {
-	clientID       string
-	clientSecret   string
-	refreshToken   string
-	refreshUrl     string
-	crmUrl         string
-	scope          string
-	apiVersion     string
-	tokenExpiresIn time.Time
-	log            *slog.Logger
+	clientID            string
+	clientSecret        string
+	defaultRefreshToken string
+	refreshToken        string
+	refreshUrl          string
+	crmUrl              string
+	scope               string
+	apiVersion          string
+	tokenExpiresIn      time.Time
+	log                 *slog.Logger
 }
 
 func NewZohoService(conf *config.Config, log *slog.Logger) *ZohoService {
 
 	return &ZohoService{
-		clientID:     conf.Zoho.ClientId,
-		clientSecret: conf.Zoho.ClientSecret,
-		refreshToken: conf.Zoho.RefreshToken,
-		refreshUrl:   conf.Zoho.RefreshUrl,
-		crmUrl:       conf.Zoho.CrmUrl,
-		scope:        conf.Zoho.Scope,
-		apiVersion:   conf.Zoho.ApiVersion,
-		log:          log.With(sl.Module("zoho")),
+		clientID:            conf.Zoho.ClientId,
+		clientSecret:        conf.Zoho.ClientSecret,
+		defaultRefreshToken: conf.Zoho.RefreshToken,
+		refreshToken:        conf.Zoho.RefreshToken,
+		refreshUrl:          conf.Zoho.RefreshUrl,
+		crmUrl:              conf.Zoho.CrmUrl,
+		scope:               conf.Zoho.Scope,
+		apiVersion:          conf.Zoho.ApiVersion,
+		log:                 log.With(sl.Module("zoho")),
 	}
 }
 
@@ -47,7 +49,7 @@ func (s *ZohoService) refreshTokenCall() error {
 	form := url.Values{}
 	form.Add("client_id", s.clientID)
 	form.Add("client_secret", s.clientSecret)
-	form.Add("refresh_token", s.refreshToken)
+	form.Add("refresh_token", s.defaultRefreshToken)
 	form.Add("grant_type", "refresh_token")
 
 	resp, err := http.PostForm(s.refreshUrl, form)
