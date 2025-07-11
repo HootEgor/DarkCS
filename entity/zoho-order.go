@@ -18,6 +18,7 @@ type ZohoOrder struct {
 	TermsAndConditions string          `json:"Terms_and_Conditions"`
 	BillingCode        string          `json:"Billing_Code"`
 	ProductDetails     []ProductDetail `json:"Product_Details,omitempty"`
+	Location           string          `json:"Location_DR"`
 	Subject            string          `json:"Subject"`
 }
 
@@ -35,9 +36,8 @@ type OrderedItem struct {
 }
 
 type ZohoProduct struct {
-	Name    string `json:"name,omitempty"`
-	ID      string `json:"id"`
-	Country string `json:"country"`
+	Name string `json:"name,omitempty"`
+	ID   string `json:"id"`
 }
 
 type ProductDetail struct {

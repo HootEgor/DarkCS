@@ -77,6 +77,7 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 		TermsAndConditions: "Standard terms apply.",
 		BillingCode:        "",
 		ProductDetails:     nil,
+		Location:           "Україна",
 		Subject:            fmt.Sprintf("Order from bot"),
 	}
 }
@@ -93,7 +94,6 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 			Product: entity.ZohoProduct{
 				ID: d.ZohoId,
 				//Name: d.Name,
-				Country: "Україна",
 			},
 			Quantity:  d.Quantity,
 			Discount:  0,
