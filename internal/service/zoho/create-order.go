@@ -78,6 +78,7 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 		BillingCode:        "",
 		ProductDetails:     nil,
 		Location:           "Україна",
+		OrderSource:        "AI Bot",
 		Subject:            fmt.Sprintf("Order from bot"),
 	}
 }
