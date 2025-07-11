@@ -206,7 +206,7 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{
 		}
 	}
 
-	basket, err := o.authService.AddToBasket(user.UUID, resp.Products)
+	basket, err := o.authService.AddToBasket(user.UUID, products)
 	if err != nil {
 		return nil, err
 	}
