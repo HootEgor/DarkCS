@@ -181,6 +181,31 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{
 		return nil, err
 	}
 
+	codes := make([]string, 0, len(resp.Products))
+	for _, product := range resp.Products {
+		codes = append(codes, product.Code)
+	}
+
+	productsInfo, err := o.productService.GetProductInfo(codes)
+	if err != nil {
+		return nil, err
+	}
+
+	var products []entity.OrderProduct
+	for _, product := range resp.Products {
+		for _, info := range productsInfo {
+			if product.Code == info.Code {
+				products = append(products, entity.OrderProduct{
+					Name:     info.Name,
+					Code:     product.Code,
+					Quantity: product.Quantity,
+					Price:    info.Price,
+				})
+				break
+			}
+		}
+	}
+
 	basket, err := o.authService.AddToBasket(user.UUID, resp.Products)
 	if err != nil {
 		return nil, err
