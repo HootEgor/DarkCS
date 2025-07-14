@@ -33,9 +33,10 @@ const (
 )
 
 const (
-	OverseerAss   = "Overseer"
-	ConsultantAss = "Consultant"
-	CalculatorAss = "Calculator"
+	OverseerAss     = "Overseer"
+	ConsultantAss   = "Consultant"
+	CalculatorAss   = "Calculator"
+	OrderManagerAss = "Order Manager"
 )
 
 func NewUser(email, phone string, telegramId int64) *User {
@@ -83,16 +84,16 @@ func (u *User) GetAssistants() []string {
 
 	switch u.Role {
 	case GuestRole:
-		return []string{OverseerAss, ConsultantAss}
+		return []string{OverseerAss, ConsultantAss, OrderManagerAss}
 	case UserRole:
-		return []string{OverseerAss, ConsultantAss}
+		return []string{OverseerAss, ConsultantAss, OrderManagerAss}
 	case ManagerRole:
-		return []string{OverseerAss, ConsultantAss}
+		return []string{OverseerAss, ConsultantAss, OrderManagerAss}
 	case AdminRole:
-		return []string{OverseerAss, ConsultantAss}
+		return []string{OverseerAss, ConsultantAss, OrderManagerAss}
 	}
 
-	return []string{OverseerAss, ConsultantAss}
+	return []string{OverseerAss, ConsultantAss, OrderManagerAss}
 }
 
 func (u *User) GetInfo() *UserInfo {

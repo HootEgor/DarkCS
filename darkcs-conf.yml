@@ -15,6 +15,7 @@ openai:
   overseer_id: ${OVERSEER_ID}
   consultant_id: ${CONSULTANT_ID}
   calculator_id: ${CALCULATOR_ID}
+  order_manager_id: ${ORDER_MANAGER_ID}
   dev_prefix: Dev
 save_path: /var/lib/darkcs
 mongo:

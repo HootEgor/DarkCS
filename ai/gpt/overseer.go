@@ -66,6 +66,7 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 	assistants[entity.OverseerAss] = conf.OpenAI.OverseerID
 	assistants[entity.ConsultantAss] = conf.OpenAI.ConsultantID
 	assistants[entity.CalculatorAss] = conf.OpenAI.CalculatorID
+	assistants[entity.OrderManagerAss] = conf.OpenAI.OrderManagerID
 	return &Overseer{
 		client:     client,
 		assistants: assistants,
@@ -148,6 +149,8 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 	case entity.CalculatorAss:
 		text, answer.Products, err = o.askCalculator(user, userMsg)
 		break
+	case entity.OrderManagerAss:
+		text, answer.Products, err = o.askOrderManager(user, userMsg)
 	default:
 		text, answer.Products, err = o.askConsultant(user, userMsg)
 	}
@@ -440,6 +443,21 @@ func (o *Overseer) AttachNewFile() error {
 		o.log.With(
 			sl.Err(err),
 		).Error("attach calculator vector store")
+		return err
+	}
+
+	// Attach calculator store to order manager assistant
+	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.OrderManagerAss], openai.AssistantRequest{
+		ToolResources: &openai.AssistantToolResource{
+			FileSearch: &openai.AssistantToolFileSearch{
+				VectorStoreIDs: []string{calculatorStore.ID},
+			},
+		},
+	})
+	if err != nil {
+		o.log.With(
+			sl.Err(err),
+		).Error("attach order manager vector store")
 		return err
 	}
 
