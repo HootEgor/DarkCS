@@ -43,7 +43,7 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 		return 0, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	response, err := ParseGetUserResponse(body)
+	response, err := r.ParseGetUserResponse(body)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse response: %v", err)
 	}

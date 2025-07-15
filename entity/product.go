@@ -18,7 +18,7 @@ type OrderProduct struct {
 	Name      string `json:"name"`
 	Price     string `json:"price"`
 	Code      string `json:"code"`
-	Discount  int    `json:"discount,omitempty"`
+	Discount  int    `json:"discount"`
 	Quantity  int    `json:"quantity"`
 	Available bool   `json:"available,omitempty"`
 	ZohoId    string `json:"zoho_id,omitempty"`

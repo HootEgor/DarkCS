@@ -2,6 +2,7 @@ package product
 
 import (
 	"DarkCS/entity"
+	"DarkCS/internal/lib/sl"
 	"encoding/json"
 )
 
@@ -56,11 +57,14 @@ func ParseOrderValidateResponse(body []byte) ([]entity.OrderProduct, error) {
 	return response.Products, nil
 }
 
-func ParseGetUserResponse(body []byte) (int, error) {
+func (r *Service) ParseGetUserResponse(body []byte) (int, error) {
 	var response GetUserResponse
 	err := json.Unmarshal(body, &response)
 	if err != nil {
-		return 0, err
+		r.Log.With(
+			sl.Err(err),
+		).Error("parse get user response")
+		return 0, nil
 	}
 	return response.User.Discount, nil
 }
