@@ -39,7 +39,7 @@ func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) 
 	fullURL, err := buildURL(
 		s.crmUrl,
 		s.scope,
-		s.apiVersion,
+		"v7",
 		fmt.Sprintf("Contacts/%s/SalesOrders?fields=Status", contactID),
 	)
 	if err != nil {
