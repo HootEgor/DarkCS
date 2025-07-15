@@ -36,15 +36,13 @@ func (s *ZohoService) GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus,
 
 func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) {
 	// Build URL
-	fullURL, err := buildURL(
-		s.crmUrl,
-		s.scope,
-		"v7",
-		fmt.Sprintf("Contacts/%s/SalesOrders?fields=Status", contactID),
-	)
+	path := fmt.Sprintf("Contacts/%s/SalesOrders", contactID)
+	fullURL, err := buildURL(s.crmUrl, s.scope, "v7", path)
 	if err != nil {
 		return nil, fmt.Errorf("build url: %w", err)
 	}
+
+	fullURL = fullURL + "?fields=Status"
 
 	// Create request
 	req, err := http.NewRequest(http.MethodGet, fullURL, nil)

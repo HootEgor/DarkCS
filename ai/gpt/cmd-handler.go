@@ -156,6 +156,10 @@ func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {
 		return nil, err
 	}
 
+	if basket == nil {
+		return nil, nil
+	}
+
 	return entity.ProdForAssistant(basket.Products), nil
 }
 
@@ -169,6 +173,10 @@ func (o *Overseer) handleRemoveFromBasket(user *entity.User, args string) (inter
 	basket, err := o.authService.RemoveFromBasket(user.UUID, resp.Products)
 	if err != nil {
 		return nil, err
+	}
+
+	if basket == nil {
+		return nil, nil
 	}
 
 	return entity.ProdForAssistant(basket.Products), nil
@@ -209,6 +217,10 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{
 	basket, err := o.authService.AddToBasket(user.UUID, products)
 	if err != nil {
 		return nil, err
+	}
+
+	if basket == nil {
+		return nil, nil
 	}
 
 	return entity.ProdForAssistant(basket.Products), nil

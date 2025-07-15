@@ -3,8 +3,8 @@ package entity
 type ZohoOrder struct {
 	ContactName        ContactName     `json:"Contact_Name"`
 	ContactFullName    string          `json:"A0887ffac4e3b73fb6168af580709fd74"`
-	ContactPhone       string          `json:"A0b2c3d4e5f6a7b8c9d0e1f2g3h4i5j6"`
-	ContactEmail       string          `json:"A0c1b8d2f3e4a5b6c7d8e9f0a1b2c3d4"`
+	ContactPhone       string          `json:"A737a105054835f9641fb492dda0c26c3"`
+	ContactEmail       string          `json:"A4fe667f6f70c0892ac7e10ed209260b8"`
 	ShippingAddress    string          `json:"A0d3aa57fb7d0fc67725ca891b3965663"`
 	ShippingCountry    string          `json:"A68fdec5b7ce138314daea92f2d691979"`
 	OrderedItems       []OrderedItem   `json:"Ordered_Items"`
