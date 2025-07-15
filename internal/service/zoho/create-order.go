@@ -67,7 +67,7 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 		ShippingAddress:    order.User.Address,
 		ShippingCountry:    getCountryName(order.User.Phone),
 		OrderedItems:       orderedItems,
-		Discount:           0,
+		Discount:           float64(order.User.Discount),
 		Description:        "order from bot",
 		CustomerNo:         "",
 		ShippingState:      "",
@@ -116,6 +116,7 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 			continue
 		}
 		price, _ := strconv.ParseFloat(d.Price, 64)
+		price -= float64(d.Discount) / 100 * price
 		item := entity.OrderedItem{
 			Product: entity.ZohoProduct{
 				ID: d.ZohoId,

@@ -23,6 +23,12 @@ type OrderValidateResponse struct {
 	Message  string                `json:"message"`
 }
 
+type GetUserResponse struct {
+	Success bool            `json:"success"`
+	User    entity.OneCUser `json:"data"`
+	Message string          `json:"message"`
+}
+
 func ParseInfoResponse(body []byte) (*InfoResponse, error) {
 	var response InfoResponse
 	err := json.Unmarshal(body, &response)
@@ -48,4 +54,13 @@ func ParseOrderValidateResponse(body []byte) ([]entity.OrderProduct, error) {
 		return nil, err
 	}
 	return response.Products, nil
+}
+
+func ParseGetUserResponse(body []byte) (int, error) {
+	var response GetUserResponse
+	err := json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	return response.User.Discount, nil
 }

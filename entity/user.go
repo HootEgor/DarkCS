@@ -19,10 +19,15 @@ type User struct {
 }
 
 type UserInfo struct {
-	Name    string `json:"name" bson:"name"`
-	Email   string `json:"email" bson:"email"`
-	Phone   string `json:"phone" bson:"phone"`
-	Address string `json:"address" bson:"address"`
+	Name     string `json:"name" bson:"name"`
+	Email    string `json:"email" bson:"email"`
+	Phone    string `json:"phone" bson:"phone"`
+	Address  string `json:"address" bson:"address"`
+	Discount int    `json:"discount" bson:"discount"`
+}
+
+type OneCUser struct {
+	Discount int `json:"discount" bson:"discount"`
 }
 
 const (
