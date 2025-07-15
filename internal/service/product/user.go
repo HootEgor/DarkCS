@@ -1,7 +1,6 @@
 package product
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,7 +11,7 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 	url := fmt.Sprintf("%s/%s/%s", r.BaseURL, "client", phone)
 
 	// Create request
-	req, err := http.NewRequest(http.MethodGet, url, bytes.NewBuffer(nil))
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -36,7 +35,7 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 		r.Log.With(
 			slog.Any("response", resp),
 		).Error("invalid response code")
-		return 0, fmt.Errorf("request failed with status: %d", resp.StatusCode)
+		return 0, fmt.Errorf("get user dicount with status: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
