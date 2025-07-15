@@ -214,6 +214,25 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{
 	return entity.ProdForAssistant(basket.Products), nil
 }
 
+func (o *Overseer) canUserOrder(user *entity.User) (bool, error) {
+	orders, err := o.zohoService.GetOrders(*user.GetInfo())
+	if err != nil {
+		return false, err
+	}
+
+	if len(orders) == 0 {
+		return true, nil
+	}
+
+	for _, order := range orders {
+		if order.Status == entity.OrderStatusNew || order.Status == entity.OrderStatusProcessing || order.Status == entity.OrderStatusInvoiced {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 
 	basket, err := o.authService.GetBasket(user.UUID)
@@ -256,10 +275,34 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 		return nil, err
 	}
 
+	canOrder, err := o.canUserOrder(user)
+	if err != nil {
+		return nil, err
+	}
+
+	if !canOrder {
+		msg := struct {
+			Message  string                `json:"message"`
+			Products []entity.OrderProduct `json:"products"`
+		}{}
+		msg.Message = "Products are validated but, user have an active order, please wait until it is processed before creating a new one."
+		msg.Products = basket.Products
+		return msg, nil
+	}
+
 	return basket.Products, nil
 }
 
 func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
+
+	canOrder, err := o.canUserOrder(user)
+	if err != nil {
+		return nil, err
+	}
+
+	if !canOrder {
+		return "User have an active order, please wait until it is processed before creating a new one.", nil
+	}
 
 	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {

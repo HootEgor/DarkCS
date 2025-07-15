@@ -36,6 +36,7 @@ type AuthService interface {
 
 type ZohoService interface {
 	CreateOrder(order *entity.Order) error
+	GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus, error)
 }
 
 type Overseer struct {

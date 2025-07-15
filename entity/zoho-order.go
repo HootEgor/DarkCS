@@ -59,6 +59,12 @@ type LineTax struct {
 	Name       string  `json:"name"`
 }
 
+type OrderStatus struct {
+	Status string `json:"Status"`
+}
+
 const (
-	OrderStatusNew = "Нове"
+	OrderStatusNew        = "Нове"
+	OrderStatusProcessing = "Оброблення замовлення"
+	OrderStatusInvoiced   = "Рахунок виставлено"
 )
