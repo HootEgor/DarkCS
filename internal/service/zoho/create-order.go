@@ -61,6 +61,11 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 
 	return entity.ZohoOrder{
 		ContactName:        entity.ContactName{ID: contactID},
+		ContactFullName:    order.User.Name,
+		ContactPhone:       order.User.Phone,
+		ContactEmail:       order.User.Email,
+		ShippingAddress:    order.User.Address,
+		ShippingCountry:    getCountryName(order.User.Phone),
 		OrderedItems:       orderedItems,
 		Discount:           0,
 		Description:        "order from bot",
@@ -81,6 +86,26 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 		OrderSource:        "AI Bot",
 		Subject:            fmt.Sprintf("AI Bot - %s", order.User.Name),
 	}
+}
+
+func getCountryName(phone string) string {
+	if len(phone) >= 3 {
+		if phone[:4] == "+380" {
+			return "Україна"
+		} else if phone[:2] == "+1" {
+			return "США або Канада"
+		} else if phone[:3] == "+44" {
+			return "Велика Британія"
+		} else if phone[:3] == "+49" {
+			return "Німеччина"
+		} else if phone[:3] == "+33" {
+			return "Франція"
+		} else if phone[:3] == "+48" {
+			return "Польща"
+		}
+	}
+
+	return "Невідома країна"
 }
 
 func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
