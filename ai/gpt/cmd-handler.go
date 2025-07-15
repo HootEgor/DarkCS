@@ -232,7 +232,7 @@ func (o *Overseer) canUserOrder(user *entity.User) (bool, error) {
 		return false, err
 	}
 
-	if len(orders) == 0 {
+	if orders == nil || len(orders) == 0 {
 		return true, nil
 	}
 

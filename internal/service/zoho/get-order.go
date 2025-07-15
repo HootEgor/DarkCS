@@ -89,6 +89,10 @@ func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) 
 		} `json:"data"`
 	}
 
+	if bodyBytes == nil || len(bodyBytes) == 0 {
+		return nil, nil
+	}
+
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
