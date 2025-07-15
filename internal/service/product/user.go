@@ -12,7 +12,7 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 	url := fmt.Sprintf("%s/%s/%s", r.BaseURL, "client", phone)
 
 	// Create request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(nil))
+	req, err := http.NewRequest(http.MethodGet, url, bytes.NewBuffer(nil))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %v", err)
 	}
