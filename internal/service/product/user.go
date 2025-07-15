@@ -34,8 +34,8 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 	if resp.StatusCode != http.StatusOK {
 		r.Log.With(
 			slog.Any("response", resp),
-		).Error("invalid response code")
-		return 0, fmt.Errorf("get user dicount with status: %d", resp.StatusCode)
+		).Error("get user discount invalid response code")
+		return 0, nil
 	}
 
 	body, err := io.ReadAll(resp.Body)
