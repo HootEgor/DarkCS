@@ -5,7 +5,6 @@ import (
 	"DarkCS/internal/lib/sl"
 	"fmt"
 	"log/slog"
-	"time"
 )
 
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
@@ -71,20 +70,20 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 		return nil, err
 	}
 
-	message := entity.Message{
-		User:     user,
-		Question: msg.Message,
-		Answer:   answer,
-		Time:     time.Now(),
-	}
+	//message := entity.Message{
+	//	User:     user,
+	//	Question: msg.Message,
+	//	Answer:   answer,
+	//	Time:     time.Now(),
+	//}
 
-	sErr := c.repo.SaveMessage(message)
-	if sErr != nil {
-		c.log.With(
-			slog.Any("msg", message),
-			sl.Err(sErr),
-		).Error("save message")
-	}
+	//sErr := c.repo.SaveMessage(message)
+	//if sErr != nil {
+	//	c.log.With(
+	//		slog.Any("msg", message),
+	//		sl.Err(sErr),
+	//	).Error("save message")
+	//}
 
 	if msg.WithHtmlLinks {
 		if len(answer.Products) > 0 {

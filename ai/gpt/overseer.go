@@ -45,13 +45,18 @@ type Overseer struct {
 	client         *openai.Client
 	assistants     map[string]string
 	apiKey         string
-	threads        map[string]string
+	threads        map[string]ThreadMeta
 	productService ProductService
 	authService    AuthService
 	zohoService    ZohoService
 	savePath       string
 	locker         *LockThreads
 	log            *slog.Logger
+}
+
+type ThreadMeta struct {
+	ID           string
+	MessageCount int
 }
 
 type LockThreads struct {
@@ -74,7 +79,7 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 		client:     client,
 		assistants: assistants,
 		apiKey:     conf.OpenAI.ApiKey,
-		threads:    make(map[string]string),
+		threads:    make(map[string]ThreadMeta),
 		savePath:   conf.SavePath,
 		locker:     &LockThreads{threads: make(map[string]*sync.Mutex)},
 		log:        logger.With(sl.Module("overseer")),
@@ -308,24 +313,106 @@ func (o *Overseer) handleRun(user *entity.User, threadID, assistantID string) bo
 func (o *Overseer) getOrCreateThread(userId string) (openai.Thread, error) {
 	o.locker.Lock(userId)
 
-	if threadId, ok := o.threads[userId]; ok && threadId != "" {
-		thread, err := o.client.RetrieveThread(context.Background(), threadId)
-		if err == nil {
-			return thread, nil
+	meta, exists := o.threads[userId]
+	shouldReset := false
+
+	if exists {
+		if meta.MessageCount > 20 {
+			shouldReset = true
 		}
-		o.log.With(slog.String("thread", threadId)).Error("retrieving thread", sl.Err(err))
 	}
 
+	// Reset thread if needed
+	if shouldReset {
+		o.log.With(slog.String("thread", meta.ID)).Info("resetting thread, creating summary")
+
+		// 1. Fetch all messages
+		msgs, err := o.client.ListMessage(context.Background(), meta.ID, nil, nil, nil, nil, nil)
+		if err != nil {
+			o.log.Warn("failed to fetch old messages for summary", sl.Err(err))
+		} else {
+			// 2. Generate summary
+			summary := o.summarizeMessages(msgs.Messages)
+
+			// 3. Create a new thread
+			thread, err := o.client.CreateThread(context.Background(), openai.ThreadRequest{})
+			if err != nil {
+				return openai.Thread{}, err
+			}
+
+			// 4. Add summary as first assistant message
+			_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
+				Role:    string(openai.ThreadMessageRoleAssistant),
+				Content: fmt.Sprintf("Ось короткий підсумок нашої попередньої розмови, щоб ми могли продовжити:\n\n%s", summary),
+			})
+			if err != nil {
+				o.log.Warn("failed to add summary to new thread", sl.Err(err))
+			}
+
+			// 5. Replace thread
+			o.threads[userId] = ThreadMeta{
+				ID:           thread.ID,
+				MessageCount: 0,
+			}
+			return thread, nil
+		}
+	}
+
+	// Reuse an existing thread if it exists
+	if threadMeta, ok := o.threads[userId]; ok && threadMeta.ID != "" {
+		thread, err := o.client.RetrieveThread(context.Background(), threadMeta.ID)
+		if err == nil {
+			meta.MessageCount++
+			o.threads[userId] = meta
+			return thread, nil
+		}
+	}
+
+	// Create new thread
 	thread, err := o.client.CreateThread(context.Background(), openai.ThreadRequest{})
 	if err != nil {
 		return openai.Thread{}, err
 	}
 
-	o.threads[userId] = thread.ID
-	o.log.With(slog.String("thread", thread.ID)).Info("created new thread")
+	o.threads[userId] = ThreadMeta{
+		ID:           thread.ID,
+		MessageCount: 0,
+	}
 
 	return thread, nil
 }
+
+func (o *Overseer) summarizeMessages(msgs []openai.Message) string {
+	ctx := context.Background()
+
+	var history []string
+	for _, msg := range msgs {
+		for _, content := range msg.Content {
+			history = append(history, fmt.Sprintf("[%s]: %s", msg.Role, content.Text.Value))
+		}
+	}
+
+	historyText := strings.Join(history, "\n")
+
+	summaryPrompt := fmt.Sprintf(`Будь ласка, коротко підсумуй діалог нижче українською мовою. Залиш тільки основні моменти, без деталей замовлення чи товарних кодів. %s`, historyText)
+
+	resp, err := o.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: openai.GPT4oMini, // or "gpt-4o"
+		Messages: []openai.ChatCompletionMessage{
+			{Role: "system", Content: "Ти — помічниця, яка коротко підсумовує розмови користувачів."},
+			{Role: "user", Content: summaryPrompt},
+		},
+		MaxTokens:   300,
+		Temperature: 0.3,
+	})
+	if err != nil || len(resp.Choices) == 0 {
+		o.log.Warn("failed to generate summary", sl.Err(err))
+		return "На жаль, не вдалося створити підсумок попередньої розмови."
+	}
+
+	return resp.Choices[0].Message.Content
+}
+
 func (o *Overseer) AttachNewFile() error {
 	ctx := context.Background()
 
