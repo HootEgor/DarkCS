@@ -30,17 +30,17 @@ func ProdForAssistant(products []OrderProduct) interface{} {
 	result := make([]interface{}, len(products))
 	for i, p := range products {
 		result[i] = struct {
-			Name     string  `json:"name"`
-			Price    float64 `json:"price"`
-			Code     string  `json:"code"`
-			Quantity int     `json:"quantity"`
-			Discount int     `json:"discount,omitempty"`
+			Name      string  `json:"name"`
+			Price     float64 `json:"price"`
+			Code      string  `json:"code"`
+			Quantity  int     `json:"quantity"`
+			Available bool    `json:"available,omitempty"`
 		}{
-			Name:     p.Name,
-			Price:    p.Price,
-			Code:     p.Code,
-			Quantity: p.Quantity,
-			Discount: p.Discount,
+			Name:      p.Name,
+			Price:     p.Price,
+			Code:      p.Code,
+			Quantity:  p.Quantity,
+			Available: p.Available,
 		}
 	}
 	return result

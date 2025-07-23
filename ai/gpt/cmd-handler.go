@@ -306,15 +306,15 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 
 	if !canOrder {
 		msg := struct {
-			Message  string                `json:"message"`
-			Products []entity.OrderProduct `json:"products"`
+			Message  string      `json:"message"`
+			Products interface{} `json:"products"`
 		}{}
 		msg.Message = "Products are validated but, user have an active order, please wait until it is processed before creating a new one."
-		msg.Products = basket.Products
+		msg.Products = entity.ProdForAssistant(basket.Products)
 		return msg, nil
 	}
 
-	return basket.Products, nil
+	return entity.ProdForAssistant(basket.Products), nil
 }
 
 func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
