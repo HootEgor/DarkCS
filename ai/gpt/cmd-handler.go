@@ -26,6 +26,8 @@ func (o *Overseer) handleCommand(user *entity.User, name, args string) (interfac
 		return o.handleGetUserInfo(user)
 	case "get_basket":
 		return o.handleGetBasket(user)
+	case "clear_basket":
+		return o.handleClearBasket(user)
 	case "add_to_basket":
 		return o.handleAddToBasket(user, args)
 	case "remove_from_basket":
@@ -148,6 +150,10 @@ func (o *Overseer) handleUpdateUserName(user *entity.User, args string) (string,
 
 func (o *Overseer) handleGetUserInfo(user *entity.User) (interface{}, error) {
 	return user.GetInfo(), nil
+}
+
+func (o *Overseer) handleClearBasket(user *entity.User) (interface{}, error) {
+	return o.authService.ClearBasket(user.UUID), nil
 }
 
 func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {
