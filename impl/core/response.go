@@ -94,7 +94,7 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 		if len(answer.Products) > 0 {
 			answer.Text += "\n"
 			for _, p := range answer.Products {
-				answer.Text += fmt.Sprintf("\n<a href=\"%s\">%s</a> - %f грн.", p.Url, p.Name, p.Price)
+				answer.Text += fmt.Sprintf("\n<a href=\"%s\">%s</a> - %.2f грн.", p.Url, p.Name, p.Price)
 			}
 		}
 	}
