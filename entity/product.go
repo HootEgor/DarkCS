@@ -1,10 +1,10 @@
 package entity
 
 type ProductInfo struct {
-	Code  string `json:"code"`
-	Name  string `json:"name"`
-	Price string `json:"price"`
-	Url   string `json:"url"`
+	Code  string  `json:"code"`
+	Name  string  `json:"name"`
+	Price float64 `json:"price"`
+	Url   string  `json:"url"`
 }
 
 type Product struct {
@@ -15,24 +15,26 @@ type Product struct {
 }
 
 type OrderProduct struct {
-	Name      string `json:"name"`
-	Price     string `json:"price"`
-	Code      string `json:"code"`
-	Discount  int    `json:"discount"`
-	Quantity  int    `json:"quantity"`
-	Available bool   `json:"available,omitempty"`
-	ZohoId    string `json:"zoho_id,omitempty"`
+	Name        string  `json:"name"`
+	Price       float64 `json:"price"`
+	TotalPrice  float64 `json:"total,omitempty"`
+	Code        string  `json:"code"`
+	Discount    int     `json:"discount"`
+	DiscountSum float64 `json:"discount_total,omitempty"`
+	Quantity    int     `json:"quantity"`
+	Available   bool    `json:"available,omitempty"`
+	ZohoId      string  `json:"zoho_id,omitempty"`
 }
 
 func ProdForAssistant(products []OrderProduct) interface{} {
 	result := make([]interface{}, len(products))
 	for i, p := range products {
 		result[i] = struct {
-			Name     string `json:"name"`
-			Price    string `json:"price"`
-			Code     string `json:"code"`
-			Quantity int    `json:"quantity"`
-			Discount int    `json:"discount,omitempty"`
+			Name     string  `json:"name"`
+			Price    float64 `json:"price"`
+			Code     string  `json:"code"`
+			Quantity int     `json:"quantity"`
+			Discount int     `json:"discount,omitempty"`
 		}{
 			Name:     p.Name,
 			Price:    p.Price,

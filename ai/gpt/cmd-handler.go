@@ -283,7 +283,7 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 		}
 	}
 
-	validProducts, err := o.productService.ValidateOrder(products, user.Phone)
+	validProducts, err := o.productService.ValidateOrder(products, "380672702827")
 	if err != nil {
 		return nil, err
 	}

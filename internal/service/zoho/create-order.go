@@ -3,7 +3,6 @@ package services
 import (
 	"DarkCS/entity"
 	"fmt"
-	"strconv"
 	"time"
 )
 
@@ -115,18 +114,17 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 		if !d.Available {
 			continue
 		}
-		price, _ := strconv.ParseFloat(d.Price, 64)
-		price -= float64(d.Discount) / 100 * price
+		//price -= float64(d.Discount) / 100 * price
 		item := entity.OrderedItem{
 			Product: entity.ZohoProduct{
 				ID: d.ZohoId,
 				//Name: d.Name,
 			},
 			Quantity:  d.Quantity,
-			Discount:  0,
-			DiscountP: 0,
-			ListPrice: roundToTwoDecimalPlaces(price),
-			Total:     roundToTwoDecimalPlaces(price * float64(d.Quantity)),
+			Discount:  d.DiscountSum,
+			DiscountP: roundToTwoDecimalPlaces(float64(d.Discount)),
+			ListPrice: roundToTwoDecimalPlaces(d.Price),
+			Total:     roundToTwoDecimalPlaces(d.TotalPrice),
 		}
 		orderedItems = append(orderedItems, item)
 	}
