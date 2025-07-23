@@ -123,7 +123,7 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 			Quantity:  d.Quantity,
 			Discount:  d.DiscountSum,
 			DiscountP: roundToTwoDecimalPlaces(float64(d.Discount)),
-			ListPrice: roundToTwoDecimalPlaces(d.Price),
+			ListPrice: roundToTwoDecimalPlaces(d.Price + d.DiscountSum/float64(d.Quantity)),
 			Total:     roundToTwoDecimalPlaces(d.TotalPrice),
 		}
 		orderedItems = append(orderedItems, item)
