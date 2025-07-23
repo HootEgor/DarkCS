@@ -8,10 +8,20 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
+	"unicode"
 )
 
-func (r *Service) ValidateOrder(products []entity.OrderProduct) ([]entity.OrderProduct, error) {
-	url := fmt.Sprintf("%s/%s/1", r.BaseURL, "order")
+func (r *Service) ValidateOrder(products []entity.OrderProduct, phone string) ([]entity.OrderProduct, error) {
+
+	sanitizedPhone := strings.Map(func(r rune) rune {
+		if unicode.IsDigit(r) {
+			return r
+		}
+		return -1
+	}, phone)
+
+	url := fmt.Sprintf("%s/%s/%s", r.BaseURL, "order", sanitizedPhone)
 
 	requestBody, err := json.Marshal(products)
 	if err != nil {

@@ -262,10 +262,10 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 		return nil, err
 	}
 
-	discount, err := o.productService.GetUserDiscount(user.Phone)
-	if err != nil {
-		return nil, err
-	}
+	//discount, err := o.productService.GetUserDiscount(user.Phone)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	var products []entity.OrderProduct
 	for _, product := range basket.Products {
@@ -276,14 +276,14 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 					Code:     product.Code,
 					Quantity: product.Quantity,
 					Price:    info.Price,
-					Discount: discount,
+					//Discount: discount,
 				})
 				break
 			}
 		}
 	}
 
-	validProducts, err := o.productService.ValidateOrder(products)
+	validProducts, err := o.productService.ValidateOrder(products, user.Phone)
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,7 @@ type ProductService interface {
 	GetProductInfo(articles []string) ([]entity.ProductInfo, error)
 	GetAvailableProducts() ([]entity.Product, error)
 
-	ValidateOrder([]entity.OrderProduct) ([]entity.OrderProduct, error)
+	ValidateOrder([]entity.OrderProduct, string) ([]entity.OrderProduct, error)
 
 	GetUserDiscount(phone string) (int, error)
 }
