@@ -7,6 +7,10 @@ import (
 	"log/slog"
 )
 
+const (
+	errorResponse = "От халепа... Щось пішло не так, будь ласка, спробуйте повторити запит :("
+)
+
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	if msg.SmartSenderId != "" {
 		go func(msg entity.HttpUserMsg) {
@@ -16,6 +20,7 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 				c.log.With(
 					sl.Err(err),
 				).Error("compose smart response")
+				answer.Text = errorResponse
 			}
 
 			err = c.smartService.EditLatestInputMessage(msg.SmartSenderId, answer.Text)
