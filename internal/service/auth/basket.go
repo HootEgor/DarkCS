@@ -10,17 +10,13 @@ func (s *Service) GetBasket(userUUID string) (*entity.Basket, error) {
 }
 
 func (s *Service) ClearBasket(userUUID string) error {
-	basket, err := s.repository.GetBasket(userUUID)
-	if err != nil {
-		return err
+
+	basket := &entity.Basket{
+		UserUUID: userUUID,
+		Products: []entity.OrderProduct{},
 	}
 
-	if basket == nil {
-		return nil
-	}
-
-	basket.Products = []entity.OrderProduct{}
-	_, err = s.repository.UpsertBasket(basket)
+	_, err := s.repository.UpsertBasket(basket)
 	return err
 }
 
