@@ -43,7 +43,7 @@ func (s *ZohoService) GetOrderProducts(orderId string) (string, error) {
 	total := 0.0
 	for _, item := range products.Data {
 		for _, product := range item.OrderedItems {
-			msg += fmt.Sprintf(" - %s, Кількість: %d, Ціна: %.2f\nСума: %.2f, Знижка: %d%%\nЗагальна ціна: %.2f\n\n",
+			msg += fmt.Sprintf(" - %s\nКількість: %d, Ціна: %.2f\nСума: %.2f, Знижка: %d%%\nЗагальна ціна: %.2f\n\n",
 				product.ProductName.Name,
 				product.Quantity,
 				product.ListPrice,
