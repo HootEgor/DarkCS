@@ -12,7 +12,7 @@ import (
 
 type productsResponse struct {
 	Data []struct {
-		OrderedItems struct {
+		OrderedItems []struct {
 			ProductName struct {
 				Name string `json:"name"`
 			} `json:"Product_Name"`
@@ -41,13 +41,15 @@ func (s *ZohoService) GetOrderProducts(orderId string) (string, error) {
 
 	msg := "Товари:\n"
 	for _, item := range products.Data {
-		msg += fmt.Sprintf(" - %s, Кількість: %d, Ціна: %.2f\nСума: %.2f, Знижка: %d%%\nФінальна сума: %.2f\n\n",
-			item.OrderedItems.ProductName.Name,
-			item.OrderedItems.Quantity,
-			item.OrderedItems.ListPrice,
-			item.OrderedItems.Total,
-			item.OrderedItems.Discount,
-			item.OrderedItems.NetTotal)
+		for _, product := range item.OrderedItems {
+			msg += fmt.Sprintf(" - %s, Кількість: %d, Ціна: %.2f\nСума: %.2f, Знижка: %d%%\nФінальна сума: %.2f\n\n",
+				product.ProductName.Name,
+				product.Quantity,
+				product.ListPrice,
+				product.Total,
+				product.Discount,
+				product.NetTotal)
+		}
 	}
 
 	return msg, nil
