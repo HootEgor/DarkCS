@@ -8,6 +8,7 @@ import (
 	"DarkCS/internal/http-server/handlers/response"
 	"DarkCS/internal/http-server/handlers/service"
 	"DarkCS/internal/http-server/handlers/user"
+	"DarkCS/internal/http-server/handlers/zoho"
 	"DarkCS/internal/http-server/middleware/authenticate"
 	"DarkCS/internal/http-server/middleware/timeout"
 	"DarkCS/internal/lib/sl"
@@ -33,6 +34,7 @@ type Handler interface {
 	response.Core
 	user.Core
 	assistant.Core
+	zoho.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -66,6 +68,9 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		})
 		v1.Route("/assistant", func(r chi.Router) {
 			r.Get("/attach", assistant.AttachFile(log, handler))
+		})
+		v1.Route("/zoho", func(r chi.Router) {
+			r.Post("/order_products", zoho.GetOrderProducts(log, handler))
 		})
 	})
 

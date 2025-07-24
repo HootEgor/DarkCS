@@ -40,6 +40,16 @@ type SmartService interface {
 	EditLatestInputMessage(userId, text string) error
 }
 
+type ZohoService interface {
+	// CreateOrder creates a new order in the Zoho CRM system
+	CreateOrder(order *entity.Order) error
+
+	// GetOrders retrieves a list of orders for a specific user
+	GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus, error)
+
+	GetOrderProducts(orderId string) (string, error)
+}
+
 type Core struct {
 	repo         Repository
 	ms           MessageService
@@ -47,6 +57,7 @@ type Core struct {
 	ass          Assistant
 	authService  AuthService
 	smartService SmartService
+	zoho         ZohoService
 	authKey      string
 	keys         map[string]string
 	log          *slog.Logger
@@ -85,6 +96,10 @@ func (c *Core) SetAssistant(ass Assistant) {
 
 func (c *Core) SetSmartService(smart SmartService) {
 	c.smartService = smart
+}
+
+func (c *Core) SetZohoService(zoho ZohoService) {
+	c.zoho = zoho
 }
 
 func (c *Core) Init() {
@@ -143,4 +158,8 @@ func (c *Core) GetUser(email, phone string, telegramId int64) (*entity.User, err
 
 func (c *Core) CreateUser(name, email, phone string, telegramId int64) (*entity.User, error) {
 	return c.authService.RegisterUser(name, email, phone, telegramId)
+}
+
+func (c *Core) GetOrderProducts(orderId string) (string, error) {
+	return c.zoho.GetOrderProducts(orderId)
 }

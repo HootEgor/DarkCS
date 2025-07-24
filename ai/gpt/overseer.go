@@ -1,3 +1,6 @@
+// Package gpt provides functionality for handling AI-powered interactions and commands
+// in the DarkCS system. This package includes AI assistant management, thread handling,
+// and integration with various services for product, authentication, and order management.
 package gpt
 
 import (
@@ -17,57 +20,97 @@ import (
 	"time"
 )
 
+// ProductService defines the interface for product-related operations.
+// It provides methods for retrieving product information, validating orders,
+// and managing user discounts.
 type ProductService interface {
+	// GetProductInfo retrieves detailed information about products based on their article codes
 	GetProductInfo(articles []string) ([]entity.ProductInfo, error)
+
+	// GetAvailableProducts returns a list of all available products
 	GetAvailableProducts() ([]entity.Product, error)
 
+	// ValidateOrder validates an order's products and returns the validated products
 	ValidateOrder([]entity.OrderProduct, string) ([]entity.OrderProduct, error)
 
+	// GetUserDiscount retrieves the discount percentage for a user based on their phone number
 	GetUserDiscount(phone string) (int, error)
 }
 
+// AuthService defines the interface for authentication and user-related operations.
+// It provides methods for updating user information and managing shopping baskets.
 type AuthService interface {
+	// UpdateUser updates a user's information in the system
 	UpdateUser(user *entity.User) error
 
+	// UpdateBasket updates the contents of a user's shopping basket
 	UpdateBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
+
+	// GetBasket retrieves the current contents of a user's shopping basket
 	GetBasket(userUUID string) (*entity.Basket, error)
+
+	// ClearBasket removes all products from a user's shopping basket
 	ClearBasket(userUUID string) error
+
+	// AddToBasket adds products to a user's shopping basket
 	AddToBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
+
+	// RemoveFromBasket removes products from a user's shopping basket
 	RemoveFromBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 }
 
+// ZohoService defines the interface for Zoho CRM integration.
+// It provides methods for creating and retrieving orders.
 type ZohoService interface {
+	// CreateOrder creates a new order in the Zoho CRM system
 	CreateOrder(order *entity.Order) error
+
+	// GetOrders retrieves a list of orders for a specific user
 	GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus, error)
 }
 
+// Overseer manages AI assistant interactions and coordinates with various services.
+// It handles OpenAI API communication, thread management, and service integration.
 type Overseer struct {
-	client         *openai.Client
-	assistants     map[string]string
-	apiKey         string
-	threads        map[string]ThreadMeta
-	productService ProductService
-	authService    AuthService
-	zohoService    ZohoService
-	savePath       string
-	locker         *LockThreads
-	log            *slog.Logger
+	client         *openai.Client        // OpenAI API client
+	assistants     map[string]string     // Map of assistant names to their IDs
+	apiKey         string                // OpenAI API key
+	threads        map[string]ThreadMeta // Map of user IDs to their thread metadata
+	productService ProductService        // Service for product-related operations
+	authService    AuthService           // Service for authentication and user operations
+	zohoService    ZohoService           // Service for Zoho CRM integration
+	savePath       string                // Path for saving files
+	locker         *LockThreads          // Thread locking mechanism
+	log            *slog.Logger          // Logger instance
 }
 
+// ThreadMeta stores metadata about a conversation thread.
 type ThreadMeta struct {
-	ID           string
-	MessageCount int
+	ID           string // OpenAI thread ID
+	MessageCount int    // Number of messages in the thread
 }
 
+// LockThreads provides thread-safe access to user threads.
+// It uses a mutex to synchronize access to the threads map.
 type LockThreads struct {
-	mutex   sync.Mutex
-	threads map[string]*sync.Mutex
+	mutex   sync.Mutex             // Mutex for synchronizing access to the threads map
+	threads map[string]*sync.Mutex // Map of user IDs to their thread mutexes
 }
 
+// OverseerResponse represents the response structure from the Overseer.
 type OverseerResponse struct {
-	Assistant string `json:"assistant"`
+	Assistant string `json:"assistant"` // Name of the assistant that handled the request
 }
 
+// NewOverseer creates a new instance of the Overseer with the provided configuration and logger.
+// It initializes the OpenAI client, sets up assistant mappings, and prepares thread management.
+//
+// Parameters:
+//   - conf: Configuration containing OpenAI API keys and assistant IDs
+//   - logger: Logger instance for recording operations
+//
+// Returns:
+//   - *Overseer: A new Overseer instance ready for use
 func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 	client := openai.NewClient(conf.OpenAI.ApiKey)
 	assistants := make(map[string]string)
@@ -86,18 +129,39 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 	}
 }
 
+// SetProductService sets the product service for the Overseer.
+// This service is used for product-related operations.
+//
+// Parameters:
+//   - productService: The product service implementation to use
 func (o *Overseer) SetProductService(productService ProductService) {
 	o.productService = productService
 }
 
+// SetAuthService sets the authentication service for the Overseer.
+// This service is used for user authentication and basket operations.
+//
+// Parameters:
+//   - authService: The authentication service implementation to use
 func (o *Overseer) SetAuthService(authService AuthService) {
 	o.authService = authService
 }
 
+// SetZohoService sets the Zoho CRM service for the Overseer.
+// This service is used for order management in Zoho CRM.
+//
+// Parameters:
+//   - zohoService: The Zoho service implementation to use
 func (o *Overseer) SetZohoService(zohoService ZohoService) {
 	o.zohoService = zohoService
 }
 
+// Lock acquires a lock for the specified user's thread.
+// This ensures thread-safe access to user-specific resources.
+// If a mutex doesn't exist for the user, it creates one.
+//
+// Parameters:
+//   - userId: The ID of the user whose thread should be locked
 func (l *LockThreads) Lock(userId string) {
 	l.mutex.Lock()
 
@@ -112,6 +176,11 @@ func (l *LockThreads) Lock(userId string) {
 	mutex.Lock()
 }
 
+// Unlock releases the lock for the specified user's thread.
+// If no lock exists for the user, it does nothing.
+//
+// Parameters:
+//   - userId: The ID of the user whose thread should be unlocked
 func (l *LockThreads) Unlock(userId string) {
 	l.mutex.Lock()
 
@@ -125,13 +194,29 @@ func (l *LockThreads) Unlock(userId string) {
 	mutex.Unlock()
 }
 
+// ComposeResponse generates a response to a user message by determining the appropriate
+// assistant to handle the request and routing the message to that assistant.
+//
+// The method first determines which assistant should handle the request based on the message content,
+// then forwards the message to the selected assistant, and finally processes the response.
+//
+// Parameters:
+//   - user: The user entity sending the message
+//   - systemMsg: System message providing context
+//   - userMsg: The actual message from the user
+//
+// Returns:
+//   - entity.AiAnswer: The AI's response, including text, assistant name, and any product information
+//   - error: Any error encountered during processing
 func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string) (entity.AiAnswer, error) {
+	// Initialize empty answer
 	answer := entity.AiAnswer{
 		Text:      "",
 		Assistant: "",
 		Products:  nil,
 	}
 
+	// Determine which assistant should handle this request
 	assistantName, err := o.determineAssistant(user, systemMsg, userMsg)
 	if err != nil {
 		o.log.With(
@@ -150,6 +235,7 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 
 	text := ""
 
+	// Route the message to the appropriate assistant
 	switch assistantName {
 	case entity.ConsultantAss:
 		text, answer.Products, err = o.askConsultant(user, userMsg)
@@ -163,20 +249,41 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 		text, answer.Products, err = o.askConsultant(user, userMsg)
 	}
 
+	// Clean up the response text by removing citation markers
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)
 	answer.Text = re.ReplaceAllString(text, "")
 
 	return answer, err
 }
 
+// determineAssistant analyzes a user message to decide which specialized assistant
+// should handle the request. It uses the Overseer assistant to make this determination.
+//
+// The method creates or retrieves a conversation thread for the user, sends the message
+// to the Overseer assistant, and interprets the response to determine which specialized
+// assistant (consultant, calculator, order manager) should handle the actual request.
+//
+// Parameters:
+//   - user: The user entity sending the message
+//   - systemMsg: System message providing context
+//   - userMsg: The actual message from the user
+//
+// Returns:
+//   - string: The name of the assistant that should handle the request
+//   - error: Any error encountered during processing
 func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg string) (string, error) {
+	// Ensure the thread is unlocked when this function completes
 	defer o.locker.Unlock(user.UUID)
+
+	// Get or create a conversation thread for this user
 	thread, err := o.getOrCreateThread(user.UUID)
 	if err != nil {
 		return "", err
 	}
 
+	// Combine system message and user message
 	question := fmt.Sprintf("%s, HttpUserMsg: %s", systemMsg, userMsg)
+
 	// Send the user message to the assistant
 	_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
 		Role:    string(openai.ThreadMessageRoleUser),
@@ -186,6 +293,7 @@ func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg stri
 		return "", fmt.Errorf("error creating message: %v", err)
 	}
 
+	// Run the Overseer assistant to analyze the message
 	completed := o.handleRun(user, thread.ID, o.assistants[entity.OverseerAss])
 	if !completed {
 		return "", fmt.Errorf("max retries reached, unable to complete run")
@@ -201,8 +309,10 @@ func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg stri
 		return "", fmt.Errorf("no messages found")
 	}
 
+	// Extract the response text from the assistant
 	responseText := msgs.Messages[0].Content[0].Text.Value
 
+	// Parse the response to determine which assistant should handle the request
 	var response OverseerResponse
 	err = json.Unmarshal([]byte(responseText), &response)
 	if err != nil {

@@ -103,6 +103,7 @@ func main() {
 
 	smartService := smart_sender.NewSmartSenderService(conf, lg)
 	handler.SetSmartService(smartService)
+	handler.SetZohoService(zohoService)
 
 	handler.Init()
 
