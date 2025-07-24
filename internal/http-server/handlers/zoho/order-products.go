@@ -30,7 +30,13 @@ func GetOrderProducts(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
+		var response struct {
+			Data string `json:"data"`
+		}
+
+		response.Data = msg
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(msg)
+		json.NewEncoder(w).Encode(response)
 	}
 }
