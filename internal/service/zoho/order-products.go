@@ -39,21 +39,22 @@ func (s *ZohoService) GetOrderProducts(orderId string) (string, error) {
 		return "", err
 	}
 
-	msg := "Товари:\n"
+	msg := ""
 	total := 0.0
+	maxDiscount := 0
 	for _, item := range products.Data {
 		for _, product := range item.OrderedItems {
-			msg += fmt.Sprintf(" - %s\nКількість: %d, Ціна: %.2f\nСума: %.2f, Знижка: %d%%\nЗагальна ціна: %.2f\n\n",
+			msg += fmt.Sprintf("%s - %d шт\n%.2f грн.\n\n",
 				product.ProductName.Name,
 				product.Quantity,
-				product.ListPrice,
-				product.Total,
-				product.Discount,
-				product.NetTotal)
+				product.ListPrice)
 			total += product.NetTotal
+			if product.Discount > maxDiscount {
+				maxDiscount = product.Discount
+			}
 		}
 	}
-	msg += fmt.Sprintf("Загальна сума: %.2f\n", total)
+	msg += fmt.Sprintf("Накопичувальна знижка: %d%%\nЗагальна сума: %.2f", maxDiscount, total)
 
 	return msg, nil
 }
