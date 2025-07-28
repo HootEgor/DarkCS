@@ -21,19 +21,27 @@ func CreateUser(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		user, err := handler.CreateUser(req.Name, req.Email, req.Phone, req.TelegramId)
+		name, zohoId, err := handler.CreateUser(req.Name, req.Email, req.Phone, req.TelegramId)
 		if err != nil {
 			log.Error("Failed to create user", slog.Any("error", err))
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
 
-		if user == nil {
+		if zohoId == "" {
 			http.Error(w, "User not created", http.StatusNotFound)
 			return
 		}
 
+		var response struct {
+			Name   string `json:"name"`
+			ZohoId string `json:"zoho_id"`
+		}
+
+		response.Name = name
+		response.ZohoId = zohoId
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		json.NewEncoder(w).Encode(response)
 	}
 }

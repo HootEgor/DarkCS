@@ -48,6 +48,8 @@ type ZohoService interface {
 	GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus, error)
 
 	GetOrderProducts(orderId string) (string, error)
+
+	CreateContact(user *entity.User) (string, error)
 }
 
 type Core struct {
@@ -156,8 +158,18 @@ func (c *Core) GetUser(email, phone string, telegramId int64) (*entity.User, err
 	return c.authService.GetUser(email, phone, telegramId)
 }
 
-func (c *Core) CreateUser(name, email, phone string, telegramId int64) (*entity.User, error) {
-	return c.authService.RegisterUser(name, email, phone, telegramId)
+func (c *Core) CreateUser(name, email, phone string, telegramId int64) (string, string, error) {
+	user, err := c.authService.RegisterUser(name, email, phone, telegramId)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create user: %w", err)
+	}
+
+	zohoId, err := c.zoho.CreateContact(user)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create zoho contact: %w", err)
+	}
+
+	return name, zohoId, nil
 }
 
 func (c *Core) GetOrderProducts(orderId string) (string, error) {
