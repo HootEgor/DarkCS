@@ -8,4 +8,5 @@ type Core interface {
 	CreateUser(name, email, phone string, telegramId int64) (string, string, error)
 	UserHasPromoAccess(phone string) (bool, error)
 	UserActivatePromoCode(phone, code string) (bool, error)
+	ClosePromoForUser(phone string) error
 }

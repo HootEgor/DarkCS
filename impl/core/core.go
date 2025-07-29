@@ -34,6 +34,7 @@ type AuthService interface {
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool) error
+	UpdateUser(user *entity.User) error
 
 	ActivatePromoCode(phone, code string) error
 
@@ -238,4 +239,19 @@ func (c *Core) UserHasPromoAccess(phone string) (bool, error) {
 	}
 
 	return user.HasPromo(), nil
+}
+
+func (c *Core) ClosePromoForUser(phone string) error {
+	user, err := c.authService.GetUser("", phone, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	user.PromoExpire = time.Time{} // Reset promo expiration
+	err = c.authService.UpdateUser(user)
+	return err
 }

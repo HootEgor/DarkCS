@@ -69,7 +69,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 			r.Post("/block", user.BlockUser(log, handler))
 			r.Post("/promo", user.GetUserPromoAccess(log, handler))
 			r.Post("/activate", user.ActivateUserPromo(log, handler))
-
+			r.Post("/close", user.CloseUserPromo(log, handler))
 		})
 		v1.Route("/assistant", func(r chi.Router) {
 			r.Get("/attach", assistant.AttachFile(log, handler))
