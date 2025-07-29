@@ -7,15 +7,16 @@ import (
 )
 
 type User struct {
-	UUID       string    `json:"uuid" bson:"uuid"`
-	Name       string    `json:"name" bson:"name" validate:"omitempty"`
-	Email      string    `json:"email" bson:"email" validate:"omitempty,email"`
-	Phone      string    `json:"phone" bson:"phone" validate:"omitempty"`
-	Address    string    `json:"address" bson:"address" validate:"omitempty"`
-	TelegramId int64     `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
-	Role       string    `json:"role" bson:"role" validate:"omitempty"`
-	Blocked    bool      `json:"blocked" bson:"blocked" validate:"omitempty"`
-	LastSeen   time.Time `json:"last_seen" bson:"lastSeen"`
+	UUID        string    `json:"uuid" bson:"uuid"`
+	Name        string    `json:"name" bson:"name" validate:"omitempty"`
+	Email       string    `json:"email" bson:"email" validate:"omitempty,email"`
+	Phone       string    `json:"phone" bson:"phone" validate:"omitempty"`
+	Address     string    `json:"address" bson:"address" validate:"omitempty"`
+	TelegramId  int64     `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
+	Role        string    `json:"role" bson:"role" validate:"omitempty"`
+	Blocked     bool      `json:"blocked" bson:"blocked" validate:"omitempty"`
+	LastSeen    time.Time `json:"last_seen" bson:"lastSeen"`
+	PromoExpire time.Time `json:"promo_expire" bson:"promoExpire" validate:"omitempty"`
 }
 
 type UserInfo struct {
@@ -148,4 +149,11 @@ func (u *User) ToContact() *Contact {
 		Field2:    u.Address,
 		Phone:     u.Phone,
 	}
+}
+
+func (u *User) HasPromo() bool {
+	if u.PromoExpire.IsZero() {
+		return false
+	}
+	return time.Now().Before(u.PromoExpire)
 }

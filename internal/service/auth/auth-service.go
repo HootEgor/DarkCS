@@ -14,6 +14,11 @@ type Repository interface {
 
 	UpsertBasket(basket *entity.Basket) (*entity.Basket, error)
 	GetBasket(userUUID string) (*entity.Basket, error)
+
+	GetPromoCode(code string) (*entity.PromoCode, error)
+	ActivatePromoCode(code string) error
+	SavePromoCodes(codes []string) error
+	GetAllPromoCodes() ([]entity.PromoCode, error)
 }
 
 type Service struct {

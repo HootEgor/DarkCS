@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	usersCollection    = "users"
-	basketCollection   = "baskets"
-	messagesCollection = "messages"
-	apiKeysCollection  = "api-keys"
+	usersCollection      = "users"
+	basketCollection     = "baskets"
+	messagesCollection   = "messages"
+	apiKeysCollection    = "api-keys"
+	promoCodesCollection = "promo-codes"
 )
 
 type MongoDB struct {

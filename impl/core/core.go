@@ -34,6 +34,11 @@ type AuthService interface {
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool) error
+
+	ActivatePromoCode(phone, code string) error
+
+	GetActivePromoCodes() ([]entity.PromoCode, error)
+	GeneratePromoCodes(number int) error
 }
 
 type SmartService interface {
@@ -174,4 +179,62 @@ func (c *Core) CreateUser(name, email, phone string, telegramId int64) (string, 
 
 func (c *Core) GetOrderProducts(orderId string) (string, error) {
 	return c.zoho.GetOrderProducts(orderId)
+}
+
+func (c *Core) GeneratePromoCodes(number int) error {
+	if c.authService == nil {
+		return fmt.Errorf("authService is not set")
+	}
+
+	if number <= 0 {
+		return fmt.Errorf("number of promo codes must be greater than zero")
+	}
+
+	return c.authService.GeneratePromoCodes(number)
+}
+
+func (c *Core) GetActivePromoCodes() ([]entity.PromoCode, error) {
+	if c.authService == nil {
+		return nil, fmt.Errorf("authService is not set")
+	}
+
+	codes, err := c.authService.GetActivePromoCodes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active promo codes: %w", err)
+	}
+
+	if len(codes) == 0 {
+		return nil, nil // No active promo codes
+	}
+
+	return codes, nil
+}
+
+func (c *Core) UserActivatePromoCode(phone, code string) (bool, error) {
+	if c.authService == nil {
+		return false, fmt.Errorf("authService is not set")
+	}
+
+	if phone == "" {
+		return false, fmt.Errorf("phone number is required")
+	}
+
+	err := c.authService.ActivatePromoCode(phone, code)
+	if err != nil {
+		return false, fmt.Errorf("failed to activate promo code: %w", err)
+	}
+
+	return true, nil
+}
+
+func (c *Core) UserHasPromoAccess(phone string) (bool, error) {
+	user, err := c.authService.GetUser("", phone, 0)
+	if err != nil {
+		return false, fmt.Errorf("failed to get user: %w", err)
+	}
+	if user == nil {
+		return false, nil
+	}
+
+	return user.HasPromo(), nil
 }
