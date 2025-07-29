@@ -67,7 +67,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 			r.Get("/", user.GetUser(log, handler))
 			r.Post("/create", user.CreateUser(log, handler))
 			r.Post("/block", user.BlockUser(log, handler))
-			r.Get("/promo", user.GetUserPromoAccess(log, handler))
+			r.Post("/promo", user.GetUserPromoAccess(log, handler))
 			r.Post("/activate", user.ActivateUserPromo(log, handler))
 
 		})
