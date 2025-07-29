@@ -4,6 +4,7 @@ import (
 	"DarkCS/entity"
 	"errors"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -41,7 +42,7 @@ func (m *MongoDB) GetAllPromoCodes() ([]entity.PromoCode, error) {
 
 	collection := connection.Database(m.database).Collection(promoCodesCollection)
 
-	cursor, err := collection.Find(m.ctx, nil)
+	cursor, err := collection.Find(m.ctx, bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("mongodb find promoCodes: %w", err)
 	}
@@ -64,10 +65,11 @@ func (m *MongoDB) ActivatePromoCode(code string) error {
 
 	collection := connection.Database(m.database).Collection(promoCodesCollection)
 
-	filter := entity.PromoCode{Code: code, Activated: false}
-	update := entity.PromoCode{Activated: true}
+	filter := bson.M{"code": code, "activated": false}
+	update := bson.M{"$set": bson.M{"activated": true}}
 
 	result, err := collection.UpdateOne(m.ctx, filter, update)
+
 	if err != nil {
 		return fmt.Errorf("mongodb update promoCode: %w", err)
 	}
@@ -88,7 +90,7 @@ func (m *MongoDB) GetPromoCode(code string) (*entity.PromoCode, error) {
 
 	collection := connection.Database(m.database).Collection(promoCodesCollection)
 
-	filter := entity.PromoCode{Code: code}
+	filter := bson.M{"code": code}
 	var promoCode entity.PromoCode
 	err = collection.FindOne(m.ctx, filter).Decode(&promoCode)
 	if err != nil {
