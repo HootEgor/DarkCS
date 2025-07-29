@@ -1,10 +1,11 @@
 package promo
 
 import (
+	"DarkCS/internal/lib/api/response"
 	"DarkCS/internal/lib/sl"
 	"fmt"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/xuri/excelize/v2"
+	"github.com/go-chi/render"
 	"log/slog"
 	"net/http"
 )
@@ -31,27 +32,6 @@ func GetActivePromoCodes(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		// ✅ Create Excel file
-		f := excelize.NewFile()
-		sheet := "PromoCodes"
-		f.NewSheet(sheet)
-		f.SetCellValue(sheet, "A1", "Promo Code")
-
-		for i, code := range codes {
-			cell := fmt.Sprintf("A%d", i+2)        // Start from row 2
-			f.SetCellValue(sheet, cell, code.Code) // Assuming codes are entity.PromoCode
-		}
-
-		// ✅ Write Excel file to response
-		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		w.Header().Set("Content-Disposition", `attachment; filename="promo_codes.xlsx"`)
-		w.WriteHeader(http.StatusOK)
-		if err := f.Write(w); err != nil {
-			logger.Error("failed to write excel file", sl.Err(err))
-			http.Error(w, "Failed to generate Excel", http.StatusInternalServerError)
-			return
-		}
-
-		logger.Info("excel file with promo codes sent successfully")
+		render.JSON(w, r, response.Ok(codes))
 	}
 }

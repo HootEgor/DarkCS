@@ -46,7 +46,7 @@ func GeneratePromoCodes(log *slog.Logger, handler Core) http.HandlerFunc {
 			render.JSON(w, r, response.Error(fmt.Sprintf("Search failed: %v", err)))
 			return
 		}
-		logger.Debug("product search")
+		logger.Debug("Promo codes generated successfully")
 
 		render.JSON(w, r, response.Ok("Promo codes generated successfully"))
 	}
