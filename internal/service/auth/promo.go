@@ -56,6 +56,9 @@ func (s *Service) GetActivePromoCodes() ([]entity.PromoCode, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get promo codes: %w", err)
 	}
+	s.log.With("codes", len(codes)).Debug(
+		"found promo codes",
+	)
 
 	if len(codes) == 0 {
 		return nil, nil // No active promo codes

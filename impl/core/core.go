@@ -204,6 +204,7 @@ func (c *Core) GetActivePromoCodes() ([]entity.PromoCode, error) {
 	}
 
 	if len(codes) == 0 {
+		c.log.Info("No active promo codes found")
 		return nil, nil // No active promo codes
 	}
 
