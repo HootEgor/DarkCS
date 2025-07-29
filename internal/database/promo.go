@@ -41,7 +41,7 @@ func (m *MongoDB) GetAllPromoCodes() ([]entity.PromoCode, error) {
 
 	collection := connection.Database(m.database).Collection(promoCodesCollection)
 
-	cursor, err := collection.Find(m.ctx, entity.PromoCode{})
+	cursor, err := collection.Find(m.ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("mongodb find promoCodes: %w", err)
 	}
