@@ -18,7 +18,7 @@ func GetUserPromoAccess(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		has, err := handler.UserHasPromoAccess(req.Phone)
+		access, err := handler.UserHasPromoAccess(req.Phone)
 		if err != nil {
 			log.Error("Failed to get user", slog.Any("error", err))
 			http.Error(w, "Failed to get user", http.StatusInternalServerError)
@@ -26,10 +26,14 @@ func GetUserPromoAccess(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		var response struct {
-			Access bool `json:"access"`
+			Access int `json:"access"`
 		}
 
-		response.Access = has
+		if access {
+			response.Access = 1
+		} else {
+			response.Access = 0
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)

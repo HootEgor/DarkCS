@@ -27,10 +27,14 @@ func ActivateUserPromo(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		var response struct {
-			Access bool `json:"access"`
+			Access int `json:"access"`
 		}
 
-		response.Access = access
+		if access {
+			response.Access = 1
+		} else {
+			response.Access = 0
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
