@@ -27,6 +27,7 @@ type OrderProduct struct {
 	ZohoId      string  `json:"zoho_id,omitempty"`
 }
 
+// ProdForAssistant converts a slice of OrderProduct to a slice of interface{} for use in an assistant response.
 func ProdForAssistant(products []OrderProduct) interface{} {
 	result := make([]interface{}, len(products))
 	for i, p := range products {
