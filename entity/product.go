@@ -11,6 +11,7 @@ type Product struct {
 	Product     string `json:"product"`
 	Group       string `json:"group"`
 	Code        string `json:"code"`
+	Status      string `json:"status"`
 	Description string `json:"description"`
 }
 
