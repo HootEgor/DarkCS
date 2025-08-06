@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// MailMessage represents a message to be sent via email.
 type MailMessage struct {
 	Sender  *UserAuth `json:"sender,omitempty" bson:"sender"`
 	To      string    `json:"to" validate:"required,email"`
