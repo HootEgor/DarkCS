@@ -6,7 +6,12 @@ package gpt
 import (
 	"DarkCS/entity"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+)
+
+const (
+	orderInProcessLimit = 2
 )
 
 // handleCommand processes user commands and routes them to appropriate handlers.
@@ -377,8 +382,13 @@ func (o *Overseer) canUserOrder(user *entity.User) (bool, error) {
 	}
 
 	// Check if any orders are in an active state
+	activeOrders := 0
 	for _, order := range orders {
 		if order.Status == entity.OrderStatusNew || order.Status == entity.OrderStatusProcessing || order.Status == entity.OrderStatusInvoiced {
+			activeOrders++
+		}
+
+		if activeOrders >= orderInProcessLimit {
 			return false, nil
 		}
 	}
@@ -461,7 +471,7 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 			Message  string      `json:"message"`
 			Products interface{} `json:"products"`
 		}{}
-		msg.Message = "Products are validated but, user have an active order, please wait until it is processed before creating a new one."
+		msg.Message = fmt.Sprintf("Products are validated but, user have an active orders %d, please wait until it is processed before creating a new one.", orderInProcessLimit)
 		msg.Products = entity.ProdForAssistant(basket.Products)
 		return msg, nil
 	}
