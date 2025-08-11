@@ -46,9 +46,10 @@ type DuplicateRecord struct {
 }
 
 type ZohoUser struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
-	ZUID string `json:"zuid"`
+	Name          string `json:"name"`
+	ID            string `json:"id"`
+	ZUID          string `json:"zuid"`
+	SmartSenderId string `json:"Smart_Sender_id"`
 }
 
 type ZohoModule struct {
