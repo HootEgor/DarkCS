@@ -488,7 +488,6 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 //   - interface{}: Success message or error message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
-	// Check if the user can place a new order
 	canOrder, err := o.canUserOrder(user)
 	if err != nil {
 		return nil, err
