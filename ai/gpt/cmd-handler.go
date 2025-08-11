@@ -406,7 +406,6 @@ func (o *Overseer) canUserOrder(user *entity.User) (bool, error) {
 //   - interface{}: Validated basket contents or error message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
-	// Get the user's basket
 	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {
 		return nil, err
