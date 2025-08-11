@@ -29,6 +29,6 @@ func SendMsg(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		render.JSON(w, r, response.Ok("Message sent successfully"))
+		render.JSON(w, r, response.Ok("message sent successfully"))
 	}
 }
