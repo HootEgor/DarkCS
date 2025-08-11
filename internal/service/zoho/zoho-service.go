@@ -162,11 +162,16 @@ func (s *ZohoService) createContact(contactData entity.Contact) (string, error) 
 			if err := json.Unmarshal(item.Details, &dup); err != nil {
 				return "", fmt.Errorf("failed to parse duplicate details: %w", err)
 			}
+
+			var generic map[string]interface{}
+			if err := json.Unmarshal(item.Details, &generic); err != nil {
+				return "", fmt.Errorf("failed to parse details: %w", err)
+			}
 			s.log.With(
 				slog.String("duplicate_id", dup.DuplicateRecord.ID),
 				//slog.Any("owner", dup.DuplicateRecord.Owner),
 				slog.String("module", dup.DuplicateRecord.Module.APIName),
-				slog.Any("Details", item),
+				slog.Any("Details", generic),
 			).Debug("duplicate record detected")
 			return dup.DuplicateRecord.ID, nil
 		}
