@@ -164,8 +164,9 @@ func (s *ZohoService) createContact(contactData entity.Contact) (string, error) 
 			}
 			s.log.With(
 				slog.String("duplicate_id", dup.DuplicateRecord.ID),
-				slog.Any("owner", dup.DuplicateRecord.Owner),
+				//slog.Any("owner", dup.DuplicateRecord.Owner),
 				slog.String("module", dup.DuplicateRecord.Module.APIName),
+				slog.Any("Details", item),
 			).Debug("duplicate record detected")
 			return dup.DuplicateRecord.ID, nil
 		}
