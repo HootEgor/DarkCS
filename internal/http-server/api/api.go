@@ -8,6 +8,7 @@ import (
 	"DarkCS/internal/http-server/handlers/promo"
 	"DarkCS/internal/http-server/handlers/response"
 	"DarkCS/internal/http-server/handlers/service"
+	"DarkCS/internal/http-server/handlers/smart"
 	"DarkCS/internal/http-server/handlers/user"
 	"DarkCS/internal/http-server/handlers/zoho"
 	"DarkCS/internal/http-server/middleware/authenticate"
@@ -37,6 +38,7 @@ type Handler interface {
 	assistant.Core
 	zoho.Core
 	promo.Core
+	smart.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -80,6 +82,9 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Route("/promo", func(r chi.Router) {
 			r.Get("/get", promo.GetActivePromoCodes(log, handler))
 			r.Post("/generate", promo.GeneratePromoCodes(log, handler))
+		})
+		v1.Route("/smart", func(r chi.Router) {
+			r.Post("/send", smart.SendMsg(log, handler))
 		})
 	})
 

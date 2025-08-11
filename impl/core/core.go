@@ -44,6 +44,7 @@ type AuthService interface {
 
 type SmartService interface {
 	EditLatestInputMessage(userId, text string) error
+	SendMessage(userId, text string) error
 }
 
 type ZohoService interface {
@@ -254,4 +255,16 @@ func (c *Core) ClosePromoForUser(phone string) error {
 	user.PromoExpire = time.Time{} // Reset promo expiration
 	err = c.authService.UpdateUser(user)
 	return err
+}
+
+func (c *Core) SendMessage(userId, text string) error {
+	if c.smartService == nil {
+		return fmt.Errorf("smartService is not set")
+	}
+
+	if userId == "" || text == "" {
+		return fmt.Errorf("userId and text cannot be empty")
+	}
+
+	return c.smartService.SendMessage(userId, text)
 }

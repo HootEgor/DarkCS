@@ -25,12 +25,6 @@ func NewSmartSenderService(conf *config.Config, logger *slog.Logger) *Service {
 	}
 }
 
-type sendRequest struct {
-	Type      string `json:"type"`
-	Content   string `json:"content"`
-	Watermark int64  `json:"watermark"`
-}
-
 func (s *Service) EditLatestInputMessage(userId, newText string) error {
 	defer func() {
 		if r := recover(); r != nil {
