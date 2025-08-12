@@ -1,0 +1,50 @@
+package key
+
+import (
+	"DarkCS/internal/lib/api/response"
+	"DarkCS/internal/lib/sl"
+	"encoding/json"
+	"fmt"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/render"
+	"log/slog"
+	"net/http"
+)
+
+type GenerateRequest struct {
+	Name string `json:"name"`
+}
+
+func Generate(log *slog.Logger, handler Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		mod := sl.Module("http.handlers.user")
+
+		logger := log.With(
+			mod,
+			slog.String("request_id", middleware.GetReqID(r.Context())),
+		)
+
+		if handler == nil {
+			logger.Error("generate key not available")
+			render.JSON(w, r, response.Error("generate key not available"))
+			return
+		}
+
+		var req GenerateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			logger.Error("failed to decode request body", sl.Err(err))
+			render.JSON(w, r, response.Error("Invalid request body"))
+			return
+		}
+
+		code, err := handler.GenerateApiKey(req.Name)
+		if err != nil {
+			logger.Error("generate key", sl.Err(err))
+			render.JSON(w, r, response.Error(fmt.Sprintf("generation failed: %v", err)))
+			return
+		}
+		logger.Debug("generate key successfully")
+
+		render.JSON(w, r, response.Ok(code))
+	}
+}

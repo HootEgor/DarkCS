@@ -51,6 +51,16 @@ func generateRandomCode(length int) string {
 	return string(b)
 }
 
+func (s *Service) GenerateRandomNumCode(length int) string {
+	const charset = "0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
+	}
+	return string(b)
+}
+
 func (s *Service) GetActivePromoCodes() ([]entity.PromoCode, error) {
 	codes, err := s.repository.GetAllPromoCodes()
 	if err != nil {

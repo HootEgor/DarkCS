@@ -145,6 +145,24 @@ func (s *Service) BlockUser(email, phone string, telegramId int64, block bool) e
 	return nil
 }
 
+func (s *Service) SetSmartSenderId(email, phone string, telegramId int64, smartSenderId string) error {
+	user, err := s.GetUser(email, phone, telegramId)
+	if err != nil {
+		return err
+	}
+
+	user.SmartSenderId = smartSenderId
+
+	err = s.repository.UpsertUser(*user)
+	if err != nil {
+		return err
+	}
+
+	s.updateUser(*user)
+
+	return nil
+}
+
 //func (a *Service) getAssistantsBySection(section string) []entity.AssistantData {
 //
 //	var assistants []entity.AssistantData

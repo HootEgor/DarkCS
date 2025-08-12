@@ -4,6 +4,7 @@ import (
 	"DarkCS/internal/config"
 	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/errors"
+	"DarkCS/internal/http-server/handlers/key"
 	"DarkCS/internal/http-server/handlers/product"
 	"DarkCS/internal/http-server/handlers/promo"
 	"DarkCS/internal/http-server/handlers/response"
@@ -39,6 +40,7 @@ type Handler interface {
 	zoho.Core
 	promo.Core
 	smart.Core
+	key.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -72,6 +74,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 			r.Post("/promo", user.GetUserPromoAccess(log, handler))
 			r.Post("/activate", user.ActivateUserPromo(log, handler))
 			r.Post("/close", user.CloseUserPromo(log, handler))
+			r.Post("/phone", user.CheckPhone(log, handler))
 		})
 		v1.Route("/assistant", func(r chi.Router) {
 			r.Get("/attach", assistant.AttachFile(log, handler))
@@ -85,6 +88,9 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		})
 		v1.Route("/smart", func(r chi.Router) {
 			r.Post("/send", smart.SendMsg(log, handler))
+		})
+		v1.Route("/key", func(r chi.Router) {
+			r.Post("/new", key.Generate(log, handler))
 		})
 	})
 

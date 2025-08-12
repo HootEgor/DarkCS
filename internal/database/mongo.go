@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	_ "go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -93,4 +94,61 @@ func (m *MongoDB) CheckApiKey(key string) (string, error) {
 	}
 
 	return result.Username, nil
+}
+
+func (m *MongoDB) getKeyByUsername(username string) (string, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return "", err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(apiKeysCollection)
+	filter := bson.D{{"username", username}}
+
+	var result struct {
+		Key string `bson:"key"`
+	}
+	err = collection.FindOne(m.ctx, filter).Decode(&result)
+	if err != nil {
+		return "", m.findError(err)
+	}
+
+	return result.Key, nil
+}
+
+func (m *MongoDB) GenerateApiKey(username string) (string, error) {
+
+	k, err := m.getKeyByUsername(username)
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return "", fmt.Errorf("failed to get existing API key: %w", err)
+	}
+	if k != "" {
+		return k, nil
+	}
+
+	connection, err := m.connect()
+	if err != nil {
+		return "", err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(apiKeysCollection)
+	uuid, err := uuid.NewUUID()
+	if err != nil {
+		return "", fmt.Errorf("uuid generation error: %w", err)
+	}
+	key := uuid.String()
+
+	doc := bson.D{
+		{"username", username},
+		{"key", key},
+	}
+
+	_, err = collection.InsertOne(m.ctx, doc)
+	if err != nil {
+		return "", fmt.Errorf("mongodb insert error: %w", err)
+	}
+
+	return key, nil
 }

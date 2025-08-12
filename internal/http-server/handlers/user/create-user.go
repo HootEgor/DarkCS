@@ -7,10 +7,11 @@ import (
 )
 
 type CreateRequest struct {
-	Email      string `json:"email"`
-	Phone      string `json:"phone"`
-	TelegramId int64  `json:"telegram_id"`
-	Name       string `json:"name"`
+	Email         string `json:"email"`
+	Phone         string `json:"phone"`
+	TelegramId    int64  `json:"telegram_id"`
+	Name          string `json:"name"`
+	SmartSenderId string `json:"smart_sender_id"`
 }
 
 func CreateUser(log *slog.Logger, handler Core) http.HandlerFunc {
@@ -21,7 +22,7 @@ func CreateUser(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		name, zohoId, err := handler.CreateUser(req.Name, req.Email, req.Phone, req.TelegramId)
+		name, zohoId, err := handler.CreateUser(req.Name, req.Email, req.Phone, req.SmartSenderId, req.TelegramId)
 		if err != nil {
 			log.Error("Failed to create user", slog.Any("error", err))
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)

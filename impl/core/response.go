@@ -47,6 +47,13 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 		return nil, err
 	}
 
+	if user.SmartSenderId == "" && msg.SmartSenderId != "" {
+		err = c.authService.SetSmartSenderId(msg.Email, msg.Phone, msg.TelegramId, msg.SmartSenderId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if user.Blocked {
 		return nil, fmt.Errorf("user is blocked")
 	}

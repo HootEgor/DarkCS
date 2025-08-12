@@ -11,6 +11,7 @@ import (
 type Repository interface {
 	CheckApiKey(key string) (string, error)
 	SaveMessage(message entity.Message) error
+	GenerateApiKey(username string) (string, error)
 }
 
 type ProductService interface {
@@ -40,6 +41,8 @@ type AuthService interface {
 
 	GetActivePromoCodes() ([]entity.PromoCode, error)
 	GeneratePromoCodes(number int) error
+	GenerateRandomNumCode(length int) string
+	SetSmartSenderId(email, phone string, telegramId int64, smartSenderId string) error
 }
 
 type SmartService interface {
@@ -165,10 +168,17 @@ func (c *Core) GetUser(email, phone string, telegramId int64) (*entity.User, err
 	return c.authService.GetUser(email, phone, telegramId)
 }
 
-func (c *Core) CreateUser(name, email, phone string, telegramId int64) (string, string, error) {
+func (c *Core) CreateUser(name, email, phone, smartSenderId string, telegramId int64) (string, string, error) {
 	user, err := c.authService.RegisterUser(name, email, phone, telegramId)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create user: %w", err)
+	}
+
+	if user.SmartSenderId == "" && smartSenderId != "" {
+		err = c.authService.SetSmartSenderId(email, phone, telegramId, smartSenderId)
+		if err != nil {
+			return "", "", err
+		}
 	}
 
 	zohoId, err := c.zoho.CreateContact(user)
@@ -267,4 +277,45 @@ func (c *Core) SendMessage(userId, text string) error {
 	}
 
 	return c.smartService.SendMessage(userId, text)
+}
+
+func (c *Core) CheckUserPhone(phone string) (string, error) {
+	if c.authService == nil {
+		return "", fmt.Errorf("authService is not set")
+	}
+
+	phoneDigits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			phoneDigits += string(ch)
+		}
+	}
+	phone = fmt.Sprintf("+%s", phoneDigits)
+
+	user, err := c.authService.GetUser("", phone, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if user == nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	code := c.authService.GenerateRandomNumCode(4)
+
+	return code, c.smartService.SendMessage(user.SmartSenderId, code)
+}
+
+func (c *Core) GenerateApiKey(username string) (string, error) {
+	if c.repo == nil {
+		return "", fmt.Errorf("repository is not set")
+	}
+
+	apiKey, err := c.repo.GenerateApiKey(username)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate API key: %w", err)
+	}
+
+	c.keys[apiKey] = username
+	return apiKey, nil
 }
