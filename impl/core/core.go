@@ -303,7 +303,9 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 
 	code := c.authService.GenerateRandomNumCode(4)
 
-	return code, c.smartService.SendMessage(user.SmartSenderId, code)
+	codeMsg := fmt.Sprintf("Код авторизації:\n%s", code)
+
+	return code, c.smartService.SendMessage(user.SmartSenderId, codeMsg)
 }
 
 func (c *Core) GenerateApiKey(username string) (string, error) {
