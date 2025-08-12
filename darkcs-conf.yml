@@ -34,7 +34,7 @@ smart-sender:
   api_key: ${SMART_API_KEY}
   base_url: https://api.smartsender.com/v1
 listen:
-  bind_ip: 0.0.0.0
+  bind_ip: 127.0.0.1
   port: ${LISTEN_PORT}
   key: ${API_KEY}
 zoho:
