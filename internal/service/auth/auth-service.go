@@ -107,6 +107,33 @@ func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, 
 	return user, err
 }
 
+func (s *Service) UserExists(email, phone string, telegramId int64) (*entity.User, error) {
+	filterUser := entity.NewUser(email, phone, telegramId)
+	for _, user := range s.users {
+		if user.SameUser(filterUser) {
+			return &user, nil
+		}
+	}
+	user, err := s.repository.GetUser(email, phone, telegramId)
+	if err != nil {
+		return nil, err
+	}
+	if user != nil {
+		if user.UUID == "" {
+			user.UUID = uuid.NewString()
+			err = s.repository.UpsertUser(*user)
+			if err != nil {
+				s.log.Error("upserting user", sl.Err(err))
+				return nil, err
+			}
+		}
+		s.users = append(s.users, *user)
+		return user, nil
+	}
+
+	return user, err
+}
+
 func (s *Service) IsUserGuest(email, phone string, telegramId int64) bool {
 	user, err := s.GetUser(email, phone, telegramId)
 	if err != nil {

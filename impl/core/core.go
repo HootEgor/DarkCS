@@ -34,6 +34,7 @@ type Assistant interface {
 type AuthService interface {
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+	UserExists(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool) error
 	UpdateUser(user *entity.User) error
 
@@ -292,7 +293,7 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 	}
 	phone = fmt.Sprintf("+%s", phoneDigits)
 
-	user, err := c.authService.GetUser("", phone, 0)
+	user, err := c.authService.UserExists("", phone, 0)
 	if err != nil {
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
