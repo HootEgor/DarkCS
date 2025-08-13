@@ -20,6 +20,7 @@ const (
 	messagesCollection   = "messages"
 	apiKeysCollection    = "api-keys"
 	promoCodesCollection = "promo-codes"
+	assistantCollection  = "assistant"
 )
 
 type MongoDB struct {

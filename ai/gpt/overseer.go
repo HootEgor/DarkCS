@@ -20,6 +20,10 @@ import (
 	"time"
 )
 
+type Repository interface {
+	GetAssistant(name string) (*entity.Assistant, error)
+}
+
 // ProductService defines the interface for product-related operations.
 // It provides methods for retrieving product information, validating orders,
 // and managing user discounts.
@@ -79,9 +83,10 @@ type Overseer struct {
 	productService ProductService        // Service for product-related operations
 	authService    AuthService           // Service for authentication and user operations
 	zohoService    ZohoService           // Service for Zoho CRM integration
-	savePath       string                // Path for saving files
-	locker         *LockThreads          // Thread locking mechanism
-	log            *slog.Logger          // Logger instance
+	repo           Repository
+	savePath       string       // Path for saving files
+	locker         *LockThreads // Thread locking mechanism
+	log            *slog.Logger // Logger instance
 }
 
 // ThreadMeta stores metadata about a conversation thread.
@@ -127,6 +132,10 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 		locker:     &LockThreads{threads: make(map[string]*sync.Mutex)},
 		log:        logger.With(sl.Module("overseer")),
 	}
+}
+
+func (o *Overseer) SetRepository(repo Repository) {
+	o.repo = repo
 }
 
 // SetProductService sets the product service for the Overseer.
@@ -235,19 +244,43 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 
 	text := ""
 
-	// Route the message to the appropriate assistant
-	switch assistantName {
-	case entity.ConsultantAss:
-		text, answer.Products, err = o.askConsultant(user, userMsg)
-		break
-	case entity.CalculatorAss:
-		text, answer.Products, err = o.askCalculator(user, userMsg)
-		break
-	case entity.OrderManagerAss:
-		text, answer.Products, err = o.askOrderManager(user, userMsg)
-	default:
-		text, answer.Products, err = o.askConsultant(user, userMsg)
+	assistant, err := o.repo.GetAssistant(assistantName)
+	if err != nil {
+		o.log.With(
+			slog.String("assistant", assistantName),
+			slog.String("userUUID", user.UUID),
+		).Error("get assistant", sl.Err(err))
+		return answer, fmt.Errorf("failed to get assistant %s: %v", assistantName, err)
 	}
+
+	if assistant == nil {
+		o.log.With(
+			slog.String("assistant", assistantName),
+			slog.String("userUUID", user.UUID),
+		).Error("assistant not found")
+		return answer, fmt.Errorf("assistant %s not found", assistantName)
+	}
+
+	if !assistant.Active {
+		answer.Text = "Вибачте, цей асистент наразі не активний. Будь ласка, спробуйте пізніше."
+		return answer, nil
+	}
+
+	text, answer.Products, err = o.ask(user, userMsg, assistant.Id)
+
+	// Route the message to the appropriate assistant
+	//switch assistantName {
+	//case entity.ConsultantAss:
+	//	text, answer.Products, err = o.askConsultant(user, userMsg)
+	//	break
+	//case entity.CalculatorAss:
+	//	text, answer.Products, err = o.askCalculator(user, userMsg)
+	//	break
+	//case entity.OrderManagerAss:
+	//	text, answer.Products, err = o.askOrderManager(user, userMsg)
+	//default:
+	//	text, answer.Products, err = o.askConsultant(user, userMsg)
+	//}
 
 	// Clean up the response text by removing citation markers
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)

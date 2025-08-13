@@ -12,6 +12,10 @@ type Repository interface {
 	CheckApiKey(key string) (string, error)
 	SaveMessage(message entity.Message) error
 	GenerateApiKey(username string) (string, error)
+
+	UpsertAssistant(assistant *entity.Assistant) (*entity.Assistant, error)
+	GetAssistant(name string) (*entity.Assistant, error)
+	GetAllAssistants() ([]entity.Assistant, error)
 }
 
 type ProductService interface {
@@ -321,4 +325,51 @@ func (c *Core) GenerateApiKey(username string) (string, error) {
 
 	c.keys[apiKey] = username
 	return apiKey, nil
+}
+
+func (c *Core) UpdateAssistant(name, id string, active bool) error {
+	if c.repo == nil {
+		return fmt.Errorf("repository is not set")
+	}
+
+	assistant, err := c.repo.GetAssistant(name)
+	if err != nil {
+		return fmt.Errorf("failed to get assistant: %w", err)
+	}
+
+	if assistant == nil {
+		assistant = &entity.Assistant{
+			Name: name,
+		}
+	}
+
+	if assistant.Id != "" {
+		assistant.Id = id
+	}
+
+	assistant.Active = active
+	_, err = c.repo.UpsertAssistant(assistant)
+	if err != nil {
+		return fmt.Errorf("failed to update assistant: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Core) GetAllAssistants() ([]entity.Assistant, error) {
+	if c.repo == nil {
+		return nil, fmt.Errorf("repository is not set")
+	}
+
+	assistants, err := c.repo.GetAllAssistants()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all assistants: %w", err)
+	}
+
+	if len(assistants) == 0 {
+		c.log.Info("No assistants found")
+		return nil, nil // No assistants found
+	}
+
+	return assistants, nil
 }

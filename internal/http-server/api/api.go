@@ -78,6 +78,8 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		})
 		v1.Route("/assistant", func(r chi.Router) {
 			r.Get("/attach", assistant.AttachFile(log, handler))
+			r.Post("/update", assistant.Update(log, handler))
+			r.Get("/all", assistant.GetAllAssistants(log, handler))
 		})
 		v1.Route("/zoho", func(r chi.Router) {
 			r.Post("/order_products", zoho.GetOrderProducts(log, handler))

@@ -39,13 +39,6 @@ const (
 	AdminRole   = "admin"
 )
 
-const (
-	OverseerAss     = "Overseer"
-	ConsultantAss   = "Consultant"
-	CalculatorAss   = "Calculator"
-	OrderManagerAss = "Order Manager"
-)
-
 func NewUser(email, phone string, telegramId int64) *User {
 
 	return &User{

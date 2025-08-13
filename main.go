@@ -91,6 +91,7 @@ func main() {
 
 	overseer := gpt.NewOverseer(conf, lg)
 	if overseer != nil {
+		overseer.SetRepository(db)
 		overseer.SetZohoService(zohoService)
 		overseer.SetProductService(ps)
 		overseer.SetAuthService(authService)

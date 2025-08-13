@@ -27,7 +27,14 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 			if err != nil {
 				c.log.With(
 					sl.Err(err),
-				).Error("send smart msg")
+				).Error("edit smart msg")
+
+				err = c.smartService.SendMessage(msg.SmartSenderId, answer.Text)
+				if err != nil {
+					c.log.With(
+						sl.Err(err),
+					).Error("send smart msg")
+				}
 			}
 		}(msg)
 
