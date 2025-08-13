@@ -340,7 +340,7 @@ func (c *Core) UpdateAssistant(name, id string, active bool) error {
 		}
 	}
 
-	if assistant.Id != "" {
+	if id != "" {
 		assistant.Id = id
 	}
 
