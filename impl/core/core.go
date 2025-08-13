@@ -332,10 +332,7 @@ func (c *Core) UpdateAssistant(name, id string, active bool) error {
 		return fmt.Errorf("repository is not set")
 	}
 
-	assistant, err := c.repo.GetAssistant(name)
-	if err != nil {
-		return fmt.Errorf("failed to get assistant: %w", err)
-	}
+	assistant, _ := c.repo.GetAssistant(name)
 
 	if assistant == nil {
 		assistant = &entity.Assistant{
@@ -348,7 +345,7 @@ func (c *Core) UpdateAssistant(name, id string, active bool) error {
 	}
 
 	assistant.Active = active
-	_, err = c.repo.UpsertAssistant(assistant)
+	_, err := c.repo.UpsertAssistant(assistant)
 	if err != nil {
 		return fmt.Errorf("failed to update assistant: %w", err)
 	}

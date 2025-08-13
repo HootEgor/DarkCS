@@ -43,7 +43,7 @@ func Update(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		err := handler.UpdateAssistant(req.Id, req.Name, req.Active)
+		err := handler.UpdateAssistant(req.Name, req.Id, req.Active)
 		if err != nil {
 			logger.Error("update assistant", sl.Err(err))
 			render.JSON(w, r, response.Error("Update failed"))
