@@ -1,5 +1,5 @@
 package zoho
 
 type Core interface {
-	GetOrderProducts(orderId string) (string, error)
+	GetOrderProducts(orderId, smartSenderId string) error
 }

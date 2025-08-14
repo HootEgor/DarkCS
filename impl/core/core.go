@@ -194,8 +194,18 @@ func (c *Core) CreateUser(name, email, phone, smartSenderId string, telegramId i
 	return name, zohoId, nil
 }
 
-func (c *Core) GetOrderProducts(orderId string) (string, error) {
-	return c.zoho.GetOrderProducts(orderId)
+func (c *Core) GetOrderProducts(orderId, smartSenderId string) error {
+
+	msg, err := c.zoho.GetOrderProducts(orderId)
+	if err != nil {
+		c.log.With(
+			sl.Err(err),
+		).Error("get order products")
+
+		return c.smartService.SendMessage(smartSenderId, errorResponse)
+	}
+
+	return c.smartService.SendMessage(smartSenderId, msg)
 }
 
 func (c *Core) GeneratePromoCodes(number int) error {
