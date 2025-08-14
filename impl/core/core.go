@@ -320,6 +320,11 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 
 	codeMsg := fmt.Sprintf("Код авторизації:\n%s", code)
 
+	if user.SmartSenderId == "" {
+		return "", fmt.Errorf("user does not have a SmartSenderId set")
+
+	}
+
 	return code, c.smartService.SendMessage(user.SmartSenderId, codeMsg)
 }
 
