@@ -303,7 +303,7 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 	}
 
 	if user == nil {
-		return "", fmt.Errorf("user not found")
+		return "", nil
 	}
 
 	code := c.authService.GenerateRandomNumCode(4)

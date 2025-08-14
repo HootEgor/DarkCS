@@ -43,6 +43,13 @@ func CheckPhone(log *slog.Logger, handler Core) http.HandlerFunc {
 			render.JSON(w, r, response.Error(fmt.Sprintf("Check failed: %v", err)))
 			return
 		}
+
+		if code == "" {
+			logger.Info("phone not found", slog.String("phone", req.Phone))
+			render.JSON(w, r, response.Error("Phone not found"))
+			return
+		}
+
 		logger.With(
 			slog.String("phone", req.Phone),
 			slog.String("code", code),
