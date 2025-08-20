@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 )
@@ -29,16 +31,19 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		var body json.RawMessage
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, "invalid json", http.StatusBadRequest)
+		// Read body
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}
+		// Restore the body so it can be decoded later
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		log.With(
 			slog.String("module", "http.handlers.mcp"),
 			slog.String("request", r.URL.Path),
-			slog.Any("body", body),
+			slog.String("body", string(bodyBytes)),
 		).Debug("handling MCP request")
 
 		var req RPCRequest
