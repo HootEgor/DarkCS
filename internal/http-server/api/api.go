@@ -5,6 +5,7 @@ import (
 	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/errors"
 	"DarkCS/internal/http-server/handlers/key"
+	"DarkCS/internal/http-server/handlers/mcp"
 	"DarkCS/internal/http-server/handlers/product"
 	"DarkCS/internal/http-server/handlers/promo"
 	"DarkCS/internal/http-server/handlers/response"
@@ -94,6 +95,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Route("/key", func(r chi.Router) {
 			r.Post("/new", key.Generate(log, handler))
 		})
+		v1.Post("/mcp", mcp.MCPHandler)
 	})
 
 	httpLog := slog.NewLogLogger(log.Handler(), slog.LevelError)
