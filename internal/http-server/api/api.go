@@ -97,7 +97,6 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 			r.Post("/new", key.Generate(log, handler))
 		})
 		v1.Post("/mcp", mcp.Handler(log, handler))
-		v1.Get("/.well-known/mcp.json", mcp.ToolsDescription)
 	})
 
 	httpLog := slog.NewLogLogger(log.Handler(), slog.LevelError)

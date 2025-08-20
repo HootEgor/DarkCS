@@ -1,12 +1,6 @@
 package mcp
 
-import (
-	"encoding/json"
-	"net/http"
-)
-
-func ToolsDescription(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func ToolsDescription() map[string]interface{} {
 	tools := map[string]interface{}{
 		"tools": []map[string]interface{}{
 			{
@@ -25,5 +19,6 @@ func ToolsDescription(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	_ = json.NewEncoder(w).Encode(tools)
+
+	return tools
 }
