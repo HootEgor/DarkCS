@@ -29,6 +29,18 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
+		var body json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+
+		log.With(
+			slog.String("module", "http.handlers.mcp"),
+			slog.String("request", r.URL.Path),
+			slog.Any("body", body),
+		).Debug("handling MCP request")
+
 		var req RPCRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
