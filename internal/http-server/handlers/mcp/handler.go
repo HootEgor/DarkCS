@@ -56,7 +56,13 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 
 		switch req.Method {
 		case "initialize":
-			res.Result = ToolsDescription()
+			res.Result = map[string]interface{}{
+				"protocolVersion": "2025-06-18",
+				"capabilities": map[string]interface{}{
+					"supportsTools": true,
+				},
+				"tools": ToolsDescription()["tools"], // include your tools
+			}
 		case "ping":
 			pong := handler.Ping()
 			res.Result = map[string]string{"msg": pong}
