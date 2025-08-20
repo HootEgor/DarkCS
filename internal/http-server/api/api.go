@@ -42,6 +42,7 @@ type Handler interface {
 	promo.Core
 	smart.Core
 	key.Core
+	mcp.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -95,7 +96,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Route("/key", func(r chi.Router) {
 			r.Post("/new", key.Generate(log, handler))
 		})
-		v1.Post("/mcp", mcp.MCPHandler)
+		v1.Post("/mcp", mcp.Handler(log, handler))
 	})
 
 	httpLog := slog.NewLogLogger(log.Handler(), slog.LevelError)
