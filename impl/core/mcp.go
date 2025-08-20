@@ -1,5 +1,5 @@
 package core
 
-func (c *Core) Pong() string {
+func (c *Core) Ping() string {
 	return "core pong"
 }
