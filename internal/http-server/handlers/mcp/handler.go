@@ -55,6 +55,15 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		res := RPCResponse{Jsonrpc: "2.0", ID: req.ID}
 
 		switch req.Method {
+		case "initialize":
+			res.Result = map[string]interface{}{
+				"serverName":      "darkcs",
+				"serverVersion":   "1.0.0",
+				"protocolVersion": "2025-06-18",
+				"capabilities": map[string]interface{}{
+					"supportsTools": true,
+				},
+			}
 		case "ping":
 			pong := handler.Ping()
 			res.Result = map[string]string{"msg": pong}
