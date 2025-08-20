@@ -41,6 +41,25 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		case "ping":
 			pong := handler.Ping()
 			res.Result = map[string]string{"msg": pong}
+		case "get_products_info":
+			// Parse params
+			var params struct {
+				Codes []string `json:"codes"`
+			}
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				res.Error = "invalid params: " + err.Error()
+				break
+			}
+
+			products, err := handler.ProductsInfo(params.Codes)
+			if err != nil {
+				res.Error = err.Error()
+				break
+			}
+
+			res.Result = map[string]interface{}{
+				"products": products,
+			}
 		default:
 			res.Error = "unknown method: " + req.Method
 		}

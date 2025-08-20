@@ -99,6 +99,8 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Post("/mcp", mcp.Handler(log, handler))
 	})
 
+	router.Get("/.well-known/mcp.json", mcp.ToolsDescription)
+
 	httpLog := slog.NewLogLogger(log.Handler(), slog.LevelError)
 	server.httpServer = &http.Server{
 		Handler:  router,
