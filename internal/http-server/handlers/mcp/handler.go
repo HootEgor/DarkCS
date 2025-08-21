@@ -31,7 +31,7 @@ type ErrorResponse struct {
 // Example MCP handler over HTTP
 func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -56,6 +56,11 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		res := RPCResponse{Jsonrpc: "2.0", ID: req.ID}
+
+		if req.Method == "notifications/initialized" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 
 		switch req.Method {
 		case "initialize":
