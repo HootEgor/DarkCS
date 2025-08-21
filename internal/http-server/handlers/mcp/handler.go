@@ -3,6 +3,7 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/go-chi/render"
 	"io"
 	"log/slog"
 	"net/http"
@@ -75,7 +76,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 					"tools": map[string]interface{}{
 						// Explicitly state the tool methods this server supports.
 						// This is the piece of information the client is depending on.
-						"methods": []string{"list", "call"},
+						"methods": []string{"get_products_info", "list", "call"},
 
 						// You can still indicate that the list is dynamic.
 						"listChanged": true,
@@ -123,13 +124,13 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			res.Error = &ErrorResponse{Code: -32601, Message: "Method not found: " + req.Method}
 		}
 
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(res); err != nil {
-			log.Error("failed to encode response", slog.Any("error", err))
-			http.Error(w, "failed to encode response", http.StatusInternalServerError)
-			return
-		}
-		//render.JSON(w, r, res)
+		//w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		//w.WriteHeader(http.StatusOK)
+		//if err := json.NewEncoder(w).Encode(res); err != nil {
+		//	log.Error("failed to encode response", slog.Any("error", err))
+		//	http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		//	return
+		//}
+		render.JSON(w, r, res)
 	}
 }
