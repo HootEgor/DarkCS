@@ -96,6 +96,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Route("/key", func(r chi.Router) {
 			r.Post("/new", key.Generate(log, handler))
 		})
+		v1.Get("/mcp", mcp.Handler(log, handler))
 		v1.Post("/mcp", mcp.Handler(log, handler))
 	})
 

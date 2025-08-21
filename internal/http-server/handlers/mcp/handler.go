@@ -23,21 +23,24 @@ type RPCResponse struct {
 	Error   interface{} `json:"error,omitempty"`
 }
 
+type ErrorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 // Example MCP handler over HTTP
 func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
+		if r.Method != http.MethodPost && r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		// Read body
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}
-		// Restore the body so it can be decoded later
 		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		log.With(
@@ -57,39 +60,61 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		switch req.Method {
 		case "initialize":
 			res.Result = map[string]interface{}{
-				"protocolVersion": "2025-06-18",
-				"capabilities": map[string]interface{}{
-					"supportsTools": true,
+				"protocolVersion": "2025-03-26",
+				"serverInfo": map[string]interface{}{
+					"name":    "Go MCP Server",
+					"version": "1.0.0",
 				},
-				"tools": ToolsDescription()["tools"], // include your tools
+				"capabilities": map[string]interface{}{
+					"tools": map[string]interface{}{
+						"listChanged": true,
+					},
+				},
 			}
+		case "tools/list":
+			res.Result = ToolsDescription()
 		case "ping":
 			pong := handler.Ping()
 			res.Result = map[string]string{"msg": pong}
-		case "get_products_info":
-			// Parse params
-			var params struct {
-				Codes []string `json:"codes"`
+		case "tools/call":
+			var callParams struct {
+				Name  string          `json:"name"`
+				Input json.RawMessage `json:"input"`
 			}
-			if err := json.Unmarshal(req.Params, &params); err != nil {
-				res.Error = "invalid params: " + err.Error()
+			if err := json.Unmarshal(req.Params, &callParams); err != nil {
+				res.Error = &ErrorResponse{Code: -32602, Message: "Invalid params: " + err.Error()}
 				break
 			}
 
-			products, err := handler.ProductsInfo(params.Codes)
-			if err != nil {
-				res.Error = err.Error()
-				break
-			}
+			switch callParams.Name {
+			case "get_products_info":
+				var params struct {
+					Codes []string `json:"codes"`
+				}
+				if err := json.Unmarshal(callParams.Input, &params); err != nil {
+					res.Error = &ErrorResponse{Code: -32602, Message: "Invalid input for get_products_info: " + err.Error()}
+					break
+				}
 
-			res.Result = map[string]interface{}{
-				"products": products,
+				products, err := handler.ProductsInfo(params.Codes)
+				if err != nil {
+					res.Error = &ErrorResponse{Code: -32603, Message: err.Error()}
+					break
+				}
+
+				res.Result = map[string]interface{}{
+					"products": products,
+				}
+			default:
+				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}
 		default:
-			res.Error = "unknown method: " + req.Method
+			res.Error = &ErrorResponse{Code: -32601, Message: "Method not found: " + req.Method}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(res)
+		if err := json.NewEncoder(w).Encode(res); err != nil {
+			log.Error("failed to encode response", slog.Any("error", err))
+		}
 	}
 }
