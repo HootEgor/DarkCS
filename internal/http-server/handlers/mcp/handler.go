@@ -114,7 +114,9 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 					break
 				}
 
-				res.Result = products
+				res.Result = map[string]interface{}{
+					"products": products,
+				}
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}
@@ -122,7 +124,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			res.Error = &ErrorResponse{Code: -32601, Message: "Method not found: " + req.Method}
 		}
 
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		//w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		render.JSON(w, r, res)
 	}
 }
