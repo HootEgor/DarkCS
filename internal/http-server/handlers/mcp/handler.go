@@ -104,12 +104,14 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 					Codes []string `json:"codes"`
 				}
 				if err := json.Unmarshal(callParams.Input, &params); err != nil {
+					log.Error("failed to unmarshal get_products_info params", slog.Any("error", err))
 					res.Error = &ErrorResponse{Code: -32602, Message: "Invalid input for get_products_info: " + err.Error()}
 					break
 				}
 
 				products, err := handler.ProductsInfo(params.Codes)
 				if err != nil {
+					log.Error("failed to fetch products info", slog.Any("error", err))
 					res.Error = &ErrorResponse{Code: -32603, Message: err.Error()}
 					break
 				}
@@ -117,19 +119,6 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				res.Result = map[string]interface{}{
 					"products": products,
 				}
-			case "hello_world":
-				var params struct {
-					Name string `json:"name"`
-				}
-				if err := json.Unmarshal(callParams.Input, &params); err != nil {
-					res.Error = &ErrorResponse{Code: -32602, Message: "Invalid input for hello_world: " + err.Error()}
-					break
-				}
-				res.Result = map[string]string{
-					"message": "Hello ashdiosfdhj, " + params.Name + "!",
-				}
-				render.JSON(w, r, res.Result)
-				return
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}

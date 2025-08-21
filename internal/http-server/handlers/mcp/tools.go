@@ -36,29 +36,6 @@ func ToolsDescription() map[string]interface{} {
 					"required": []string{"products"},
 				},
 			},
-			//hello world tool
-			{
-				"name":        "hello_world",
-				"description": "Returns a simple greeting message",
-				"inputSchema": map[string]interface{}{
-					"type":     "object",
-					"required": []string{"name"},
-					"properties": map[string]interface{}{
-						"name": map[string]interface{}{
-							"type": "string",
-						},
-					},
-				},
-				"outputSchema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"message": map[string]interface{}{
-							"type": "string",
-						},
-					},
-					"required": []string{"message"},
-				},
-			},
 		},
 	}
 
