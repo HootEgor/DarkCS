@@ -128,6 +128,8 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				res.Result = map[string]string{
 					"message": "Hello ashdiosfdhj, " + params.Name + "!",
 				}
+				render.JSON(w, r, res.Result)
+				return
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}
