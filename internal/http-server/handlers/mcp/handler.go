@@ -76,7 +76,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 					"tools": map[string]interface{}{
 						// Explicitly state the tool methods this server supports.
 						// This is the piece of information the client is depending on.
-						"methods": []string{"get_products_info", "list", "call"},
+						"methods": []string{"list", "call"},
 
 						// You can still indicate that the list is dynamic.
 						"listChanged": true,
@@ -116,6 +116,17 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 
 				res.Result = map[string]interface{}{
 					"products": products,
+				}
+			case "hello_world":
+				var params struct {
+					Name string `json:"name"`
+				}
+				if err := json.Unmarshal(callParams.Input, &params); err != nil {
+					res.Error = &ErrorResponse{Code: -32602, Message: "Invalid input for hello_world: " + err.Error()}
+					break
+				}
+				res.Result = map[string]string{
+					"message": "Hello ashdiosfdhj, " + params.Name + "!",
 				}
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
