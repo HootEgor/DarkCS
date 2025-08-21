@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"bytes"
 	"encoding/json"
 	"github.com/go-chi/render"
 	"io"
@@ -42,7 +41,6 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}
-		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		log.With(
 			slog.String("module", "http.handlers.mcp"),
@@ -51,7 +49,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		).Debug("handling MCP request")
 
 		var req RPCRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.Unmarshal(bodyBytes, &req); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
