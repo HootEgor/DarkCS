@@ -102,9 +102,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 					break
 				}
 
-				res.Result = map[string]interface{}{
-					"products": products,
-				}
+				res.Result = products
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}
