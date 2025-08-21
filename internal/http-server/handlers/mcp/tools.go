@@ -6,7 +6,7 @@ func ToolsDescription() map[string]interface{} {
 			{
 				"name":        "get_products_info",
 				"description": "Fetches information about products based on product codes",
-				"inputSchema": map[string]interface{}{
+				"input_schema": map[string]interface{}{
 					"type":     "object",
 					"required": []string{"codes"},
 					"properties": map[string]interface{}{
