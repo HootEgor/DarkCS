@@ -79,7 +79,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		case "tools/call":
 			var callParams struct {
 				Name  string          `json:"name"`
-				Input json.RawMessage `json:"input"`
+				Input json.RawMessage `json:"arguments"`
 			}
 			if err := json.Unmarshal(req.Params, &callParams); err != nil {
 				res.Error = &ErrorResponse{Code: -32602, Message: "Invalid params: " + err.Error()}
