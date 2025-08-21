@@ -19,7 +19,7 @@ type RPCRequest struct {
 type RPCResponse struct {
 	Jsonrpc string      `json:"jsonrpc"`
 	ID      int         `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
+	Result  interface{} `json:"results,omitempty"`
 	Error   interface{} `json:"error,omitempty"`
 }
 
