@@ -65,13 +65,19 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		switch req.Method {
 		case "initialize":
 			res.Result = map[string]interface{}{
-				"protocolVersion": "2025-03-26",
+				"protocolVersion": "2025-06-18",
 				"serverInfo": map[string]interface{}{
 					"name":    "Go MCP Server",
 					"version": "1.0.0",
 				},
+				// This capabilities block is the critical change.
 				"capabilities": map[string]interface{}{
 					"tools": map[string]interface{}{
+						// Explicitly state the tool methods this server supports.
+						// This is the piece of information the client is depending on.
+						"methods": []string{"list", "call"},
+
+						// You can still indicate that the list is dynamic.
 						"listChanged": true,
 					},
 				},
