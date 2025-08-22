@@ -42,10 +42,17 @@ func (s *Service) SendMessage(userId, text string) error {
 		return err
 	}
 
+	if sendReq == nil {
+		return fmt.Errorf("nil request to smart sender")
+	}
+
 	sendReq.Header.Set("Content-Type", "application/json")
 	sendReq.Header.Set("Authorization", "Bearer "+s.apiKey)
 
 	client := &http.Client{Timeout: 10 * time.Second}
+	if client == nil {
+		return fmt.Errorf("nil HTTP client")
+	}
 	sendResp, err := client.Do(sendReq)
 	if err != nil {
 		s.log.With(sl.Err(err)).Error("send POST HTTP")
