@@ -119,7 +119,6 @@ func (s *Service) EditLatestInputMessage(userId, newText string) error {
 	defer editResp.Body.Close()
 
 	if editResp.StatusCode < 200 || editResp.StatusCode >= 300 {
-		s.log.With(sl.Err(err)).Error("non-2xx on PUT")
 		return fmt.Errorf("failed to edit message: status %d", editResp.StatusCode)
 	}
 
