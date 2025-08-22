@@ -66,7 +66,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			res.Result = map[string]interface{}{
 				"protocolVersion": "2025-06-18",
 				"serverInfo": map[string]interface{}{
-					"name":    "Go MCP Server",
+					"name":    "darkcs",
 					"version": "1.0.0",
 				},
 				// This capabilities block is the critical change.
@@ -83,9 +83,6 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			}
 		case "tools/list":
 			res.Result = ToolsDescription()
-		case "ping":
-			pong := handler.Ping()
-			res.Result = map[string]string{"msg": pong}
 		case "tools/call":
 			var callParams struct {
 				Name  string          `json:"name"`
@@ -115,7 +112,14 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				}
 
 				res.Result = map[string]interface{}{
-					"products": products,
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "output",
+							"output": map[string]interface{}{
+								"products": products,
+							},
+						},
+					},
 				}
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
