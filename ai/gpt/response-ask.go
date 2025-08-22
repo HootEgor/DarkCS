@@ -63,8 +63,13 @@ type Tool struct {
 type ResponseAPIResponse struct {
 	ID     string `json:"id"`
 	Output []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type    string `json:"type"`
+		Status  string `json:"status,omitempty"`
+		Role    string `json:"role,omitempty"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content,omitempty"`
 	} `json:"output"`
 }
 
@@ -186,20 +191,38 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		return "", nil, fmt.Errorf("failed to decode response body: %v", err)
 	}
 
-	// Safety check
-	if len(apiResp.Output) == 0 || apiResp.Output[0].Text == "" {
-		return "", nil, fmt.Errorf("no output from assistant")
+	var assistantText string
+	for _, out := range apiResp.Output {
+		if out.Type == "message" && len(out.Content) > 0 {
+			for _, c := range out.Content {
+				if c.Type == "output_text" && c.Text != "" {
+					assistantText = c.Text
+					break
+				}
+			}
+			if assistantText != "" {
+				break
+			}
+		}
 	}
 
-	// Parse assistant JSON response safely
-	var r Response
-	if err := json.Unmarshal([]byte(apiResp.Output[0].Text), &r); err != nil {
+	if assistantText == "" {
 		o.log.With(
 			slog.String("userUUID", user.UUID),
-			slog.Any("response", apiResp.Output[0].Text),
+			slog.String("responseID", apiResp.ID),
+		).Warn("no assistant message found in Response API output")
+		return string(body), nil, fmt.Errorf("no output from assistant")
+	}
+
+	// Now you can safely unmarshal it
+	var r Response
+	if err := json.Unmarshal([]byte(assistantText), &r); err != nil {
+		o.log.With(
+			slog.String("userUUID", user.UUID),
+			slog.Any("response", assistantText),
 			sl.Err(err),
-		).Error("unmarshalling response")
-		return apiResp.Output[0].Text, nil, nil
+		).Error("unmarshalling assistant response")
+		return assistantText, nil, nil
 	}
 
 	// Clean text
