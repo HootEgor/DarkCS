@@ -149,6 +149,22 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	}
 	defer resp.Body.Close()
 
+	// Read the full body safely (limit to 10MB to avoid OOM)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Log full body (or first N chars if it's huge)
+	previewLen := 2000
+	if len(body) < previewLen {
+		previewLen = len(body)
+	}
+	o.log.With(
+		slog.String("body_preview", string(body[:previewLen])),
+		slog.Int("body_length", len(body)),
+	).Debug("full Response API body")
+
 	if resp.StatusCode != 200 {
 		// Try to read a limited body for error logging
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
