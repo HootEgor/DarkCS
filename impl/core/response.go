@@ -20,16 +20,20 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 				c.log.With(
 					sl.Err(err),
 				).Error("compose smart response")
-				answer.Text = errorResponse
 			}
 
-			err = c.smartService.EditLatestInputMessage(msg.SmartSenderId, answer.Text)
+			sendMsg := errorResponse
+			if answer != nil && answer.Text != "" {
+				sendMsg = answer.Text
+			}
+
+			err = c.smartService.EditLatestInputMessage(msg.SmartSenderId, sendMsg)
 			if err != nil {
 				c.log.With(
 					sl.Err(err),
 				).Error("edit smart msg")
 
-				err = c.smartService.SendMessage(msg.SmartSenderId, answer.Text)
+				err = c.smartService.SendMessage(msg.SmartSenderId, sendMsg)
 				if err != nil {
 					c.log.With(
 						sl.Err(err),

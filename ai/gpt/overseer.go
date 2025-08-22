@@ -277,6 +277,12 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)
 	answer.Text = re.ReplaceAllString(text, "")
 
+	o.log.With(
+		slog.String("userUUID", user.UUID),
+		slog.String("assistant", assistantName),
+		slog.String("response", answer.Text),
+	).Debug("assistant response")
+
 	return answer, err
 }
 
