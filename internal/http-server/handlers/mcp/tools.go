@@ -5,37 +5,23 @@ func ToolsDescription() map[string]interface{} {
 		"tools": []map[string]interface{}{
 			{
 				"name":        "get_products_info",
-				"description": "Fetches information about products based on product codes",
-				"inputSchema": map[string]interface{}{
+				"description": "Fetches information about products based on an array of product codes. It returns info only about available products, meaning if 3 codes are given but only 2 exist, the output includes only 2.",
+				"parameters": map[string]interface{}{
 					"type":     "object",
 					"required": []string{"codes"},
 					"properties": map[string]interface{}{
 						"codes": map[string]interface{}{
-							"type":  "array",
-							"items": map[string]interface{}{"type": "string"},
-						},
-					},
-				},
-				"outputSchema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"products": map[string]interface{}{
-							"type": "array",
+							"type":        "array",
+							"description": "Array of product codes to fetch information for",
 							"items": map[string]interface{}{
-								"type":     "object",
-								"required": []string{"code", "name", "price", "url"},
-								"properties": map[string]interface{}{
-									"code":  map[string]interface{}{"type": "string"},
-									"name":  map[string]interface{}{"type": "string"},
-									"price": map[string]interface{}{"type": "number"},
-									"url":   map[string]interface{}{"type": "string"},
-								},
+								"type":        "string",
+								"description": "Unique code for each product",
 							},
 						},
 					},
 					"additionalProperties": false,
-					"required":             []string{"products"},
 				},
+				"strict": true,
 			},
 		},
 	}

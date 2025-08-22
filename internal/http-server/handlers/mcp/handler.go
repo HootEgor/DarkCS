@@ -11,16 +11,16 @@ import (
 // JSON-RPC request/response types
 type RPCRequest struct {
 	Jsonrpc string          `json:"jsonrpc"`
-	ID      int             `json:"id"`
+	ID      interface{}     `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
 }
 
 type RPCResponse struct {
-	Jsonrpc string      `json:"jsonrpc"`
-	ID      int         `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   interface{} `json:"error,omitempty"`
+	Jsonrpc string         `json:"jsonrpc"`
+	ID      interface{}    `json:"id"`
+	Result  interface{}    `json:"result,omitempty"`
+	Error   *ErrorResponse `json:"error,omitempty"`
 }
 
 type ErrorResponse struct {
