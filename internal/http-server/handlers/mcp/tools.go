@@ -1,7 +1,7 @@
 package mcp
 
 func ToolsDescription() map[string]interface{} {
-	tools := map[string]interface{}{
+	return map[string]interface{}{
 		"tools": []map[string]interface{}{
 			{
 				"name":        "get_products_info",
@@ -16,9 +16,26 @@ func ToolsDescription() map[string]interface{} {
 						},
 					},
 				},
+				"outputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"products": map[string]interface{}{
+							"type": "array",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"code":  map[string]interface{}{"type": "string"},
+									"name":  map[string]interface{}{"type": "string"},
+									"price": map[string]interface{}{"type": "number"},
+									"url":   map[string]interface{}{"type": "string"},
+								},
+								"required": []string{"code", "name", "price"},
+							},
+						},
+					},
+					"required": []string{"products"},
+				},
 			},
 		},
 	}
-
-	return tools
 }

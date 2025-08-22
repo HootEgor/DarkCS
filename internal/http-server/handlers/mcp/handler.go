@@ -114,11 +114,12 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				res.Result = map[string]interface{}{
 					"content": []interface{}{
 						map[string]interface{}{
-							"type": "json", // indicates this is structured JSON the LLM can read
-							"json": map[string]interface{}{
-								"products": products,
-							},
+							"type": "text",
+							"text": "Here is the information about the products you requested.",
 						},
+					},
+					"structuredContent": map[string]interface{}{
+						"products": products,
 					},
 				}
 
