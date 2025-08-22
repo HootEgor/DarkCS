@@ -16,26 +16,6 @@ func ToolsDescription() map[string]interface{} {
 						},
 					},
 				},
-				"outputSchema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"products": map[string]interface{}{
-							"type": "array",
-							"items": map[string]interface{}{
-								"type":     "object",
-								"required": []string{"code", "name", "price", "url"},
-								"properties": map[string]interface{}{
-									"code":  map[string]interface{}{"type": "string"},
-									"name":  map[string]interface{}{"type": "string"},
-									"price": map[string]interface{}{"type": "number"},
-									"url":   map[string]interface{}{"type": "string"},
-								},
-							},
-						},
-					},
-					"additionalProperties": false,
-					"required":             []string{"products"},
-				},
 			},
 		},
 	}
