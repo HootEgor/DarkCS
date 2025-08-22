@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/go-chi/render"
 	"io"
 	"log/slog"
@@ -111,11 +112,17 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 					break
 				}
 
+				// Constructing a response that includes both text and structured content
+				contentMsg := "Found the following products:\n"
+				for _, p := range products {
+					contentMsg += "- " + p.Name + " (Code: " + p.Code + ", Price: " + fmt.Sprintf("%.2f", p.Price) + ")\n"
+				}
+
 				res.Result = map[string]interface{}{
 					"content": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": "Here is the information about the products you requested.",
+							"text": contentMsg,
 						},
 					},
 					"structuredContent": map[string]interface{}{

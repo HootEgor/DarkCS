@@ -1,6 +1,7 @@
 package core
 
 import (
+	"DarkCS/entity"
 	"fmt"
 )
 
@@ -11,7 +12,7 @@ func (c *Core) FindProduct(article string) (interface{}, error) {
 	return c.ps.ProductSearch(article)
 }
 
-func (c *Core) ProductsInfo(articles []string) (interface{}, error) {
+func (c *Core) ProductsInfo(articles []string) ([]entity.ProductInfo, error) {
 	if c.repo == nil {
 		return nil, fmt.Errorf("repository not initialized")
 	}
