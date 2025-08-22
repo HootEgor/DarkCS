@@ -155,26 +155,19 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		return "", nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	// Log full body (or first N chars if it's huge)
-	previewLen := 2000
-	if len(body) < previewLen {
-		previewLen = len(body)
-	}
+	// Log the full body for debugging (consider redacting sensitive info in production)
 	o.log.With(
-		slog.String("body_preview", string(body[:previewLen])),
+		slog.String("body_preview", string(body)),
 		slog.Int("body_length", len(body)),
 	).Debug("full Response API body")
 
 	if resp.StatusCode != 200 {
-		// Try to read a limited body for error logging
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		return "", nil, fmt.Errorf("response API error: %s", string(body))
 	}
 
-	// Use json.Decoder to parse the response stream
-	decoder := json.NewDecoder(resp.Body)
+	// Unmarshal the body that was already read
 	var apiResp ResponseAPIResponse
-	if err := decoder.Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(body, &apiResp); err != nil {
 		return "", nil, fmt.Errorf("failed to decode response body: %v", err)
 	}
 
