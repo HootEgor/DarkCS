@@ -149,24 +149,25 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		// Try to read a limited body for error logging
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		return "", nil, fmt.Errorf("response API error: %s", string(body))
 	}
 
-	o.log.With(
-		slog.String("body", string(body)),
-	).Debug("handling ResponseAPIResponse")
-
+	// Use json.Decoder to parse the response stream
+	decoder := json.NewDecoder(resp.Body)
 	var apiResp ResponseAPIResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return "", nil, fmt.Errorf("failed to unmarshal response: %v", err)
+	if err := decoder.Decode(&apiResp); err != nil {
+		return "", nil, fmt.Errorf("failed to decode response body: %v", err)
 	}
 
-	if len(apiResp.Output) == 0 {
+	// Safety check
+	if len(apiResp.Output) == 0 || apiResp.Output[0].Text == "" {
 		return "", nil, fmt.Errorf("no output from assistant")
 	}
 
+	// Parse assistant JSON response safely
 	var r Response
 	if err := json.Unmarshal([]byte(apiResp.Output[0].Text), &r); err != nil {
 		o.log.With(
