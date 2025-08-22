@@ -90,39 +90,26 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 
 	apiKey := o.apiKey
 
-	reqBody := ResponseAPIRequest{
-		Model: assistant.Model,
-		Input: []MessageItem{
+	var input []MessageItem
+	var tools []Tool
+
+	if user.PrevRespID == "" {
+		// New conversation
+		input = []MessageItem{
 			{
 				Role: "developer",
 				Content: []ContentItem{
-					{
-						Type: "input_text",
-						Text: assistant.Prompt,
-					},
+					{Type: "input_text", Text: assistant.Prompt},
 				},
 			},
 			{
 				Role: "user",
 				Content: []ContentItem{
-					{
-						Type: "input_text",
-						Text: userMsg,
-					},
+					{Type: "input_text", Text: userMsg},
 				},
 			},
-		},
-		Text: TextSchema{
-			Format: Format{
-				Type:   "json_schema",
-				Name:   "response_schema",
-				Strict: true,
-				Schema: entity.GetResponseFormat(assistant.ResponseFormat),
-			},
-			Verbosity: "medium",
-		},
-		Reasoning: Reasoning{Effort: "medium", Summary: "auto"},
-		Tools: []Tool{
+		}
+		tools = []Tool{
 			{
 				Type:           "file_search",
 				VectorStoreIDs: []string{assistant.VectorStoreId},
@@ -135,7 +122,34 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 				AllowedTools:    assistant.AllowedTools,
 				RequireApproval: "never",
 			},
+		}
+	} else {
+		// Follow-up
+		input = []MessageItem{
+			{
+				Role: "user",
+				Content: []ContentItem{
+					{Type: "input_text", Text: userMsg},
+				},
+			},
+		}
+		tools = nil // omit tools
+	}
+
+	reqBody := ResponseAPIRequest{
+		Model: assistant.Model,
+		Input: input,
+		Text: TextSchema{
+			Format: Format{
+				Type:   "json_schema",
+				Name:   "response_schema",
+				Strict: true,
+				Schema: entity.GetResponseFormat(assistant.ResponseFormat),
+			},
+			Verbosity: "medium",
 		},
+		Reasoning:          Reasoning{Effort: "medium", Summary: "auto"},
+		Tools:              tools,
 		PreviousResponseID: user.PrevRespID,
 		Store:              true,
 	}
@@ -158,27 +172,6 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	// Log the response body for debugging
-	previewLen := 2000
-	if len(body) < previewLen {
-		previewLen = len(body)
-	}
-	o.log.With(
-		slog.String("body_preview", string(body[:previewLen])),
-		slog.Int("body_length", len(body)),
-	).Debug("full Response API body")
-	for i := 0; i < len(body); i += 2000 {
-		end := i + 2000
-		if end > len(body) {
-			end = len(body)
-		}
-		o.log.With(
-			slog.String("body_chunk", string(body[i:end])),
-			slog.Int("chunk_start", i),
-			slog.Int("chunk_end", end),
-		).Debug("Response API body chunk")
 	}
 
 	if resp.StatusCode != 200 {
