@@ -114,14 +114,14 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				res.Result = map[string]interface{}{
 					"content": []interface{}{
 						map[string]interface{}{
-							"type": "json",
-							"json": map[string]interface{}{
-								"products": products,
-							},
+							"type": "text",
+							"text": "Here is the information about the products you requested.",
 						},
 					},
+					"structuredContent": map[string]interface{}{
+						"products": products,
+					},
 				}
-
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}
