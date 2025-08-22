@@ -89,7 +89,14 @@ func main() {
 		lg.Debug("zoho service initialized")
 	}
 
-	overseer := gpt.NewOverseer(conf, lg)
+	mcpApiKey, err := handler.GenerateApiKey("openai")
+	if err != nil {
+		lg.With(
+			sl.Err(err),
+		).Error("generate openai api key")
+	}
+
+	overseer := gpt.NewOverseer(conf, lg, mcpApiKey)
 	if overseer != nil {
 		overseer.SetRepository(db)
 		overseer.SetZohoService(zohoService)

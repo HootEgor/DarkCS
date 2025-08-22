@@ -207,7 +207,7 @@ func (c *Core) GenerateApiKey(username string) (string, error) {
 	return apiKey, nil
 }
 
-func (c *Core) UpdateAssistant(name, id string, active bool) error {
+func (c *Core) UpdateAssistant(name, id string, active bool, model, prompt, vectorStoreId, responseFormat string, allowedTools []string) error {
 	if c.repo == nil {
 		return fmt.Errorf("repository is not set")
 	}
@@ -222,6 +222,22 @@ func (c *Core) UpdateAssistant(name, id string, active bool) error {
 
 	if id != "" {
 		assistant.Id = id
+	}
+
+	if model != "" {
+		assistant.Model = model
+	}
+	if prompt != "" {
+		assistant.Prompt = prompt
+	}
+	if vectorStoreId != "" {
+		assistant.VectorStoreId = vectorStoreId
+	}
+	if responseFormat != "" {
+		assistant.ResponseFormat = responseFormat
+	}
+	if len(allowedTools) > 0 {
+		assistant.AllowedTools = allowedTools
 	}
 
 	assistant.Active = active

@@ -10,12 +10,6 @@ import (
 	"log/slog"
 )
 
-type Response struct {
-	Response  string   `json:"response"`
-	Codes     []string `json:"codes"`
-	ShowCodes bool     `json:"show_codes"`
-}
-
 func (o *Overseer) ask(user *entity.User, userMsg, assId string) (string, []entity.ProductInfo, error) {
 	defer o.locker.Unlock(user.UUID)
 	thread, err := o.getOrCreateThread(user.UUID)

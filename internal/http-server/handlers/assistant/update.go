@@ -10,9 +10,14 @@ import (
 )
 
 type UpdateRequest struct {
-	Name   string `json:"name"`
-	Id     string `json:"id"`
-	Active bool   `json:"active"`
+	Name           string   `json:"name"`
+	Id             string   `json:"id"`
+	Active         bool     `json:"active"`
+	Model          string   `json:"model"`
+	Prompt         string   `json:"prompt"`
+	VectorStoreId  string   `json:"vector_store_id"`
+	ResponseFormat string   `json:"response_format"`
+	AllowedTools   []string `json:"allowed_tools"`
 }
 
 func Update(log *slog.Logger, handler Core) http.HandlerFunc {
@@ -43,7 +48,7 @@ func Update(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		err := handler.UpdateAssistant(req.Name, req.Id, req.Active)
+		err := handler.UpdateAssistant(req.Name, req.Id, req.Active, req.Model, req.Prompt, req.VectorStoreId, req.ResponseFormat, req.AllowedTools)
 		if err != nil {
 			logger.Error("update assistant", sl.Err(err))
 			render.JSON(w, r, response.Error("Update failed"))

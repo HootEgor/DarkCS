@@ -61,6 +61,8 @@ type AuthService interface {
 
 	// RemoveFromBasket removes products from a user's shopping basket
 	RemoveFromBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
+
+	SetPrevRespID(user entity.User, respID string) error
 }
 
 // ZohoService defines the interface for Zoho CRM integration.
@@ -79,6 +81,7 @@ type Overseer struct {
 	client         *openai.Client        // OpenAI API client
 	assistants     map[string]string     // Map of assistant names to their IDs
 	apiKey         string                // OpenAI API key
+	mcpKey         string                // MCP API key
 	threads        map[string]ThreadMeta // Map of user IDs to their thread metadata
 	productService ProductService        // Service for product-related operations
 	authService    AuthService           // Service for authentication and user operations
@@ -116,7 +119,7 @@ type OverseerResponse struct {
 //
 // Returns:
 //   - *Overseer: A new Overseer instance ready for use
-func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
+func NewOverseer(conf *config.Config, logger *slog.Logger, mcpApiKey string) *Overseer {
 	client := openai.NewClient(conf.OpenAI.ApiKey)
 	assistants := make(map[string]string)
 	assistants[entity.OverseerAss] = conf.OpenAI.OverseerID
@@ -127,6 +130,7 @@ func NewOverseer(conf *config.Config, logger *slog.Logger) *Overseer {
 		client:     client,
 		assistants: assistants,
 		apiKey:     conf.OpenAI.ApiKey,
+		mcpKey:     mcpApiKey,
 		threads:    make(map[string]ThreadMeta),
 		savePath:   conf.SavePath,
 		locker:     &LockThreads{threads: make(map[string]*sync.Mutex)},
@@ -266,21 +270,8 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 		return answer, nil
 	}
 
-	text, answer.Products, err = o.ask(user, userMsg, assistant.Id)
-
-	// Route the message to the appropriate assistant
-	//switch assistantName {
-	//case entity.ConsultantAss:
-	//	text, answer.Products, err = o.askConsultant(user, userMsg)
-	//	break
-	//case entity.CalculatorAss:
-	//	text, answer.Products, err = o.askCalculator(user, userMsg)
-	//	break
-	//case entity.OrderManagerAss:
-	//	text, answer.Products, err = o.askOrderManager(user, userMsg)
-	//default:
-	//	text, answer.Products, err = o.askConsultant(user, userMsg)
-	//}
+	//text, answer.Products, err = o.ask(user, userMsg, assistant.Id)
+	text, answer.Products, err = o.Ask(user, userMsg, *assistant)
 
 	// Clean up the response text by removing citation markers
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)

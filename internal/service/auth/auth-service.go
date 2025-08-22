@@ -190,6 +190,19 @@ func (s *Service) SetSmartSenderId(email, phone string, telegramId int64, smartS
 	return nil
 }
 
+func (s *Service) SetPrevRespID(user entity.User, respID string) error {
+	user.PrevRespID = respID
+
+	err := s.repository.UpsertUser(user)
+	if err != nil {
+		return err
+	}
+
+	s.updateUser(user)
+
+	return nil
+}
+
 //func (a *Service) getAssistantsBySection(section string) []entity.AssistantData {
 //
 //	var assistants []entity.AssistantData

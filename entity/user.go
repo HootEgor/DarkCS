@@ -18,6 +18,7 @@ type User struct {
 	Blocked       bool      `json:"blocked" bson:"blocked" validate:"omitempty"`
 	LastSeen      time.Time `json:"last_seen" bson:"lastSeen"`
 	PromoExpire   time.Time `json:"promo_expire" bson:"promoExpire" validate:"omitempty"`
+	PrevRespID    string    `json:"prev_resp_id" bson:"prevRespID" validate:"omitempty"`
 }
 
 type UserInfo struct {
