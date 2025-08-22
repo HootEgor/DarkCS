@@ -17,6 +17,10 @@ type sendRequest struct {
 }
 
 func (s *Service) SendMessage(userId, text string) error {
+	s.log.With(
+		slog.String("smartId", userId),
+		slog.String("text", text),
+	).Debug("sending smart msg")
 	defer func() {
 		if r := recover(); r != nil {
 			s.log.With(slog.Any("panic", r)).Error("send smart msg")
