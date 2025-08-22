@@ -169,6 +169,11 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 
 	var r Response
 	if err := json.Unmarshal([]byte(apiResp.Output[0].Text), &r); err != nil {
+		o.log.With(
+			slog.String("userUUID", user.UUID),
+			slog.Any("response", apiResp.Output[0].Text),
+			sl.Err(err),
+		).Error("unmarshalling response")
 		return apiResp.Output[0].Text, nil, nil
 	}
 
