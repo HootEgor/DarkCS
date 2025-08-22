@@ -112,8 +112,16 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				}
 
 				res.Result = map[string]interface{}{
-					"content": products,
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "json", // indicates this is structured JSON the LLM can read
+							"json": map[string]interface{}{
+								"products": products,
+							},
+						},
+					},
 				}
+
 			default:
 				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
 			}
