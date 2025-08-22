@@ -114,12 +114,9 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				res.Result = map[string]interface{}{
 					"content": []interface{}{
 						map[string]interface{}{
-							"type": "text",
-							"text": "Here is the information about the products you requested.",
+							"type":  "array",
+							"items": products,
 						},
-					},
-					"structuredContent": map[string]interface{}{
-						"products": products,
 					},
 				}
 			default:
