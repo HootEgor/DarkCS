@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -150,10 +150,14 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		return "", nil, fmt.Errorf("response API error: %s", string(body))
 	}
+
+	o.log.With(
+		slog.String("body", string(body)),
+	).Debug("handling ResponseAPIResponse")
 
 	var apiResp ResponseAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
