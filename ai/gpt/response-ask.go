@@ -78,11 +78,10 @@ type Response struct {
 func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assistant) (string, []entity.ProductInfo, error) {
 	defer func() {
 		if r := recover(); r != nil {
-			o.log.With(slog.Any("panic", r)).Error("response api ask")
+			o.log.With(slog.Any("panic", r)).Error("panic caught in Ask")
+			o.locker.Unlock(user.UUID) // ensure unlock
 		}
 	}()
-
-	defer o.locker.Unlock(user.UUID)
 
 	apiKey := o.apiKey
 
