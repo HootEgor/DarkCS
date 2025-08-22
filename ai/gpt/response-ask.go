@@ -76,6 +76,12 @@ type Response struct {
 
 // Ask sends a message to the assistant via Response API without SDK
 func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assistant) (string, []entity.ProductInfo, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			o.log.With(slog.Any("panic", r)).Error("response api ask")
+		}
+	}()
+
 	defer o.locker.Unlock(user.UUID)
 
 	apiKey := o.apiKey
@@ -107,7 +113,7 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 				Type:   "json_schema",
 				Name:   "response_schema",
 				Strict: true,
-				Schema: assistant.ResponseFormat,
+				Schema: entity.GetResponseFormat(assistant.ResponseFormat),
 			},
 			Verbosity: "medium",
 		},
