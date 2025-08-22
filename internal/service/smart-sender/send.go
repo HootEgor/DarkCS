@@ -17,10 +17,6 @@ type sendRequest struct {
 }
 
 func (s *Service) SendMessage(userId, text string) error {
-	s.log.With(
-		slog.String("smartId", userId),
-		slog.String("text", text),
-	).Debug("sending smart msg")
 	defer func() {
 		if r := recover(); r != nil {
 			s.log.With(slog.Any("panic", r)).Error("send smart msg")
@@ -67,7 +63,9 @@ func (s *Service) SendMessage(userId, text string) error {
 		return fmt.Errorf("nil response from smart sender")
 	}
 
-	defer sendResp.Body.Close()
+	if sendResp.Body != nil {
+		defer sendResp.Body.Close()
+	}
 
 	if sendResp.StatusCode < 200 || sendResp.StatusCode >= 300 {
 		s.log.With(sl.Err(err)).Error("non-2xx on POST")
