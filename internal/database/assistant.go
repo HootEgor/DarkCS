@@ -88,15 +88,11 @@ func (m *MongoDB) SetVectorStore(assistantName, vectorStoreID string) error {
 
 	collection := connection.Database(m.database).Collection(assistantCollection)
 
-	m.log.With(
-		"assistantName", assistantName,
-		"vectorStoreID", vectorStoreID,
-	).Info("Setting vector store for assistant")
-
 	filter := bson.D{{"name", assistantName}}
 	update := bson.D{{"$set", bson.D{{"vector_store_id", vectorStoreID}}}}
 
-	result, err := collection.UpdateOne(m.ctx, filter, update)
+	opts := options.Update().SetUpsert(true)
+	result, err := collection.UpdateOne(m.ctx, filter, update, opts)
 	if err != nil {
 		return fmt.Errorf("mongodb update assistant vector store: %w", err)
 	}
