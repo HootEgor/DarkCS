@@ -95,55 +95,44 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	var tools []Tool
 
 	prevRespID := user.PrevRespID
-	if prevRespID == "" || assistant.Name == entity.OverseerAss {
+	if assistant.Name == entity.OverseerAss {
 		prevRespID = ""
-		// New conversation
-		input = []MessageItem{
-			{
-				Role: "developer",
-				Content: []ContentItem{
-					{Type: "input_text", Text: assistant.Prompt},
-				},
+	}
+
+	input = []MessageItem{
+		{
+			Role: "developer",
+			Content: []ContentItem{
+				{Type: "input_text", Text: assistant.Prompt},
 			},
-			{
-				Role: "user",
-				Content: []ContentItem{
-					{Type: "input_text", Text: userMsg},
-				},
+		},
+		{
+			Role: "user",
+			Content: []ContentItem{
+				{Type: "input_text", Text: userMsg},
 			},
-		}
-		tools = []Tool{}
-		if len(assistant.VectorStoreId) > 2 {
-			tools = append(tools, Tool{
-				Type:           "file_search",
-				VectorStoreIDs: []string{assistant.VectorStoreId},
-			})
-		}
-		if len(assistant.AllowedTools) > 0 {
-			tools = append(tools, Tool{
-				Type:        "mcp",
-				ServerLabel: "darkcs",
-				ServerURL:   "https://backup.darkbyrior.com/api/v1/mcp",
-				Headers: map[string]string{
-					"Authorization": "Bearer " + o.mcpKey,
-					"X-Assistant":   assistant.Name,
-					"X-User-UUID":   user.UUID,
-				},
-				AllowedTools:    assistant.AllowedTools,
-				RequireApproval: "never",
-			})
-		}
-	} else {
-		// Follow-up
-		input = []MessageItem{
-			{
-				Role: "user",
-				Content: []ContentItem{
-					{Type: "input_text", Text: userMsg},
-				},
+		},
+	}
+	tools = []Tool{}
+	if len(assistant.VectorStoreId) > 2 {
+		tools = append(tools, Tool{
+			Type:           "file_search",
+			VectorStoreIDs: []string{assistant.VectorStoreId},
+		})
+	}
+	if len(assistant.AllowedTools) > 0 {
+		tools = append(tools, Tool{
+			Type:        "mcp",
+			ServerLabel: "darkcs",
+			ServerURL:   "https://backup.darkbyrior.com/api/v1/mcp",
+			Headers: map[string]string{
+				"Authorization": "Bearer " + o.mcpKey,
+				"X-Assistant":   assistant.Name,
+				"X-User-UUID":   user.UUID,
 			},
-		}
-		tools = nil // omit tools
+			AllowedTools:    assistant.AllowedTools,
+			RequireApproval: "never",
+		})
 	}
 
 	reqBody := ResponseAPIRequest{
