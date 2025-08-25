@@ -189,15 +189,11 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 
 	var assistantText string
 	for _, out := range apiResp.Output {
-		if out.Type == "message" && len(out.Content) > 0 {
+		if out.Type == "message" {
 			for _, c := range out.Content {
 				if c.Type == "output_text" && c.Text != "" {
-					assistantText = c.Text
-					break
+					assistantText = c.Text // keep overwriting → final one wins
 				}
-			}
-			if assistantText != "" {
-				break
 			}
 		}
 	}
