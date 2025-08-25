@@ -110,25 +110,37 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				break
 			}
 
-			res.Result = map[string]interface{}{
-				"content": []interface{}{
-					map[string]interface{}{
-						"type": "text",
-						"text": cmdResp.(string),
+			b, err := json.Marshal(cmdResp)
+			if err != nil {
+				res.Result = map[string]interface{}{
+					"isError": true,
+					"content": []map[string]interface{}{
+						{"type": "text", "text": "Unsupported response type"},
 					},
-				},
+				}
+			} else {
+				var parsed interface{}
+				_ = json.Unmarshal(b, &parsed)
+				res.Result = map[string]interface{}{
+					"content": []map[string]interface{}{
+						{"type": "text", "text": "Structured response"},
+					},
+					"structuredContent": parsed,
+				}
 			}
+
+			//res.Result = map[string]interface{}{
+			//	"content": []map[string]interface{}{
+			//		{
+			//			"type": "output_text", // <-- FIXED
+			//			"text": fmt.Sprintf("%v", cmdResp),
+			//		},
+			//	},
+			//}
 		default:
 			res.Error = &ErrorResponse{Code: -32601, Message: "Method not found: " + req.Method}
 		}
 
-		//w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		//w.WriteHeader(http.StatusOK)
-		//if err := json.NewEncoder(w).Encode(res); err != nil {
-		//	log.Error("failed to encode response", slog.Any("error", err))
-		//	http.Error(w, "failed to encode response", http.StatusInternalServerError)
-		//	return
-		//}
 		render.JSON(w, r, res)
 	}
 }
