@@ -43,7 +43,7 @@ func (o *Overseer) ask(user *entity.User, userMsg, assId string) (string, []enti
 
 	responseText := msgs.Messages[0].Content[0].Text.Value
 
-	var response Response
+	var response entity.ResponseCode
 	err = json.Unmarshal([]byte(responseText), &response)
 	if err != nil {
 		o.log.With(
