@@ -200,6 +200,9 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 			for _, c := range out.Content {
 				if c.Type == "output_text" && c.Text != "" {
 					assistantText = c.Text // keep overwriting → final one wins
+					o.log.With(
+						slog.String("resp", c.Text),
+					).Info("assistant response received")
 				}
 			}
 		}
