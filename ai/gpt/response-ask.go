@@ -87,7 +87,7 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	var input []MessageItem
 	var tools []Tool
 
-	if user.PrevRespID == "" {
+	if user.PrevRespID == "" || assistant.Name == entity.OverseerAss {
 		// New conversation
 		input = []MessageItem{
 			{
@@ -208,12 +208,14 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		return string(body), fmt.Errorf("no output from assistant")
 	}
 
-	err = o.authService.SetPrevRespID(*user, apiResp.ID)
-	if err != nil {
-		o.log.With(
-			slog.String("userUUID", user.UUID),
-			sl.Err(err),
-		).Error("setting previous response ID")
+	if assistant.Name != entity.OverseerAss {
+		err = o.authService.SetPrevRespID(*user, apiResp.ID)
+		if err != nil {
+			o.log.With(
+				slog.String("userUUID", user.UUID),
+				sl.Err(err),
+			).Error("setting previous response ID")
+		}
 	}
 
 	return assistantText, nil
