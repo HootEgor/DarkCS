@@ -274,13 +274,7 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 	//text, answer.Products, err = o.ask(user, userMsg, assistant.Id)
 	text, answer.Products, err = o.getResponse(user, userMsg, *assistant)
 	if err != nil {
-		err = o.authService.SetPrevRespID(*user, "")
-		if err != nil {
-			o.log.With(
-				slog.String("userUUID", user.UUID),
-				sl.Err(err),
-			).Error("setting previous response ID")
-		}
+		user.PrevRespID = ""
 		text, answer.Products, err = o.getResponse(user, userMsg, *assistant)
 	}
 
