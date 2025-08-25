@@ -266,3 +266,20 @@ func (c *Core) GetAllAssistants() ([]entity.Assistant, error) {
 
 	return assistants, nil
 }
+
+func (c *Core) ResetConversation(phone string) error {
+	if phone == "" {
+		return fmt.Errorf("phone number is required")
+	}
+
+	user, err := c.authService.GetUser("", phone, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	return c.authService.SetPrevRespID(*user, "")
+}

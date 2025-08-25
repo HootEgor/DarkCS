@@ -77,6 +77,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 			r.Post("/activate", user.ActivateUserPromo(log, handler))
 			r.Post("/close", user.CloseUserPromo(log, handler))
 			r.Post("/phone", user.CheckPhone(log, handler))
+			r.Get("/reset_conv", user.ResetConversation(log, handler))
 		})
 		v1.Route("/assistant", func(r chi.Router) {
 			r.Get("/attach", assistant.AttachFile(log, handler))

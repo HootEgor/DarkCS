@@ -50,6 +50,8 @@ type AuthService interface {
 	GeneratePromoCodes(number int) error
 	GenerateRandomNumCode(length int) string
 	SetSmartSenderId(email, phone string, telegramId int64, smartSenderId string) error
+
+	SetPrevRespID(user entity.User, respID string) error
 }
 
 type SmartService interface {
