@@ -194,16 +194,16 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		return "", fmt.Errorf("failed to decode response body: %v", err)
 	}
 
-	var assistantText string
+	assistantText := ""
 	for _, out := range apiResp.Output {
 		if out.Type == "message" {
 			for _, c := range out.Content {
 				if c.Type == "output_text" && c.Text != "" {
 					assistantText = c.Text // keep overwriting → final one wins
-					o.log.With(
-						slog.String("resp", c.Text),
-					).Info("assistant response received")
 				}
+				o.log.With(
+					slog.String("resp", c.Text),
+				).Info("assistant response received")
 			}
 		}
 	}
