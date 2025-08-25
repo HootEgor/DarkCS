@@ -87,7 +87,9 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	var input []MessageItem
 	var tools []Tool
 
-	if user.PrevRespID == "" || assistant.Name == entity.OverseerAss {
+	prevRespID := user.PrevRespID
+	if prevRespID == "" || assistant.Name == entity.OverseerAss {
+		prevRespID = ""
 		// New conversation
 		input = []MessageItem{
 			{
@@ -151,7 +153,7 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		},
 		Reasoning:          Reasoning{Effort: "medium", Summary: "auto"},
 		Tools:              tools,
-		PreviousResponseID: user.PrevRespID,
+		PreviousResponseID: prevRespID,
 		Store:              true,
 	}
 
