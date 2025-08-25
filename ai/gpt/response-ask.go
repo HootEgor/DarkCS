@@ -60,6 +60,12 @@ type Tool struct {
 	RequireApproval string            `json:"require_approval,omitempty"`
 }
 
+type Usage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+	TotalTokens  int `json:"total_tokens"`
+}
+
 type ResponseAPIResponse struct {
 	ID     string `json:"id"`
 	Output []struct {
@@ -71,6 +77,7 @@ type ResponseAPIResponse struct {
 			Text string `json:"text"`
 		} `json:"content,omitempty"`
 	} `json:"output"`
+	Usage Usage `json:"usage"`
 }
 
 // Ask sends a message to the assistant via Response API without SDK
@@ -206,8 +213,21 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		return string(body), fmt.Errorf("no output from assistant")
 	}
 
+	const contextLimit = 400000
+	const safeMargin = int(float64(contextLimit) * 0.9) // ~360k
+
 	if assistant.Name != entity.OverseerAss {
-		err = o.authService.SetPrevRespID(*user, apiResp.ID)
+		if apiResp.Usage.InputTokens > safeMargin {
+			o.log.With(
+				slog.String("userUUID", user.UUID),
+				slog.Int("input_tokens", apiResp.Usage.InputTokens),
+			).Info("context window near limit, resetting conversation")
+			// Don’t save PrevRespID → new conversation next time
+			err = o.authService.SetPrevRespID(*user, "")
+		} else {
+			err = o.authService.SetPrevRespID(*user, apiResp.ID)
+		}
+
 		if err != nil {
 			o.log.With(
 				slog.String("userUUID", user.UUID),
