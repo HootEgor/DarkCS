@@ -11,6 +11,7 @@ import (
 type Repository interface {
 	UpsertUser(user entity.User) error
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+	GetUserByUUID(uuid string) (*entity.User, error)
 
 	UpsertBasket(basket *entity.Basket) (*entity.Basket, error)
 	GetBasket(userUUID string) (*entity.Basket, error)
@@ -105,6 +106,23 @@ func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, 
 	user, err = s.RegisterUser("", email, phone, telegramId)
 
 	return user, err
+}
+
+func (s *Service) GetUserByUUID(uuid string) (*entity.User, error) {
+	for _, user := range s.users {
+		if user.UUID == uuid {
+			return &user, nil
+		}
+	}
+	user, err := s.repository.GetUserByUUID(uuid)
+	if err != nil {
+		return nil, err
+	}
+	if user != nil {
+		s.users = append(s.users, *user)
+		return user, nil
+	}
+	return nil, fmt.Errorf("user not found")
 }
 
 func (s *Service) UserExists(email, phone string, telegramId int64) (*entity.User, error) {

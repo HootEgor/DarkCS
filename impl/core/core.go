@@ -3,6 +3,7 @@ package core
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"encoding/json"
 	"log/slog"
 	"time"
 )
@@ -28,6 +29,7 @@ type MessageService interface {
 
 type Assistant interface {
 	ComposeResponse(user *entity.User, systemMsg, userMsg string) (entity.AiAnswer, error)
+	HandleCommand(user *entity.User, name string, args json.RawMessage) (interface{}, error)
 
 	GetAudioText(fileURL string) (string, error)
 
@@ -37,6 +39,7 @@ type Assistant interface {
 type AuthService interface {
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+	GetUserByUUID(uuid string) (*entity.User, error)
 	UserExists(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool) error
 	UpdateUser(user *entity.User) error

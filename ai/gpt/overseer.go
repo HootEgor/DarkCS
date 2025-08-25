@@ -22,6 +22,7 @@ import (
 
 type Repository interface {
 	GetAssistant(name string) (*entity.Assistant, error)
+	SetVectorStore(assistantName, vectorStoreID string) error
 }
 
 // ProductService defines the interface for product-related operations.
@@ -271,7 +272,7 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 	}
 
 	//text, answer.Products, err = o.ask(user, userMsg, assistant.Id)
-	text, answer.Products, err = o.Ask(user, userMsg, *assistant)
+	text, answer.Products, err = o.getResponse(user, userMsg, *assistant)
 
 	// Clean up the response text by removing citation markers
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)
@@ -301,62 +302,62 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 // Returns:
 //   - string: The name of the assistant that should handle the request
 //   - error: Any error encountered during processing
-func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg string) (string, error) {
-	// Ensure the thread is unlocked when this function completes
-	defer o.locker.Unlock(user.UUID)
-
-	// Get or create a conversation thread for this user
-	thread, err := o.getOrCreateThread(user.UUID)
-	if err != nil {
-		return "", err
-	}
-
-	// Combine system message and user message
-	question := fmt.Sprintf("%s, HttpUserMsg: %s", systemMsg, userMsg)
-
-	// Send the user message to the assistant
-	_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
-		Role:    string(openai.ThreadMessageRoleUser),
-		Content: question,
-	})
-	if err != nil {
-		return "", fmt.Errorf("error creating message: %v", err)
-	}
-
-	// Run the Overseer assistant to analyze the message
-	completed := o.handleRun(user, thread.ID, o.assistants[entity.OverseerAss])
-	if !completed {
-		return "", fmt.Errorf("max retries reached, unable to complete run")
-	}
-
-	// Fetch the messages once the run is complete
-	msgs, err := o.client.ListMessage(context.Background(), thread.ID, nil, nil, nil, nil, nil)
-	if err != nil {
-		return "", fmt.Errorf("error listing messages: %v", err)
-	}
-
-	if len(msgs.Messages) == 0 {
-		return "", fmt.Errorf("no messages found")
-	}
-
-	// Extract the response text from the assistant
-	responseText := msgs.Messages[0].Content[0].Text.Value
-
-	// Parse the response to determine which assistant should handle the request
-	var response OverseerResponse
-	err = json.Unmarshal([]byte(responseText), &response)
-	if err != nil {
-		o.log.With(
-			slog.String("userUUID", user.UUID),
-			slog.Int("text_length", len(responseText)),
-			slog.String("response", responseText),
-		).Debug("chat response")
-		o.log.Error("error unmarshalling response", sl.Err(err))
-		return responseText, nil
-	}
-
-	return response.Assistant, nil
-}
+//func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg string) (string, error) {
+//	// Ensure the thread is unlocked when this function completes
+//	defer o.locker.Unlock(user.UUID)
+//
+//	// Get or create a conversation thread for this user
+//	thread, err := o.getOrCreateThread(user.UUID)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	// Combine system message and user message
+//	question := fmt.Sprintf("%s, HttpUserMsg: %s", systemMsg, userMsg)
+//
+//	// Send the user message to the assistant
+//	_, err = o.client.CreateMessage(context.Background(), thread.ID, openai.MessageRequest{
+//		Role:    string(openai.ThreadMessageRoleUser),
+//		Content: question,
+//	})
+//	if err != nil {
+//		return "", fmt.Errorf("error creating message: %v", err)
+//	}
+//
+//	// Run the Overseer assistant to analyze the message
+//	completed := o.handleRun(user, thread.ID, o.assistants[entity.OverseerAss])
+//	if !completed {
+//		return "", fmt.Errorf("max retries reached, unable to complete run")
+//	}
+//
+//	// Fetch the messages once the run is complete
+//	msgs, err := o.client.ListMessage(context.Background(), thread.ID, nil, nil, nil, nil, nil)
+//	if err != nil {
+//		return "", fmt.Errorf("error listing messages: %v", err)
+//	}
+//
+//	if len(msgs.Messages) == 0 {
+//		return "", fmt.Errorf("no messages found")
+//	}
+//
+//	// Extract the response text from the assistant
+//	responseText := msgs.Messages[0].Content[0].Text.Value
+//
+//	// Parse the response to determine which assistant should handle the request
+//	var response OverseerResponse
+//	err = json.Unmarshal([]byte(responseText), &response)
+//	if err != nil {
+//		o.log.With(
+//			slog.String("userUUID", user.UUID),
+//			slog.Int("text_length", len(responseText)),
+//			slog.String("response", responseText),
+//		).Debug("chat response")
+//		o.log.Error("error unmarshalling response", sl.Err(err))
+//		return responseText, nil
+//	}
+//
+//	return response.Assistant, nil
+//}
 
 func (o *Overseer) handleRun(user *entity.User, threadID, assistantID string) bool {
 	maxRetries := 3
@@ -394,7 +395,7 @@ func (o *Overseer) handleRun(user *entity.User, threadID, assistantID string) bo
 					for _, toolCall := range run.RequiredAction.SubmitToolOutputs.ToolCalls {
 						cmdName := toolCall.Function.Name
 						cmdArgs := toolCall.Function.Arguments
-						output, err := o.handleCommand(user, cmdName, cmdArgs)
+						output, err := o.HandleCommand(user, cmdName, []byte(cmdArgs))
 						if err != nil {
 							o.log.With(
 								slog.String("command", cmdName),
@@ -660,6 +661,12 @@ func (o *Overseer) AttachNewFile() error {
 		).Error("attach consultant vector store")
 		return err
 	}
+	err = o.repo.SetVectorStore(entity.ConsultantAss, consultantStore.ID)
+	if err != nil {
+		o.log.With(
+			sl.Err(err),
+		).Error("set vector store in DB")
+	}
 
 	// Attach calculator store to calculator assistant
 	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.CalculatorAss], openai.AssistantRequest{
@@ -675,6 +682,12 @@ func (o *Overseer) AttachNewFile() error {
 		).Error("attach calculator vector store")
 		return err
 	}
+	err = o.repo.SetVectorStore(entity.CalculatorAss, calculatorStore.ID)
+	if err != nil {
+		o.log.With(
+			sl.Err(err),
+		).Error("set calculator vector store in DB")
+	}
 
 	// Attach calculator store to order manager assistant
 	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.OrderManagerAss], openai.AssistantRequest{
@@ -689,6 +702,12 @@ func (o *Overseer) AttachNewFile() error {
 			sl.Err(err),
 		).Error("attach order manager vector store")
 		return err
+	}
+	err = o.repo.SetVectorStore(entity.OrderManagerAss, calculatorStore.ID)
+	if err != nil {
+		o.log.With(
+			sl.Err(err),
+		).Error("set order manager vector store in DB")
 	}
 
 	// 8. Delete previous vector stores

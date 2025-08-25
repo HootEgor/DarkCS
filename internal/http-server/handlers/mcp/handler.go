@@ -1,8 +1,8 @@
 package mcp
 
 import (
+	"DarkCS/entity"
 	"encoding/json"
-	"fmt"
 	"github.com/go-chi/render"
 	"io"
 	"log/slog"
@@ -62,6 +62,16 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
+		assistantName := r.Header.Get("X-Assistant")
+		if assistantName == "" {
+			assistantName = entity.ConsultantAss
+		}
+
+		userUUID := r.Header.Get("X-User-UUID")
+		if userUUID == "" {
+			userUUID = "default-user"
+		}
+
 		switch req.Method {
 		case "initialize":
 			res.Result = map[string]interface{}{
@@ -83,7 +93,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				},
 			}
 		case "tools/list":
-			res.Result = ToolsDescription()
+			res.Result = ToolsDescription(assistantName)
 		case "tools/call":
 			var callParams struct {
 				Name  string          `json:"name"`
@@ -94,44 +104,19 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				break
 			}
 
-			switch callParams.Name {
-			case "get_products_info":
-				var params struct {
-					Codes []string `json:"codes"`
-				}
-				if err := json.Unmarshal(callParams.Input, &params); err != nil {
-					log.Error("failed to unmarshal get_products_info params", slog.Any("error", err))
-					res.Error = &ErrorResponse{Code: -32602, Message: "Invalid input for get_products_info: " + err.Error()}
-					break
-				}
+			cmdResp, err := handler.HandleCommand(userUUID, callParams.Name, callParams.Input)
+			if err != nil {
+				res.Error = &ErrorResponse{Code: -32603, Message: err.Error()}
+				break
+			}
 
-				products, err := handler.ProductsInfo(params.Codes)
-				if err != nil {
-					log.Error("failed to fetch products info", slog.Any("error", err))
-					res.Error = &ErrorResponse{Code: -32603, Message: err.Error()}
-					break
-				}
-
-				// Constructing a response that includes both text and structured content
-				contentMsg := "Found the following products:\n"
-				for _, p := range products {
-					contentMsg += "- " + p.Name + " (Code: " + p.Code + ", Price: " + fmt.Sprintf("%.2f", p.Price) + ")\n"
-				}
-
-				res.Result = map[string]interface{}{
-					"content": []interface{}{
-						map[string]interface{}{
-							"type": "text",
-							"text": contentMsg,
-						},
+			res.Result = map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": cmdResp.(string),
 					},
-					"structuredContent": map[string]interface{}{
-						"products": products,
-					},
-				}
-
-			default:
-				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not found: " + callParams.Name}
+				},
 			}
 		default:
 			res.Error = &ErrorResponse{Code: -32601, Message: "Method not found: " + req.Method}

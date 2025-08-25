@@ -7,14 +7,13 @@ import (
 	"DarkCS/entity"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 )
 
 const (
 	orderInProcessLimit = 2
 )
 
-// handleCommand processes user commands and routes them to appropriate handlers.
+// HandleCommand processes user commands and routes them to appropriate handlers.
 // It takes a user entity, command name, and arguments as input, then delegates
 // the processing to specific handler functions based on the command name.
 //
@@ -26,11 +25,7 @@ const (
 // Returns:
 //   - interface{}: Command execution result, varies by command type
 //   - error: Any error encountered during command processing
-func (o *Overseer) handleCommand(user *entity.User, name, args string) (interface{}, error) {
-	o.log.With(
-		slog.String("command", name),
-		slog.String("args", args),
-	).Debug("handling command")
+func (o *Overseer) HandleCommand(user *entity.User, name string, args json.RawMessage) (interface{}, error) {
 	switch name {
 	case "get_products_info":
 		return o.handleGetProductInfo(args)
@@ -102,9 +97,9 @@ type orderResp struct {
 // Returns:
 //   - []entity.ProductInfo: Array of product information objects
 //   - error: Any error encountered during processing
-func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, error) {
+func (o *Overseer) handleGetProductInfo(args json.RawMessage) ([]entity.ProductInfo, error) {
 	var resp *getProductInfoResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -128,9 +123,9 @@ func (o *Overseer) handleGetProductInfo(args string) ([]entity.ProductInfo, erro
 // Returns:
 //   - string: Success message
 //   - error: Any error encountered during processing
-func (o *Overseer) handleUpdateUserPhone(user *entity.User, args string) (string, error) {
+func (o *Overseer) handleUpdateUserPhone(user *entity.User, args json.RawMessage) (string, error) {
 	var resp *updateUserPhoneResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
@@ -155,9 +150,9 @@ func (o *Overseer) handleUpdateUserPhone(user *entity.User, args string) (string
 // Returns:
 //   - string: Success message
 //   - error: Any error encountered during processing
-func (o *Overseer) handleUpdateUserEmail(user *entity.User, args string) (string, error) {
+func (o *Overseer) handleUpdateUserEmail(user *entity.User, args json.RawMessage) (string, error) {
 	var resp *updateUserEmailResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
@@ -182,9 +177,9 @@ func (o *Overseer) handleUpdateUserEmail(user *entity.User, args string) (string
 // Returns:
 //   - string: Success message
 //   - error: Any error encountered during processing
-func (o *Overseer) handleUpdateUserAddress(user *entity.User, args string) (string, error) {
+func (o *Overseer) handleUpdateUserAddress(user *entity.User, args json.RawMessage) (string, error) {
 	var resp *updateUserAddressResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
@@ -209,9 +204,9 @@ func (o *Overseer) handleUpdateUserAddress(user *entity.User, args string) (stri
 // Returns:
 //   - string: Success message
 //   - error: Any error encountered during processing
-func (o *Overseer) handleUpdateUserName(user *entity.User, args string) (string, error) {
+func (o *Overseer) handleUpdateUserName(user *entity.User, args json.RawMessage) (string, error) {
 	var resp *updateUserNameResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
@@ -282,9 +277,9 @@ func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {
 // Returns:
 //   - interface{}: Updated basket contents formatted for the assistant
 //   - error: Any error encountered during processing
-func (o *Overseer) handleRemoveFromBasket(user *entity.User, args string) (interface{}, error) {
+func (o *Overseer) handleRemoveFromBasket(user *entity.User, args json.RawMessage) (interface{}, error) {
 	var resp *orderResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -312,9 +307,9 @@ func (o *Overseer) handleRemoveFromBasket(user *entity.User, args string) (inter
 // Returns:
 //   - interface{}: Updated basket contents formatted for the assistant
 //   - error: Any error encountered during processing
-func (o *Overseer) handleAddToBasket(user *entity.User, args string) (interface{}, error) {
+func (o *Overseer) handleAddToBasket(user *entity.User, args json.RawMessage) (interface{}, error) {
 	var resp *orderResp
-	err := json.Unmarshal([]byte(args), &resp)
+	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
 	}

@@ -44,7 +44,34 @@ func GetResponseFormat(name string) interface{} {
 			"required":             []string{"response", "codes", "show_codes"},
 			"additionalProperties": false,
 		}
+	case "response_assistant":
+		return map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"assistant": map[string]interface{}{
+					"type":        "string",
+					"description": "The name of the assistant.",
+					"enum": []string{
+						ConsultantAss,
+						CalculatorAss,
+						OrderManagerAss,
+					},
+				},
+			},
+			"required":             []string{"assistant"},
+			"additionalProperties": false,
+		}
 	default:
 		return nil
 	}
+}
+
+type ResponseCode struct {
+	Response  string   `json:"response"`
+	Codes     []string `json:"codes"`
+	ShowCodes bool     `json:"show_codes"`
+}
+
+type ResponseAssistant struct {
+	Assistant string `json:"assistant"`
 }

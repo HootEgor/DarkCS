@@ -1,8 +1,8 @@
 package mcp
 
-import "DarkCS/entity"
+import "encoding/json"
 
 type Core interface {
 	Ping() string
-	ProductsInfo(articles []string) ([]entity.ProductInfo, error)
+	HandleCommand(userUID, name string, args json.RawMessage) (interface{}, error)
 }

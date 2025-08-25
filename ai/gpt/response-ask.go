@@ -73,14 +73,8 @@ type ResponseAPIResponse struct {
 	} `json:"output"`
 }
 
-type Response struct {
-	Response  string   `json:"response"`
-	Codes     []string `json:"codes"`
-	ShowCodes bool     `json:"show_codes"`
-}
-
 // Ask sends a message to the assistant via Response API without SDK
-func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assistant) (string, []entity.ProductInfo, error) {
+func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assistant) (string, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			o.log.With(slog.Any("panic", r)).Error("panic caught in Ask")
@@ -114,14 +108,20 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 				Type:           "file_search",
 				VectorStoreIDs: []string{assistant.VectorStoreId},
 			},
-			{
-				Type:            "mcp",
-				ServerLabel:     "darkcs",
-				ServerURL:       "https://backup.darkbyrior.com/api/v1/mcp",
-				Headers:         map[string]string{"Authorization": "Bearer " + o.mcpKey},
+		}
+		if len(assistant.AllowedTools) > 0 {
+			tools = append(tools, Tool{
+				Type:        "mcp",
+				ServerLabel: "darkcs",
+				ServerURL:   "https://backup.darkbyrior.com/api/v1/mcp",
+				Headers: map[string]string{
+					"Authorization": "Bearer " + o.mcpKey,
+					"X-Assistant":   assistant.Name,
+					"X-User-UUID":   user.UUID,
+				},
 				AllowedTools:    assistant.AllowedTools,
 				RequireApproval: "never",
-			},
+			})
 		}
 	} else {
 		// Follow-up
@@ -157,31 +157,31 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	b, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(context.Background(), "POST", "https://api.openai.com/v1/responses", bytes.NewBuffer(b))
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	// Read the full body safely (limit to 10MB to avoid OOM)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to read response body: %v", err)
+		return "", fmt.Errorf("failed to read response body: %v", err)
 	}
 
 	if resp.StatusCode != 200 {
-		return "", nil, fmt.Errorf("response API error: %s", string(body))
+		return "", fmt.Errorf("response API error: %s", string(body))
 	}
 
 	// Unmarshal the body that was already read
 	var apiResp ResponseAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return "", nil, fmt.Errorf("failed to decode response body: %v", err)
+		return "", fmt.Errorf("failed to decode response body: %v", err)
 	}
 
 	var assistantText string
@@ -204,18 +204,32 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 			slog.String("userUUID", user.UUID),
 			slog.String("responseID", apiResp.ID),
 		).Warn("no assistant message found in Response API output")
-		return string(body), nil, fmt.Errorf("no output from assistant")
+		return string(body), fmt.Errorf("no output from assistant")
 	}
 
-	// Now you can safely unmarshal it
-	var r Response
-	if err := json.Unmarshal([]byte(assistantText), &r); err != nil {
+	err = o.authService.SetPrevRespID(*user, apiResp.ID)
+	if err != nil {
 		o.log.With(
 			slog.String("userUUID", user.UUID),
-			slog.Any("response", assistantText),
+			sl.Err(err),
+		).Error("setting previous response ID")
+	}
+
+	return assistantText, nil
+}
+
+func (o *Overseer) getResponse(user *entity.User, userMsg string, assistant entity.Assistant) (string, []entity.ProductInfo, error) {
+	response, err := o.Ask(user, userMsg, assistant)
+
+	// Now you can safely unmarshal it
+	var r entity.ResponseCode
+	if err := json.Unmarshal([]byte(response), &r); err != nil {
+		o.log.With(
+			slog.String("userUUID", user.UUID),
+			slog.Any("response", response),
 			sl.Err(err),
 		).Error("unmarshalling assistant response")
-		return assistantText, nil, nil
+		return response, nil, fmt.Errorf("invalid response format")
 	}
 
 	// Clean text
@@ -226,14 +240,35 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		products, _ = o.productService.GetProductInfo(r.Codes)
 	}
 
-	// Update user's previous response ID
-	err = o.authService.SetPrevRespID(*user, apiResp.ID)
+	return r.Response, products, err
+}
+
+func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg string) (string, error) {
+	question := fmt.Sprintf("%s, HttpUserMsg: %s", systemMsg, userMsg)
+
+	assistant, err := o.repo.GetAssistant(entity.OverseerAss)
 	if err != nil {
 		o.log.With(
+			slog.String("assistant", entity.OverseerAss),
 			slog.String("userUUID", user.UUID),
-			sl.Err(err),
-		).Error("setting previous response ID")
+		).Error("get assistant", sl.Err(err))
+		return "", fmt.Errorf("failed to get assistant %s: %v", entity.OverseerAss, err)
 	}
 
-	return r.Response, products, nil
+	response, err := o.Ask(user, question, *assistant)
+	if err != nil {
+		return "", err
+	}
+
+	var r entity.ResponseAssistant
+	if err := json.Unmarshal([]byte(response), &r); err != nil {
+		o.log.With(
+			slog.String("userUUID", user.UUID),
+			slog.Any("response", response),
+			sl.Err(err),
+		).Error("unmarshalling assistant response")
+		return response, fmt.Errorf("invalid response format")
+	}
+
+	return r.Assistant, nil
 }
