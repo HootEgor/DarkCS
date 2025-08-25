@@ -6,9 +6,9 @@ type Assistant struct {
 	Active         bool     `json:"active"`
 	Model          string   `json:"model"`
 	Prompt         string   `json:"prompt"`
-	VectorStoreId  string   `json:"vector_store_id"`
-	ResponseFormat string   `json:"response_format"`
-	AllowedTools   []string `json:"allowed_tools"`
+	VectorStoreId  string   `json:"vector_store_id" bson:"vector_store_id"`
+	ResponseFormat string   `json:"response_format" bson:"response_format"`
+	AllowedTools   []string `json:"allowed_tools" bson:"allowed_tools"`
 }
 
 const (
