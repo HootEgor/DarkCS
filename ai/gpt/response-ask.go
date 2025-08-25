@@ -103,11 +103,12 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 				},
 			},
 		}
-		tools = []Tool{
-			{
-				Type:           "file_search",
+		tools = []Tool{}
+		if len(assistant.VectorStoreId) > 2 {
+			tools = append(tools, Tool{
+				Type:           "vector_store",
 				VectorStoreIDs: []string{assistant.VectorStoreId},
-			},
+			})
 		}
 		if len(assistant.AllowedTools) > 0 {
 			tools = append(tools, Tool{
