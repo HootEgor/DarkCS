@@ -281,5 +281,10 @@ func (c *Core) ResetConversation(phone string) error {
 		return fmt.Errorf("user not found")
 	}
 
+	c.log.With(
+		slog.String("phone", phone),
+		slog.String("user_id", user.UUID),
+	).Info("reset conversation")
+
 	return c.authService.SetPrevRespID(*user, "")
 }
