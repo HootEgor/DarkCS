@@ -123,9 +123,12 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				_ = json.Unmarshal(b, &parsed)
 				res.Result = map[string]interface{}{
 					"content": []map[string]interface{}{
-						{"type": "text", "text": "Structured response"},
+						{
+							"type": "text",
+							"text": "Structured response",
+						},
 					},
-					"structuredContent": parsed,
+					//"structuredContent": parsed,
 				}
 			}
 
