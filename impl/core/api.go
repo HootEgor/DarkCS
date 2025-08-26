@@ -286,5 +286,5 @@ func (c *Core) ResetConversation(phone string) error {
 		slog.String("user_id", user.UUID),
 	).Info("reset conversation")
 
-	return c.authService.SetPrevRespID(*user, "")
+	return c.authService.ClearConversation(user)
 }

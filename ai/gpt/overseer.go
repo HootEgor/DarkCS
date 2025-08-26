@@ -63,7 +63,7 @@ type AuthService interface {
 	// RemoveFromBasket removes products from a user's shopping basket
 	RemoveFromBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)
 
-	SetPrevRespID(user entity.User, respID string) error
+	UpdateConversation(user entity.User, conversation entity.DialogMessage) error
 }
 
 // ZohoService defines the interface for Zoho CRM integration.
@@ -273,10 +273,6 @@ func (o *Overseer) ComposeResponse(user *entity.User, systemMsg, userMsg string)
 
 	//text, answer.Products, err = o.ask(user, userMsg, assistant.Id)
 	text, answer.Products, err = o.getResponse(user, userMsg, *assistant)
-	if err != nil {
-		user.PrevRespID = ""
-		text, answer.Products, err = o.getResponse(user, userMsg, *assistant)
-	}
 
 	// Clean up the response text by removing citation markers
 	re := regexp.MustCompile(`【\d+:\d+†[^】]+】`)

@@ -51,7 +51,8 @@ type AuthService interface {
 	GenerateRandomNumCode(length int) string
 	SetSmartSenderId(email, phone string, telegramId int64, smartSenderId string) error
 
-	SetPrevRespID(user entity.User, respID string) error
+	UpdateConversation(user entity.User, conversation entity.DialogMessage) error
+	ClearConversation(user *entity.User) error
 }
 
 type SmartService interface {

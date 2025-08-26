@@ -11,16 +11,16 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"time"
 )
 
 type ResponseAPIRequest struct {
-	Model              string        `json:"model"`
-	Input              []MessageItem `json:"input"`
-	Text               TextSchema    `json:"text"`
-	Reasoning          Reasoning     `json:"reasoning"`
-	Tools              []Tool        `json:"tools"`
-	PreviousResponseID string        `json:"previous_response_id,omitempty"`
-	Store              bool          `json:"store"`
+	Model     string        `json:"model"`
+	Input     []MessageItem `json:"input"`
+	Text      TextSchema    `json:"text"`
+	Reasoning Reasoning     `json:"reasoning"`
+	Tools     []Tool        `json:"tools"`
+	Store     bool          `json:"store"`
 }
 
 type MessageItem struct {
@@ -91,28 +91,44 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 
 	apiKey := o.apiKey
 
-	var input []MessageItem
 	var tools []Tool
 
-	prevRespID := user.PrevRespID
-	if assistant.Name == entity.OverseerAss {
-		prevRespID = ""
-	}
-
-	input = []MessageItem{
+	// Start with the assistant's prompt
+	input := []MessageItem{
 		{
 			Role: "developer",
 			Content: []ContentItem{
 				{Type: "input_text", Text: assistant.Prompt},
 			},
 		},
-		{
-			Role: "user",
-			Content: []ContentItem{
-				{Type: "input_text", Text: userMsg},
-			},
-		},
 	}
+
+	// Append recent conversation messages (oldest → newest)
+	for _, msg := range user.Conversation {
+		input = append(input,
+			MessageItem{
+				Role: "user",
+				Content: []ContentItem{
+					{Type: "input_text", Text: msg.Question},
+				},
+			},
+			MessageItem{
+				Role: "assistant",
+				Content: []ContentItem{
+					{Type: "output_text", Text: msg.Answer},
+				},
+			},
+		)
+	}
+
+	// Append the new user message
+	input = append(input, MessageItem{
+		Role: "user",
+		Content: []ContentItem{
+			{Type: "input_text", Text: userMsg},
+		},
+	})
+
 	tools = []Tool{}
 	if len(assistant.VectorStoreId) > 2 {
 		tools = append(tools, Tool{
@@ -147,10 +163,9 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 			},
 			Verbosity: "medium",
 		},
-		Reasoning:          Reasoning{Effort: "medium", Summary: "auto"},
-		Tools:              tools,
-		PreviousResponseID: prevRespID,
-		Store:              true,
+		Reasoning: Reasoning{Effort: "medium", Summary: "auto"},
+		Tools:     tools,
+		Store:     true,
 	}
 
 	b, _ := json.Marshal(reqBody)
@@ -226,26 +241,17 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		return string(body), fmt.Errorf("no output from assistant")
 	}
 
-	const contextLimit = 400000
-	const safeMargin = int(float64(contextLimit) * 0.9) // ~360k
-
 	if assistant.Name != entity.OverseerAss {
-		if apiResp.Usage.InputTokens > safeMargin {
-			o.log.With(
-				slog.String("userUUID", user.UUID),
-				slog.Int("input_tokens", apiResp.Usage.InputTokens),
-			).Info("context window near limit, resetting conversation")
-			// Don’t save PrevRespID → new conversation next time
-			err = o.authService.SetPrevRespID(*user, "")
-		} else {
-			err = o.authService.SetPrevRespID(*user, apiResp.ID)
+		msg := entity.DialogMessage{
+			Question: userMsg,
+			Answer:   assistantText,
+			Time:     time.Now(),
 		}
-
-		if err != nil {
+		if err := o.authService.UpdateConversation(*user, msg); err != nil {
 			o.log.With(
 				slog.String("userUUID", user.UUID),
 				sl.Err(err),
-			).Error("setting previous response ID")
+			).Error("failed to update conversation")
 		}
 	}
 

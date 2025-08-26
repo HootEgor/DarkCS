@@ -3,6 +3,7 @@ package auth
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"log/slog"
@@ -208,17 +209,36 @@ func (s *Service) SetSmartSenderId(email, phone string, telegramId int64, smartS
 	return nil
 }
 
-func (s *Service) SetPrevRespID(user entity.User, respID string) error {
-	user.PrevRespID = respID
+func (s *Service) UpdateConversation(user entity.User, message entity.DialogMessage) error {
+	const contextLimit = 400000
+	const safeMargin = int(float64(contextLimit) * 0.7)
 
-	err := s.repository.UpsertUser(user)
+	// Append the new message to the conversation
+	user.Conversation = append(user.Conversation, message)
+
+	// Serialize conversation to estimate size
+	data, err := json.Marshal(user.Conversation)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal conversation: %w", err)
 	}
 
-	s.updateUser(user)
+	// Trim oldest messages if exceeding safe margin
+	for len(data) > safeMargin && len(user.Conversation) > 1 {
+		user.Conversation = user.Conversation[1:]
+		data, _ = json.Marshal(user.Conversation)
+	}
 
-	return nil
+	return s.UpdateUser(&user)
+}
+
+func (s *Service) ClearConversation(user *entity.User) error {
+	if user == nil {
+		return fmt.Errorf("user is nil")
+	}
+
+	user.Conversation = make([]entity.DialogMessage, 0)
+
+	return s.UpdateUser(user)
 }
 
 //func (a *Service) getAssistantsBySection(section string) []entity.AssistantData {
