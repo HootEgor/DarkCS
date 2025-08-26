@@ -130,7 +130,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 						},
 					},
 					"structuredContent": map[string]interface{}{
-						"products": parsed, // always wrap array in an object
+						"data": parsed, // always wrap array in an object
 					},
 					"isError": false,
 				}
