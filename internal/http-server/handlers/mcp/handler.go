@@ -3,6 +3,7 @@ package mcp
 import (
 	"DarkCS/entity"
 	"encoding/json"
+	"fmt"
 	"github.com/go-chi/render"
 	"io"
 	"log/slog"
@@ -110,31 +111,46 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 				break
 			}
 
-			b, err := json.Marshal(cmdResp)
+			respText, err := json.MarshalIndent(cmdResp, "", "  ")
 			if err != nil {
-				res.Result = map[string]interface{}{
-					"isError": true,
-					"content": []map[string]interface{}{
-						{"type": "text", "text": "Unsupported response type"},
-					},
-				}
-			} else {
-				var parsed interface{}
-				_ = json.Unmarshal(b, &parsed)
-
-				res.Result = map[string]interface{}{
-					"content": []map[string]interface{}{
-						{
-							"type": "text",
-							"text": "Structured response",
-						},
-					},
-					"structuredContent": map[string]interface{}{
-						"data": parsed, // always wrap array in an object
-					},
-					"isError": false,
-				}
+				respText = []byte(fmt.Sprintf("Failed to serialize response: %v", err))
 			}
+
+			res.Result = map[string]interface{}{
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": string(respText), // simple string display
+					},
+				},
+				"isError": false,
+			}
+
+			//b, err := json.Marshal(cmdResp)
+			//if err != nil {
+			//	res.Result = map[string]interface{}{
+			//		"isError": true,
+			//		"content": []map[string]interface{}{
+			//			{"type": "text", "text": "Unsupported response type"},
+			//		},
+			//	}
+			//} else {
+			//	var parsed interface{}
+			//	_ = json.Unmarshal(b, &parsed)
+			//
+			//	res.Result = map[string]interface{}{
+			//		"content": []map[string]interface{}{
+			//			{
+			//				"type": "text",
+			//				"text": "Structured response",
+			//			},
+			//		},
+			//		"structuredContent": map[string]interface{}{
+			//			"data": parsed, // always wrap array in an object
+			//		},
+			//		"isError": false,
+			//	}
+			//}
 
 			//res.Result = map[string]interface{}{
 			//	"content": []map[string]interface{}{
