@@ -18,18 +18,23 @@ func ToolsDescription(assName string) map[string]interface{} {
 				},
 			},
 			"outputSchema": map[string]interface{}{
-				"type": "array",
-				"items": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"name":     map[string]interface{}{"type": "string"},
-						"price":    map[string]interface{}{"type": "number"},
-						"code":     map[string]interface{}{"type": "string"},
-						"quantity": map[string]interface{}{"type": "integer"},
-						"discount": map[string]interface{}{"type": "integer"},
+				"type": "object",
+				"properties": map[string]interface{}{
+					"data": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"name":  map[string]interface{}{"type": "string"},
+								"price": map[string]interface{}{"type": "number"},
+								"code":  map[string]interface{}{"type": "string"},
+								"url":   map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"name", "price", "code"},
+						},
 					},
-					"required": []string{"name", "price", "code"},
 				},
+				"required": []string{"data"},
 			},
 		},
 	}
@@ -37,7 +42,7 @@ func ToolsDescription(assName string) map[string]interface{} {
 	shopTools := []map[string]interface{}{
 		{
 			"name":        "create_order",
-			"description": "Procces confirmed order",
+			"description": "Process confirmed order",
 			"strict":      true,
 			"inputSchema": map[string]interface{}{
 				"type":                 "object",
@@ -48,12 +53,11 @@ func ToolsDescription(assName string) map[string]interface{} {
 			"outputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"name":     map[string]interface{}{"type": "string"},
-					"email":    map[string]interface{}{"type": "string"},
-					"phone":    map[string]interface{}{"type": "string"},
-					"address":  map[string]interface{}{"type": "string"},
-					"discount": map[string]interface{}{"type": "integer"},
+					"data": map[string]interface{}{
+						"type": "string",
+					},
 				},
+				"required": []string{"data"},
 			},
 		},
 		{
@@ -67,33 +71,45 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"required":             []string{},
 			},
 			"outputSchema": map[string]interface{}{
-				"type": "array",
-				"items": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"name":          map[string]interface{}{"type": "string"},
-						"price":         map[string]interface{}{"type": "number"},
-						"code":          map[string]interface{}{"type": "string"},
-						"quantity":      map[string]interface{}{"type": "integer"},
-						"discount":      map[string]interface{}{"type": "integer"},
-						"discountTotal": map[string]interface{}{"type": "number"},
-						"available":     map[string]interface{}{"type": "boolean"},
+				"type": "object",
+				"properties": map[string]interface{}{
+					"data": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"name":          map[string]interface{}{"type": "string"},
+								"price":         map[string]interface{}{"type": "number"},
+								"code":          map[string]interface{}{"type": "string"},
+								"quantity":      map[string]interface{}{"type": "integer"},
+								"discount":      map[string]interface{}{"type": "integer"},
+								"discountTotal": map[string]interface{}{"type": "number"},
+								"available":     map[string]interface{}{"type": "boolean"},
+							},
+						},
 					},
 				},
+				"required": []string{"data"},
 			},
 		},
 		{
 			"name":        "update_user_address",
 			"description": "Update user address",
-			"parameters": map[string]interface{}{
+			"strict":      true,
+			"inputSchema": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"address"},
 				"properties": map[string]interface{}{
 					"address": map[string]interface{}{"type": "string"},
 				},
+				"additionalProperties": false,
 			},
 			"outputSchema": map[string]interface{}{
-				"type": "string",
+				"type": "object",
+				"properties": map[string]interface{}{
+					"data": map[string]interface{}{"type": "string"},
+				},
+				"required": []string{"data"},
 			},
 		},
 		{
@@ -127,17 +143,25 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 			},
 			"outputSchema": map[string]interface{}{
-				"type": "array",
-				"items": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"code":     map[string]interface{}{"type": "string"},
-						"name":     map[string]interface{}{"type": "string"},
-						"price":    map[string]interface{}{"type": "number"},
-						"quantity": map[string]interface{}{"type": "integer"},
+				"type": "object",
+				"properties": map[string]interface{}{
+					"data": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"name":          map[string]interface{}{"type": "string"},
+								"price":         map[string]interface{}{"type": "number"},
+								"code":          map[string]interface{}{"type": "string"},
+								"quantity":      map[string]interface{}{"type": "integer"},
+								"discount":      map[string]interface{}{"type": "integer"},
+								"discountTotal": map[string]interface{}{"type": "number"},
+								"available":     map[string]interface{}{"type": "boolean"},
+							},
+						},
 					},
-					"required": []string{"code", "name", "quantity"},
 				},
+				"required": []string{"data"},
 			},
 		},
 		{
@@ -171,17 +195,25 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 			},
 			"outputSchema": map[string]interface{}{
-				"type": "array",
-				"items": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"code":     map[string]interface{}{"type": "string"},
-						"name":     map[string]interface{}{"type": "string"},
-						"price":    map[string]interface{}{"type": "number"},
-						"quantity": map[string]interface{}{"type": "integer"},
+				"type": "object",
+				"properties": map[string]interface{}{
+					"data": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"name":          map[string]interface{}{"type": "string"},
+								"price":         map[string]interface{}{"type": "number"},
+								"code":          map[string]interface{}{"type": "string"},
+								"quantity":      map[string]interface{}{"type": "integer"},
+								"discount":      map[string]interface{}{"type": "integer"},
+								"discountTotal": map[string]interface{}{"type": "number"},
+								"available":     map[string]interface{}{"type": "boolean"},
+							},
+						},
 					},
-					"required": []string{"code", "name", "quantity"},
 				},
+				"required": []string{"data"},
 			},
 		},
 		{
@@ -197,30 +229,18 @@ func ToolsDescription(assName string) map[string]interface{} {
 			"outputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"name":    map[string]interface{}{"type": "string"},
-					"email":   map[string]interface{}{"type": "string"},
-					"phone":   map[string]interface{}{"type": "string"},
-					"address": map[string]interface{}{"type": "string"},
-				},
-			},
-		},
-		{
-			"name":        "update_user_address",
-			"description": "Update user address",
-			"strict":      true,
-			"inputSchema": map[string]interface{}{
-				"type":     "object",
-				"required": []string{"address"},
-				"properties": map[string]interface{}{
-					"address": map[string]interface{}{
-						"type":        "string",
-						"description": "User's address",
+					"data": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"name":     map[string]interface{}{"type": "string"},
+							"email":    map[string]interface{}{"type": "string"},
+							"phone":    map[string]interface{}{"type": "string"},
+							"address":  map[string]interface{}{"type": "string"},
+							"discount": map[string]interface{}{"type": "integer"},
+						},
 					},
 				},
-				"additionalProperties": false,
-			},
-			"outputSchema": map[string]interface{}{
-				"type": "string",
+				"required": []string{"data"},
 			},
 		},
 		{
@@ -236,24 +256,32 @@ func ToolsDescription(assName string) map[string]interface{} {
 			"outputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"message": map[string]interface{}{
-						"type": "string",
-					},
-					"products": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "object",
-							"properties": map[string]interface{}{
-								"code":     map[string]interface{}{"type": "string"},
-								"name":     map[string]interface{}{"type": "string"},
-								"price":    map[string]interface{}{"type": "number"},
-								"quantity": map[string]interface{}{"type": "integer"},
+					"data": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"message": map[string]interface{}{
+								"type": "string",
 							},
-							"required": []string{"code", "name", "price", "quantity"},
+							"products": map[string]interface{}{
+								"type": "array",
+								"items": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"name":          map[string]interface{}{"type": "string"},
+										"price":         map[string]interface{}{"type": "number"},
+										"code":          map[string]interface{}{"type": "string"},
+										"quantity":      map[string]interface{}{"type": "integer"},
+										"discount":      map[string]interface{}{"type": "integer"},
+										"discountTotal": map[string]interface{}{"type": "number"},
+										"available":     map[string]interface{}{"type": "boolean"},
+									},
+								},
+							},
 						},
+						"required": []string{"message", "products"},
 					},
 				},
-				"required": []string{"message", "products"},
+				"required": []string{"data"},
 			},
 		},
 		{
@@ -267,7 +295,11 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"required":             []string{},
 			},
 			"outputSchema": map[string]interface{}{
-				"type": "string",
+				"type": "object",
+				"properties": map[string]interface{}{
+					"data": map[string]interface{}{"type": "string"},
+				},
+				"required": []string{"data"},
 			},
 		},
 	}

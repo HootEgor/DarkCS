@@ -121,6 +121,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			} else {
 				var parsed interface{}
 				_ = json.Unmarshal(b, &parsed)
+
 				res.Result = map[string]interface{}{
 					"content": []map[string]interface{}{
 						{
@@ -128,7 +129,10 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 							"text": "Structured response",
 						},
 					},
-					"structuredContent": parsed,
+					"structuredContent": map[string]interface{}{
+						"products": parsed, // always wrap array in an object
+					},
+					"isError": false,
 				}
 			}
 
