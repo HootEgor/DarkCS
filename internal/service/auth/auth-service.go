@@ -212,20 +212,24 @@ func (s *Service) SetSmartSenderId(email, phone string, telegramId int64, smartS
 func (s *Service) UpdateConversation(user entity.User, message entity.DialogMessage) error {
 	const contextLimit = 400000
 	const safeMargin = int(float64(contextLimit) * 0.7)
+	const maxMessages = 20
 
-	// Append the new message to the conversation
+	// Append the new message
 	user.Conversation = append(user.Conversation, message)
 
-	// Serialize conversation to estimate size
+	// Trim oldest messages if exceeding safe margin
 	data, err := json.Marshal(user.Conversation)
 	if err != nil {
 		return fmt.Errorf("failed to marshal conversation: %w", err)
 	}
-
-	// Trim oldest messages if exceeding safe margin
 	for len(data) > safeMargin && len(user.Conversation) > 1 {
 		user.Conversation = user.Conversation[1:]
 		data, _ = json.Marshal(user.Conversation)
+	}
+
+	// Ensure max message count
+	if len(user.Conversation) > maxMessages {
+		user.Conversation = user.Conversation[len(user.Conversation)-maxMessages:]
 	}
 
 	return s.UpdateUser(&user)
