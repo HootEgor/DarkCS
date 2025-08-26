@@ -128,7 +128,7 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 							"text": "Structured response",
 						},
 					},
-					//"structuredContent": parsed,
+					"structuredContent": parsed,
 				}
 			}
 

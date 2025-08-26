@@ -460,17 +460,21 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 	}
 
 	// If user has an active order, return a message explaining the situation
+	msg := struct {
+		Message  string      `json:"message"`
+		Products interface{} `json:"products"`
+	}{}
+
 	if !canOrder {
-		msg := struct {
-			Message  string      `json:"message"`
-			Products interface{} `json:"products"`
-		}{}
 		msg.Message = fmt.Sprintf("Products are validated but, user have an active orders %d, please wait until it is processed before creating a new one.", orderInProcessLimit)
 		msg.Products = entity.ProdForAssistant(basket.Products)
 		return msg, nil
 	}
 
-	return entity.ProdForAssistant(basket.Products), nil
+	msg.Message = "Products are validated and you can proceed to create an order."
+	msg.Products = entity.ProdForAssistant(basket.Products)
+
+	return msg, nil
 }
 
 // handleCreateOrder creates a new order from the user's basket.
