@@ -17,25 +17,25 @@ func ToolsDescription(assName string) map[string]interface{} {
 					},
 				},
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "object",
-							"properties": map[string]interface{}{
-								"name":  map[string]interface{}{"type": "string"},
-								"price": map[string]interface{}{"type": "number"},
-								"code":  map[string]interface{}{"type": "string"},
-								"url":   map[string]interface{}{"type": "string"},
-							},
-							"required": []string{"name", "price", "code"},
-						},
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "array",
+			//			"items": map[string]interface{}{
+			//				"type": "object",
+			//				"properties": map[string]interface{}{
+			//					"name":  map[string]interface{}{"type": "string"},
+			//					"price": map[string]interface{}{"type": "number"},
+			//					"code":  map[string]interface{}{"type": "string"},
+			//					"url":   map[string]interface{}{"type": "string"},
+			//				},
+			//				"required": []string{"name", "price", "code"},
+			//			},
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 	}
 
@@ -50,15 +50,15 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 				"required":             []string{},
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "string",
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "get_basket",
@@ -70,27 +70,27 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 				"required":             []string{},
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "object",
-							"properties": map[string]interface{}{
-								"name":          map[string]interface{}{"type": "string"},
-								"price":         map[string]interface{}{"type": "number"},
-								"code":          map[string]interface{}{"type": "string"},
-								"quantity":      map[string]interface{}{"type": "integer"},
-								"discount":      map[string]interface{}{"type": "integer"},
-								"discountTotal": map[string]interface{}{"type": "number"},
-								"available":     map[string]interface{}{"type": "boolean"},
-							},
-						},
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "array",
+			//			"items": map[string]interface{}{
+			//				"type": "object",
+			//				"properties": map[string]interface{}{
+			//					"name":          map[string]interface{}{"type": "string"},
+			//					"price":         map[string]interface{}{"type": "number"},
+			//					"code":          map[string]interface{}{"type": "string"},
+			//					"quantity":      map[string]interface{}{"type": "integer"},
+			//					"discount":      map[string]interface{}{"type": "integer"},
+			//					"discountTotal": map[string]interface{}{"type": "number"},
+			//					"available":     map[string]interface{}{"type": "boolean"},
+			//				},
+			//			},
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "update_user_address",
@@ -104,13 +104,13 @@ func ToolsDescription(assName string) map[string]interface{} {
 				},
 				"additionalProperties": false,
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{"type": "string"},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{"type": "string"},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "add_to_basket",
@@ -142,27 +142,27 @@ func ToolsDescription(assName string) map[string]interface{} {
 				},
 				"additionalProperties": false,
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "object",
-							"properties": map[string]interface{}{
-								"name":          map[string]interface{}{"type": "string"},
-								"price":         map[string]interface{}{"type": "number"},
-								"code":          map[string]interface{}{"type": "string"},
-								"quantity":      map[string]interface{}{"type": "integer"},
-								"discount":      map[string]interface{}{"type": "integer"},
-								"discountTotal": map[string]interface{}{"type": "number"},
-								"available":     map[string]interface{}{"type": "boolean"},
-							},
-						},
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "array",
+			//			"items": map[string]interface{}{
+			//				"type": "object",
+			//				"properties": map[string]interface{}{
+			//					"name":          map[string]interface{}{"type": "string"},
+			//					"price":         map[string]interface{}{"type": "number"},
+			//					"code":          map[string]interface{}{"type": "string"},
+			//					"quantity":      map[string]interface{}{"type": "integer"},
+			//					"discount":      map[string]interface{}{"type": "integer"},
+			//					"discountTotal": map[string]interface{}{"type": "number"},
+			//					"available":     map[string]interface{}{"type": "boolean"},
+			//				},
+			//			},
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "remove_from_basket",
@@ -194,27 +194,27 @@ func ToolsDescription(assName string) map[string]interface{} {
 				},
 				"additionalProperties": false,
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "object",
-							"properties": map[string]interface{}{
-								"name":          map[string]interface{}{"type": "string"},
-								"price":         map[string]interface{}{"type": "number"},
-								"code":          map[string]interface{}{"type": "string"},
-								"quantity":      map[string]interface{}{"type": "integer"},
-								"discount":      map[string]interface{}{"type": "integer"},
-								"discountTotal": map[string]interface{}{"type": "number"},
-								"available":     map[string]interface{}{"type": "boolean"},
-							},
-						},
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "array",
+			//			"items": map[string]interface{}{
+			//				"type": "object",
+			//				"properties": map[string]interface{}{
+			//					"name":          map[string]interface{}{"type": "string"},
+			//					"price":         map[string]interface{}{"type": "number"},
+			//					"code":          map[string]interface{}{"type": "string"},
+			//					"quantity":      map[string]interface{}{"type": "integer"},
+			//					"discount":      map[string]interface{}{"type": "integer"},
+			//					"discountTotal": map[string]interface{}{"type": "number"},
+			//					"available":     map[string]interface{}{"type": "boolean"},
+			//				},
+			//			},
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "get_user_info",
@@ -226,22 +226,22 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 				"required":             []string{},
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"name":     map[string]interface{}{"type": "string"},
-							"email":    map[string]interface{}{"type": "string"},
-							"phone":    map[string]interface{}{"type": "string"},
-							"address":  map[string]interface{}{"type": "string"},
-							"discount": map[string]interface{}{"type": "integer"},
-						},
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "object",
+			//			"properties": map[string]interface{}{
+			//				"name":     map[string]interface{}{"type": "string"},
+			//				"email":    map[string]interface{}{"type": "string"},
+			//				"phone":    map[string]interface{}{"type": "string"},
+			//				"address":  map[string]interface{}{"type": "string"},
+			//				"discount": map[string]interface{}{"type": "integer"},
+			//			},
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "validate_order",
@@ -253,36 +253,36 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 				"required":             []string{},
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"message": map[string]interface{}{
-								"type": "string",
-							},
-							"products": map[string]interface{}{
-								"type": "array",
-								"items": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"name":          map[string]interface{}{"type": "string"},
-										"price":         map[string]interface{}{"type": "number"},
-										"code":          map[string]interface{}{"type": "string"},
-										"quantity":      map[string]interface{}{"type": "integer"},
-										"discount":      map[string]interface{}{"type": "integer"},
-										"discountTotal": map[string]interface{}{"type": "number"},
-										"available":     map[string]interface{}{"type": "boolean"},
-									},
-								},
-							},
-						},
-						"required": []string{"message", "products"},
-					},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{
+			//			"type": "object",
+			//			"properties": map[string]interface{}{
+			//				"message": map[string]interface{}{
+			//					"type": "string",
+			//				},
+			//				"products": map[string]interface{}{
+			//					"type": "array",
+			//					"items": map[string]interface{}{
+			//						"type": "object",
+			//						"properties": map[string]interface{}{
+			//							"name":          map[string]interface{}{"type": "string"},
+			//							"price":         map[string]interface{}{"type": "number"},
+			//							"code":          map[string]interface{}{"type": "string"},
+			//							"quantity":      map[string]interface{}{"type": "integer"},
+			//							"discount":      map[string]interface{}{"type": "integer"},
+			//							"discountTotal": map[string]interface{}{"type": "number"},
+			//							"available":     map[string]interface{}{"type": "boolean"},
+			//						},
+			//					},
+			//				},
+			//			},
+			//			"required": []string{"message", "products"},
+			//		},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 		{
 			"name":        "clear_basket",
@@ -294,13 +294,13 @@ func ToolsDescription(assName string) map[string]interface{} {
 				"additionalProperties": false,
 				"required":             []string{},
 			},
-			"outputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{"type": "string"},
-				},
-				"required": []string{"data"},
-			},
+			//"outputSchema": map[string]interface{}{
+			//	"type": "object",
+			//	"properties": map[string]interface{}{
+			//		"data": map[string]interface{}{"type": "string"},
+			//	},
+			//	"required": []string{"data"},
+			//},
 		},
 	}
 
