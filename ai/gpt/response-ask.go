@@ -189,25 +189,25 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	}
 
 	// Log the response body for debugging
-	previewLen := 2000
-	if len(body) < previewLen {
-		previewLen = len(body)
-	}
-	o.log.With(
-		slog.String("body_preview", string(body[:previewLen])),
-		slog.Int("body_length", len(body)),
-	).Debug("full Response API body")
-	for i := 0; i < len(body); i += 2000 {
-		end := i + 2000
-		if end > len(body) {
-			end = len(body)
-		}
-		o.log.With(
-			slog.String("body_chunk", string(body[i:end])),
-			slog.Int("chunk_start", i),
-			slog.Int("chunk_end", end),
-		).Debug("Response API body chunk")
-	}
+	//previewLen := 2000
+	//if len(body) < previewLen {
+	//	previewLen = len(body)
+	//}
+	//o.log.With(
+	//	slog.String("body_preview", string(body[:previewLen])),
+	//	slog.Int("body_length", len(body)),
+	//).Debug("full Response API body")
+	//for i := 0; i < len(body); i += 2000 {
+	//	end := i + 2000
+	//	if end > len(body) {
+	//		end = len(body)
+	//	}
+	//	o.log.With(
+	//		slog.String("body_chunk", string(body[i:end])),
+	//		slog.Int("chunk_start", i),
+	//		slog.Int("chunk_end", end),
+	//	).Debug("Response API body chunk")
+	//}
 
 	if resp.StatusCode != 200 {
 		return "", fmt.Errorf("response API error: %s", string(body))
@@ -226,9 +226,6 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 				if c.Type == "output_text" && c.Text != "" {
 					assistantText = c.Text // keep overwriting → final one wins
 				}
-				o.log.With(
-					slog.String("resp", c.Text),
-				).Info("assistant response received")
 			}
 		}
 	}

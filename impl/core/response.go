@@ -117,10 +117,10 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 		}
 	}
 
-	c.log.With(
-		slog.String("text", answer.Text),
-		slog.Any("user", user),
-	).Debug("response")
+	//c.log.With(
+	//	slog.String("text", answer.Text),
+	//	slog.Any("user", user),
+	//).Debug("response")
 
 	return &answer, err
 }
