@@ -327,7 +327,7 @@ func (c *Core) GetQrStat(group, phone string) error {
 				regNum++
 			}
 		}
-		msg = fmt.Sprintf("📊 Статистика (повна):\\n🔗 Підписалися через QR: %d\n📝 Зареєстровані: %d",
+		msg = fmt.Sprintf("📊 Статистика (повна):\n🔗 Підписалися через QR: %d\n📝 Зареєстровані: %d",
 			followNum, regNum)
 	} else if group == "month" {
 		// group by year+month
