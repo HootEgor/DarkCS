@@ -344,9 +344,9 @@ func (c *Core) GetQrStat(group, phone string) error {
 			}
 			if qr.FollowQr {
 				statsByMonth[key].follow++
-			}
-			if qr.Registered {
-				statsByMonth[key].reg++
+				if qr.Registered {
+					statsByMonth[key].reg++
+				}
 			}
 		}
 
