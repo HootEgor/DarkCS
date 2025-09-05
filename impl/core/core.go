@@ -16,6 +16,11 @@ type Repository interface {
 	UpsertAssistant(assistant *entity.Assistant) (*entity.Assistant, error)
 	GetAssistant(name string) (*entity.Assistant, error)
 	GetAllAssistants() ([]entity.Assistant, error)
+
+	GetAllQrStat() ([]entity.QrStat, error)
+
+	FollowQr(smartSenderId string) error
+	RegisterQr(smartSenderId string) error
 }
 
 type ProductService interface {
@@ -41,7 +46,7 @@ type AuthService interface {
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	GetUserByUUID(uuid string) (*entity.User, error)
 	UserExists(email, phone string, telegramId int64) (*entity.User, error)
-	BlockUser(email, phone string, telegramId int64, block bool) error
+	BlockUser(email, phone string, telegramId int64, block bool, role string) error
 	UpdateUser(user *entity.User) error
 
 	ActivatePromoCode(phone, code string) error
@@ -53,6 +58,8 @@ type AuthService interface {
 
 	UpdateConversation(user entity.User, conversation entity.DialogMessage) error
 	ClearConversation(user *entity.User) error
+
+	IsUserManager(email, phone string, telegramId int64) bool
 }
 
 type SmartService interface {

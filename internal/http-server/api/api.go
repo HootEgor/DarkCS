@@ -8,6 +8,7 @@ import (
 	"DarkCS/internal/http-server/handlers/mcp"
 	"DarkCS/internal/http-server/handlers/product"
 	"DarkCS/internal/http-server/handlers/promo"
+	qr_stat "DarkCS/internal/http-server/handlers/qr-stat"
 	"DarkCS/internal/http-server/handlers/response"
 	"DarkCS/internal/http-server/handlers/service"
 	"DarkCS/internal/http-server/handlers/smart"
@@ -42,6 +43,7 @@ type Handler interface {
 	promo.Core
 	smart.Core
 	key.Core
+	qr_stat.Core
 	mcp.Core
 }
 
@@ -96,6 +98,10 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		})
 		v1.Route("/key", func(r chi.Router) {
 			r.Post("/new", key.Generate(log, handler))
+		})
+		v1.Route("/qr", func(r chi.Router) {
+			r.Post("/follow", qr_stat.FollowQr(log, handler))
+			r.Post("/stat", qr_stat.GetStat(log, handler))
 		})
 		v1.Post("/mcp", mcp.Handler(log, handler))
 	})

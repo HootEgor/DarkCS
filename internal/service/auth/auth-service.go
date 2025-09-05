@@ -173,13 +173,24 @@ func (s *Service) IsUserAdmin(email, phone string, telegramId int64) bool {
 	return user.IsAdmin()
 }
 
-func (s *Service) BlockUser(email, phone string, telegramId int64, block bool) error {
+func (s *Service) IsUserManager(email, phone string, telegramId int64) bool {
+	user, err := s.GetUser(email, phone, telegramId)
+	if err != nil {
+		s.log.Error("getting user", sl.Err(err))
+		return false
+	}
+
+	return user.IsManager()
+}
+
+func (s *Service) BlockUser(email, phone string, telegramId int64, block bool, role string) error {
 	user, err := s.GetUser(email, phone, telegramId)
 	if err != nil {
 		return err
 	}
 
 	user.Blocked = block
+	user.Role = role
 
 	err = s.repository.UpsertUser(*user)
 	if err != nil {

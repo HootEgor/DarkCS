@@ -30,8 +30,8 @@ func (c *Core) SendEvent(message *entity.EventMessage) (interface{}, error) {
 	return nil, c.ms.SendEventMessage(message)
 }
 
-func (c *Core) BlockUser(email, phone string, telegramId int64, block bool) error {
-	return c.authService.BlockUser(email, phone, telegramId, block)
+func (c *Core) BlockUser(email, phone string, telegramId int64, block bool, role string) error {
+	return c.authService.BlockUser(email, phone, telegramId, block, role)
 }
 
 func (c *Core) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
@@ -54,6 +54,13 @@ func (c *Core) CreateUser(name, email, phone, smartSenderId string, telegramId i
 	zohoId, err := c.zoho.CreateContact(user)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create zoho contact: %w", err)
+	}
+
+	err = c.repo.RegisterQr(smartSenderId)
+	if err != nil {
+		c.log.With(
+			sl.Err(err),
+		).Debug("register qr")
 	}
 
 	return name, zohoId, nil
@@ -287,4 +294,74 @@ func (c *Core) ResetConversation(phone string) error {
 	).Info("reset conversation")
 
 	return c.authService.ClearConversation(user)
+}
+
+func (c *Core) FollowQr(smartSenderId string) error {
+	return c.repo.FollowQr(smartSenderId)
+}
+
+func (c *Core) GetQrStat(group, phone string) error {
+	user, err := c.authService.GetUser("", phone, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if !user.IsManager() {
+		return fmt.Errorf("user is not manager")
+	}
+
+	qrStats, err := c.repo.GetAllQrStat()
+	if err != nil {
+		return fmt.Errorf("failed to get qrstat: %w", err)
+	}
+
+	msg := ""
+
+	if group == "all" {
+		var followNum, regNum int
+		for _, qr := range qrStats {
+			if qr.FollowQr {
+				followNum++
+			}
+			if qr.Registered {
+				regNum++
+			}
+		}
+		msg = fmt.Sprintf("📊 Статистика (повна):\\n🔗 Підписалися через QR: %d\n📝 Зареєстровані: %d",
+			followNum, regNum)
+	} else if group == "month" {
+		// group by year+month
+		type stat struct {
+			follow int
+			reg    int
+		}
+		statsByMonth := make(map[string]*stat)
+
+		for _, qr := range qrStats {
+			key := qr.Date.Format("2006-01") // YYYY-MM
+			if _, ok := statsByMonth[key]; !ok {
+				statsByMonth[key] = &stat{}
+			}
+			if qr.FollowQr {
+				statsByMonth[key].follow++
+			}
+			if qr.Registered {
+				statsByMonth[key].reg++
+			}
+		}
+
+		// build msg
+		msg = "📊 Статистика по місяцях:\n"
+		for k, s := range statsByMonth {
+			// parse back to time for pretty formatting
+			t, _ := time.Parse("2006-01", k)
+			monthName := entity.GetMonthName(t) // from your earlier helper
+			msg += fmt.Sprintf("%s %d: 🔗 %d | 📝 %d\n",
+				monthName, t.Year(), s.follow, s.reg)
+		}
+	} else {
+		return fmt.Errorf("unknown group type: %s", group)
+	}
+
+	return c.smartService.SendMessage(user.SmartSenderId, msg)
 }

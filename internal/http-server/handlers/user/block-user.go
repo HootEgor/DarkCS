@@ -16,6 +16,7 @@ type BlockRequest struct {
 	Phone      string `json:"phone"`
 	TelegramId int64  `json:"telegram_id"`
 	Block      bool   `json:"block"`
+	Role       string `json:"role"`
 }
 
 func BlockUser(log *slog.Logger, handler Core) http.HandlerFunc {
@@ -40,7 +41,7 @@ func BlockUser(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		err := handler.BlockUser(req.Email, req.Phone, req.TelegramId, req.Block)
+		err := handler.BlockUser(req.Email, req.Phone, req.TelegramId, req.Block, req.Role)
 		if err != nil {
 			logger.Error("block user", sl.Err(err))
 			render.JSON(w, r, response.Error(fmt.Sprintf("Block failed: %v", err)))

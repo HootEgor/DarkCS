@@ -67,6 +67,10 @@ func (u *User) IsAdmin() bool {
 	return u.Role == AdminRole
 }
 
+func (u *User) IsManager() bool {
+	return u.Role == ManagerRole || u.Role == AdminRole
+}
+
 func (u *User) SameUser(other *User) bool {
 	if other == nil {
 		return false
