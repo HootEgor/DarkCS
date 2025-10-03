@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"strings"
 	"time"
@@ -47,6 +48,14 @@ const (
 )
 
 func NewUser(email, phone string, telegramId int64) *User {
+
+	phoneDigits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			phoneDigits += string(ch)
+		}
+	}
+	phone = fmt.Sprintf("+%s", phoneDigits)
 
 	return &User{
 		UUID:       uuid.NewString(),
