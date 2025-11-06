@@ -1,10 +1,10 @@
 ## Technology Stack
 
-*   ![Go](https://img.shields.io/badge/Go-1.24-blue.svg?logo=go)
-*   ![MongoDB](https://img.shields.io/badge/MongoDB-4.4-green.svg?logo=mongodb)
-*   ![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-blue.svg?logo=telegram)
-*   ![OpenAI](https://img.shields.io/badge/OpenAI-GPT-blue.svg?logo=openai)
-*   ![Chi](https://img.shields.io/badge/Chi-v5-blue)
+![Go](https://img.shields.io/badge/Go-1.24-blue.svg?logo=go)
+![MongoDB](https://img.shields.io/badge/MongoDB-4.4-green.svg?logo=mongodb)
+![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-blue.svg?logo=telegram)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT-blue.svg?logo=openai)
+![Chi](https://img.shields.io/badge/Chi-v5-blue)
 
 # 📌 DarkCS: Central System with AI Assistants
 
