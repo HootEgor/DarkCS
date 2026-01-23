@@ -10,6 +10,10 @@ telegram:
     - 64156944
   bot_name: Dark Logger
   enabled: true
+userbot:
+  api_key: ${USERBOT_API_KEY}
+  bot_name: Dark Bot
+  enabled: true
 openai:
   api_key: ${OPENAI_API_KEY}
   overseer_id: ${OVERSEER_ID}

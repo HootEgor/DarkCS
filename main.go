@@ -43,6 +43,15 @@ func main() {
 				slog.String("bot_name", conf.Telegram.BotName),
 			).Info("telegram bot initialized")
 		}
+
+		// Start admin telegram bot
+		if tgBot != nil {
+			go func() {
+				if err := tgBot.Start(); err != nil {
+					lg.Error("telegram bot error", slog.String("error", err.Error()))
+				}
+			}()
+		}
 	}
 
 	lg.Info("starting darkcs", slog.String("config", *configPath), slog.String("env", conf.Env))
@@ -94,15 +103,6 @@ func main() {
 				}()
 			}
 		}
-	}
-
-	// Start admin telegram bot
-	if tgBot != nil {
-		go func() {
-			if err := tgBot.Start(); err != nil {
-				lg.Error("telegram bot error", slog.String("error", err.Error()))
-			}
-		}()
 	}
 
 	ps := product.NewProductService(conf, lg)
