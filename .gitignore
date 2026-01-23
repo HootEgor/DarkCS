@@ -1,1 +1,4 @@
 /.build/
+/.claude/settings.local.json
+/.idea/vcs.xml
+/CLAUDE.md

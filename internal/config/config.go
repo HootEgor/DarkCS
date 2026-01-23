@@ -16,6 +16,11 @@ type Config struct {
 		Enabled     bool    `yaml:"enabled" env-default:"false"`
 		MinLogLevel string  `yaml:"min_log_level" env-default:"debug"`
 	} `yaml:"telegram"`
+	UserBot struct {
+		ApiKey  string `yaml:"api_key" env-default:""`
+		BotName string `yaml:"bot_name" env-default:"DarkCSUserBot"`
+		Enabled bool   `yaml:"enabled" env-default:"false"`
+	} `yaml:"userbot"`
 	OpenAI struct {
 		ApiKey         string `yaml:"api_key" env-default:""`
 		OverseerID     string `yaml:"overseer_id" env-default:""`

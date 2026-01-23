@@ -1,11 +1,16 @@
 package main
 
 import (
+	"flag"
+	"log/slog"
+
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
+	"DarkCS/bot/workflow"
+	"DarkCS/bot/workflows/onboarding"
 	"DarkCS/impl/core"
 	"DarkCS/internal/config"
-	"DarkCS/internal/database"
+	repository "DarkCS/internal/database"
 	"DarkCS/internal/http-server/api"
 	"DarkCS/internal/lib/logger"
 	"DarkCS/internal/lib/sl"
@@ -13,8 +18,6 @@ import (
 	"DarkCS/internal/service/product"
 	smart_sender "DarkCS/internal/service/smart-sender"
 	services "DarkCS/internal/service/zoho"
-	"flag"
-	"log/slog"
 )
 
 func main() {
@@ -26,7 +29,7 @@ func main() {
 	conf := config.MustLoad(*configPath)
 	lg := logger.SetupLogger(conf.Env, *logPath)
 
-	// Initialize Telegram bot if enabled
+	// Initialize Telegram bot if enabled (start later after workflow engine is configured)
 	var tgBot *bot.TgBot
 	if conf.Telegram.Enabled {
 		var err error
@@ -39,13 +42,6 @@ func main() {
 			lg.With(
 				slog.String("bot_name", conf.Telegram.BotName),
 			).Info("telegram bot initialized")
-
-			// Start the bot in a goroutine
-			go func() {
-				if err := tgBot.Start(); err != nil {
-					lg.Error("telegram bot error", slog.String("error", err.Error()))
-				}
-			}()
 		}
 	}
 
@@ -73,6 +69,40 @@ func main() {
 			slog.String("user", conf.Mongo.User),
 			slog.String("database", conf.Mongo.Database),
 		).Info("mongo client initialized")
+
+		// Initialize user bot with workflow engine if enabled
+		if conf.UserBot.Enabled {
+			userBot, err := bot.NewUserBot(conf.UserBot.BotName, conf.UserBot.ApiKey, lg)
+			if err != nil {
+				lg.Error("failed to initialize user bot", slog.String("error", err.Error()))
+			} else {
+				stateStorage := workflow.NewMongoStateStorage(db)
+				workflowEngine := workflow.NewWorkflowEngine(stateStorage, lg)
+
+				// Register onboarding workflow
+				onboardingWorkflow := onboarding.NewOnboardingWorkflow(authService, db, lg)
+				workflowEngine.RegisterWorkflow(onboardingWorkflow)
+
+				userBot.SetWorkflowEngine(workflowEngine)
+				lg.Info("workflow engine initialized for user bot")
+
+				// Start user bot in a goroutine
+				go func() {
+					if err := userBot.Start(); err != nil {
+						lg.Error("user bot error", slog.String("error", err.Error()))
+					}
+				}()
+			}
+		}
+	}
+
+	// Start admin telegram bot
+	if tgBot != nil {
+		go func() {
+			if err := tgBot.Start(); err != nil {
+				lg.Error("telegram bot error", slog.String("error", err.Error()))
+			}
+		}()
 	}
 
 	ps := product.NewProductService(conf, lg)
