@@ -60,7 +60,8 @@ func (e *WorkflowEngine) StartWorkflow(ctx context.Context, b *tgbotapi.Bot, use
 		slog.String("step_id", string(w.InitialStep())),
 	)
 
-	return step.Enter(ctx, b, state)
+	result := step.Enter(ctx, b, state)
+	return e.processResult(ctx, b, state, w, result)
 }
 
 // HandleMessage routes a message to the current workflow step.
@@ -182,8 +183,9 @@ func (e *WorkflowEngine) processResult(ctx context.Context, b *tgbotapi.Bot, sta
 		return e.storage.Delete(ctx, state.UserID)
 	}
 
-	// Transition to next step if specified
-	if result.NextStep != "" && result.NextStep != state.CurrentStep {
+	// Transition to next step if specified, looping through auto-transitions
+	const maxTransitions = 20
+	for i := 0; result.NextStep != "" && result.NextStep != state.CurrentStep && i < maxTransitions; i++ {
 		state.CurrentStep = result.NextStep
 
 		// Save updated state
@@ -202,9 +204,32 @@ func (e *WorkflowEngine) processResult(ctx context.Context, b *tgbotapi.Bot, sta
 			slog.String("step_id", string(result.NextStep)),
 		)
 
-		return step.Enter(ctx, b, state)
+		result = step.Enter(ctx, b, state)
+		if result.Error != nil {
+			e.log.Error("step enter error",
+				slog.Int64("user_id", state.UserID),
+				slog.String("step_id", string(state.CurrentStep)),
+				slog.String("error", result.Error.Error()),
+			)
+			return result.Error
+		}
+
+		// Merge any state updates from Enter
+		if result.UpdateState != nil {
+			state.MergeData(result.UpdateState)
+		}
+		state.UpdatedAt = time.Now()
+
+		// Check if workflow completed during Enter
+		if result.Complete {
+			e.log.Info("workflow completed",
+				slog.Int64("user_id", state.UserID),
+				slog.String("workflow_id", string(state.WorkflowID)),
+			)
+			return e.storage.Delete(ctx, state.UserID)
+		}
 	}
 
-	// Just save state updates without transition
+	// Save final state
 	return e.storage.Save(ctx, state)
 }

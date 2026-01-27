@@ -23,6 +23,10 @@ func (s *BaseStep) ID() workflow.StepID {
 	return s.id
 }
 
+func (s *BaseStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
+	return workflow.StepResult{}
+}
+
 func (s *BaseStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
 	return workflow.StepResult{}
 }
@@ -44,18 +48,14 @@ func NewHelloStep() *HelloStep {
 	return &HelloStep{BaseStep: BaseStep{id: StepHello}}
 }
 
-func (s *HelloStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *HelloStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	msg := "👋 Вітаємо!\n\nДля продовження, будь ласка, поділіться своїм номером телефону."
 	_, err := b.SendMessage(state.ChatID, msg, nil)
 	if err != nil {
-		return err
+		return workflow.StepResult{Error: err}
 	}
 
 	// Immediately transition to request phone step
-	return nil
-}
-
-func (s *HelloStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
 	return workflow.StepResult{NextStep: StepRequestPhone}
 }
 
@@ -68,12 +68,15 @@ func NewRequestPhoneStep() *RequestPhoneStep {
 	return &RequestPhoneStep{BaseStep: BaseStep{id: StepRequestPhone}}
 }
 
-func (s *RequestPhoneStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *RequestPhoneStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	keyboard := ui.ContactRequestKeyboard("📱 Поділитися номером телефону")
 	_, err := b.SendMessage(state.ChatID, "Натисніть кнопку нижче, щоб поділитися номером телефону:", &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
-	return err
+	if err != nil {
+		return workflow.StepResult{Error: err}
+	}
+	return workflow.StepResult{} // Wait for user input
 }
 
 func (s *RequestPhoneStep) HandleContact(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
@@ -114,36 +117,20 @@ func NewValidatePhoneStep() *ValidatePhoneStep {
 	return &ValidatePhoneStep{BaseStep: BaseStep{id: StepValidatePhone}}
 }
 
-func (s *ValidatePhoneStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *ValidatePhoneStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	phone := state.GetString(KeyPhone)
 	if !isValidPhone(phone) {
 		b.SendMessage(state.ChatID, "❌ Невірний формат номера телефону. Спробуйте ще раз.", &tgbotapi.SendMessageOpts{
 			ReplyMarkup: ui.RemoveKeyboard(),
 		})
-		return nil
+		return workflow.StepResult{NextStep: StepRequestPhone}
 	}
 
-	// Phone is valid, remove keyboard and continue
+	// Phone is valid, remove keyboard and auto-transition to check user
 	b.SendMessage(state.ChatID, fmt.Sprintf("✅ Номер телефону: %s", phone), &tgbotapi.SendMessageOpts{
 		ReplyMarkup: ui.RemoveKeyboard(),
 	})
-	return nil
-}
-
-func (s *ValidatePhoneStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
-	phone := state.GetString(KeyPhone)
-	if isValidPhone(phone) {
-		return workflow.StepResult{NextStep: StepCheckUser}
-	}
-	return workflow.StepResult{NextStep: StepRequestPhone}
-}
-
-func (s *ValidatePhoneStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
-	phone := state.GetString(KeyPhone)
-	if isValidPhone(phone) {
-		return workflow.StepResult{NextStep: StepCheckUser}
-	}
-	return workflow.StepResult{NextStep: StepRequestPhone}
+	return workflow.StepResult{NextStep: StepCheckUser}
 }
 
 // CheckUserStep - Check if user exists
@@ -159,35 +146,27 @@ func NewCheckUserStep(authService AuthService) *CheckUserStep {
 	}
 }
 
-func (s *CheckUserStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *CheckUserStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	phone := state.GetString(KeyPhone)
 	user, _ := s.authService.UserExists("", phone, state.UserID)
 
 	if user != nil && user.Name != "" {
 		// User exists with name, save info and skip name entry
-		state.Set(KeyUserExists, true)
-		state.Set(KeyUserUUID, user.UUID)
-		state.Set(KeyName, user.Name)
-		return nil
+		return workflow.StepResult{
+			NextStep: StepProcessDeepCode,
+			UpdateState: map[string]any{
+				KeyUserExists: true,
+				KeyUserUUID:   user.UUID,
+				KeyName:       user.Name,
+			},
+		}
 	}
 
 	// New user or no name, need to request name
-	state.Set(KeyUserExists, false)
-	return nil
-}
-
-func (s *CheckUserStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
-	if state.GetBool(KeyUserExists) {
-		return workflow.StepResult{NextStep: StepProcessDeepCode}
+	return workflow.StepResult{
+		NextStep:    StepRequestName,
+		UpdateState: map[string]any{KeyUserExists: false},
 	}
-	return workflow.StepResult{NextStep: StepRequestName}
-}
-
-func (s *CheckUserStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
-	if state.GetBool(KeyUserExists) {
-		return workflow.StepResult{NextStep: StepProcessDeepCode}
-	}
-	return workflow.StepResult{NextStep: StepRequestName}
 }
 
 // RequestNameStep - Request user's name
@@ -199,9 +178,12 @@ func NewRequestNameStep() *RequestNameStep {
 	return &RequestNameStep{BaseStep: BaseStep{id: StepRequestName}}
 }
 
-func (s *RequestNameStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *RequestNameStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	_, err := b.SendMessage(state.ChatID, "Як вас звати? Введіть ваше ім'я:", nil)
-	return err
+	if err != nil {
+		return workflow.StepResult{Error: err}
+	}
+	return workflow.StepResult{} // Wait for user input
 }
 
 func (s *RequestNameStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
@@ -230,7 +212,7 @@ func NewConfirmDataStep(authService AuthService) *ConfirmDataStep {
 	}
 }
 
-func (s *ConfirmDataStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *ConfirmDataStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	name := state.GetString(KeyName)
 	phone := state.GetString(KeyPhone)
 
@@ -240,7 +222,10 @@ func (s *ConfirmDataStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *wor
 	_, err := b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
-	return err
+	if err != nil {
+		return workflow.StepResult{Error: err}
+	}
+	return workflow.StepResult{} // Wait for user input
 }
 
 func (s *ConfirmDataStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
@@ -291,20 +276,8 @@ func NewProcessDeepCodeStep() *ProcessDeepCodeStep {
 	return &ProcessDeepCodeStep{BaseStep: BaseStep{id: StepProcessDeepCode}}
 }
 
-func (s *ProcessDeepCodeStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
-	// Check deep link type and route
-	return nil
-}
-
-func (s *ProcessDeepCodeStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
-	return s.processDeepLink(state)
-}
-
-func (s *ProcessDeepCodeStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
-	return s.processDeepLink(state)
-}
-
-func (s *ProcessDeepCodeStep) processDeepLink(state *workflow.UserState) workflow.StepResult {
+func (s *ProcessDeepCodeStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
+	// Auto-transition based on deep link
 	if state.DeepLink == nil || state.DeepLink.IsEmpty() {
 		return workflow.StepResult{NextStep: StepMainMenu}
 	}
@@ -329,22 +302,25 @@ func NewSelectSchoolStep(schoolRepo SchoolRepository) *SelectSchoolStep {
 	}
 }
 
-func (s *SelectSchoolStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *SelectSchoolStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	schools, err := s.schoolRepo.GetAllActiveSchools(ctx)
 	if err != nil {
 		b.SendMessage(state.ChatID, "Виникла помилка при завантаженні списку шкіл.", nil)
-		return err
+		return workflow.StepResult{Error: err}
 	}
 
 	if len(schools) == 0 {
 		b.SendMessage(state.ChatID, "Наразі немає доступних шкіл.", nil)
-		return nil
+		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
 	// Initialize pagination
 	state.InitPagination(len(schools), ui.DefaultItemsPerPage)
 
-	return s.sendSchoolList(ctx, b, state, schools)
+	if err := s.sendSchoolList(ctx, b, state, schools); err != nil {
+		return workflow.StepResult{Error: err}
+	}
+	return workflow.StepResult{} // Wait for user selection
 }
 
 func (s *SelectSchoolStep) sendSchoolList(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState, schools []entity.School) error {
@@ -457,19 +433,14 @@ func NewMainMenuStep() *MainMenuStep {
 	return &MainMenuStep{BaseStep: BaseStep{id: StepMainMenu}}
 }
 
-func (s *MainMenuStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) error {
+func (s *MainMenuStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	name := state.GetString(KeyName)
 	msg := fmt.Sprintf("🎉 Вітаємо, %s!\n\nВи успішно зареєструвалися. Тепер ви можете користуватися нашим ботом.", name)
 
 	_, err := b.SendMessage(state.ChatID, msg, nil)
-	return err
-}
-
-func (s *MainMenuStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
-	return workflow.StepResult{Complete: true}
-}
-
-func (s *MainMenuStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
+	if err != nil {
+		return workflow.StepResult{Error: err}
+	}
 	return workflow.StepResult{Complete: true}
 }
 

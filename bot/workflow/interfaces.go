@@ -28,7 +28,8 @@ type Step interface {
 
 	// Enter is called when the user enters this step.
 	// It should send any initial messages/keyboards to the user.
-	Enter(ctx context.Context, b *tgbotapi.Bot, state *UserState) error
+	// Return a StepResult with NextStep set to auto-transition without waiting for user input.
+	Enter(ctx context.Context, b *tgbotapi.Bot, state *UserState) StepResult
 
 	// HandleMessage processes a text message from the user.
 	HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *UserState) StepResult
