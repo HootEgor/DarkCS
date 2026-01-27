@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 func (c *Core) AttachNewFile() error {
@@ -378,7 +376,7 @@ func (c *Core) AddSchools(names []string) ([]entity.School, error) {
 	var created []entity.School
 
 	for _, name := range names {
-		school := entity.NewSchool(uuid.New().String(), name, "")
+		school := entity.NewSchool(name)
 		if err := c.repo.UpsertSchool(ctx, school); err != nil {
 			return nil, fmt.Errorf("failed to upsert school %q: %w", name, err)
 		}
@@ -405,10 +403,10 @@ func (c *Core) GetSchools(status string) ([]entity.School, error) {
 	}
 }
 
-func (c *Core) SetSchoolActive(id string, active bool) error {
+func (c *Core) SetSchoolActive(name string, active bool) error {
 	if c.repo == nil {
 		return fmt.Errorf("repository is not set")
 	}
 
-	return c.repo.SetSchoolActive(context.Background(), id, active)
+	return c.repo.SetSchoolActive(context.Background(), name, active)
 }

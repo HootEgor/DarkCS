@@ -336,7 +336,7 @@ func (s *SelectSchoolStep) sendSchoolList(ctx context.Context, b *tgbotapi.Bot, 
 	items := make([]ui.SelectableItem, len(pageSchools))
 	for i, school := range pageSchools {
 		items[i] = ui.SelectableItem{
-			ID:   school.ID,
+			ID:   school.Name,
 			Text: school.Name,
 		}
 	}
@@ -385,7 +385,7 @@ func (s *SelectSchoolStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, 
 		return workflow.StepResult{
 			NextStep: StepMainMenu,
 			UpdateState: map[string]any{
-				KeySchoolID:   school.ID,
+				KeySchoolID:   school.Name,
 				KeySchoolName: school.Name,
 			},
 		}
@@ -412,7 +412,7 @@ func (s *SelectSchoolStep) updateSchoolList(ctx context.Context, b *tgbotapi.Bot
 	items := make([]ui.SelectableItem, len(pageSchools))
 	for i, school := range pageSchools {
 		items[i] = ui.SelectableItem{
-			ID:   school.ID,
+			ID:   school.Name,
 			Text: school.Name,
 		}
 	}

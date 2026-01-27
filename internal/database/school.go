@@ -97,7 +97,7 @@ func (m *MongoDB) UpsertSchool(ctx context.Context, school *entity.School) error
 
 	collection := connection.Database(m.database).Collection(schoolsCollection)
 
-	filter := bson.D{{"_id", school.ID}}
+	filter := bson.D{{"name", school.Name}}
 	update := bson.D{{"$set", school}}
 	opts := options.Update().SetUpsert(true)
 
@@ -106,7 +106,7 @@ func (m *MongoDB) UpsertSchool(ctx context.Context, school *entity.School) error
 }
 
 // DeleteSchool deletes a school by ID (soft delete - sets active to false).
-func (m *MongoDB) DeleteSchool(ctx context.Context, id string) error {
+func (m *MongoDB) DeleteSchool(ctx context.Context, name string) error {
 	connection, err := m.connect()
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (m *MongoDB) DeleteSchool(ctx context.Context, id string) error {
 
 	collection := connection.Database(m.database).Collection(schoolsCollection)
 
-	filter := bson.D{{"_id", id}}
+	filter := bson.D{{"name", name}}
 	update := bson.D{{"$set", bson.D{{"active", false}}}}
 
 	_, err = collection.UpdateOne(ctx, filter, update)
@@ -175,8 +175,8 @@ func (m *MongoDB) GetInactiveSchools(ctx context.Context) ([]entity.School, erro
 	return schools, nil
 }
 
-// SetSchoolActive sets the active status of a school by ID.
-func (m *MongoDB) SetSchoolActive(ctx context.Context, id string, active bool) error {
+// SetSchoolActive sets the active status of a school by name.
+func (m *MongoDB) SetSchoolActive(ctx context.Context, name string, active bool) error {
 	connection, err := m.connect()
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (m *MongoDB) SetSchoolActive(ctx context.Context, id string, active bool) e
 
 	collection := connection.Database(m.database).Collection(schoolsCollection)
 
-	filter := bson.D{{"_id", id}}
+	filter := bson.D{{"name", name}}
 	update := bson.D{{"$set", bson.D{{"active", active}}}}
 
 	_, err = collection.UpdateOne(ctx, filter, update)

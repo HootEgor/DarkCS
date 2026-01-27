@@ -13,7 +13,7 @@ import (
 )
 
 type SetStatusRequest struct {
-	ID     string `json:"id"`
+	Name   string `json:"name"`
 	Active bool   `json:"active"`
 }
 
@@ -39,19 +39,19 @@ func SetStatus(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		if req.ID == "" {
-			render.JSON(w, r, response.Error("school id is required"))
+		if req.Name == "" {
+			render.JSON(w, r, response.Error("school name is required"))
 			return
 		}
 
-		err := handler.SetSchoolActive(req.ID, req.Active)
+		err := handler.SetSchoolActive(req.Name, req.Active)
 		if err != nil {
 			logger.Error("failed to set school status", sl.Err(err))
 			render.JSON(w, r, response.Error(fmt.Sprintf("Failed to set school status: %v", err)))
 			return
 		}
 
-		logger.Debug("school status updated", slog.String("id", req.ID), slog.Bool("active", req.Active))
+		logger.Debug("school status updated", slog.String("name", req.Name), slog.Bool("active", req.Active))
 		render.JSON(w, r, response.Ok("School status updated successfully"))
 	}
 }

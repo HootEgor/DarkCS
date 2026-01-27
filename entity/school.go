@@ -4,16 +4,14 @@ import "time"
 
 // School represents a school entity for the onboarding workflow.
 type School struct {
-	ID        string    `json:"id" bson:"_id"`
-	Name      string    `json:"name" bson:"name"`
+	Name      string    `json:"name" bson:"_id"`
 	Active    bool      `json:"active" bson:"active"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 }
 
 // NewSchool creates a new School entity.
-func NewSchool(id, name, code string) *School {
+func NewSchool(name string) *School {
 	return &School{
-		ID:        id,
 		Name:      name,
 		Active:    true,
 		CreatedAt: time.Now(),
