@@ -3,9 +3,12 @@ package core
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func (c *Core) AttachNewFile() error {
@@ -364,4 +367,48 @@ func (c *Core) GetQrStat(group, phone string) error {
 	}
 
 	return c.smartService.SendMessage(user.SmartSenderId, msg)
+}
+
+func (c *Core) AddSchools(names []string) ([]entity.School, error) {
+	if c.repo == nil {
+		return nil, fmt.Errorf("repository is not set")
+	}
+
+	ctx := context.Background()
+	var created []entity.School
+
+	for _, name := range names {
+		school := entity.NewSchool(uuid.New().String(), name, "")
+		if err := c.repo.UpsertSchool(ctx, school); err != nil {
+			return nil, fmt.Errorf("failed to upsert school %q: %w", name, err)
+		}
+		created = append(created, *school)
+	}
+
+	return created, nil
+}
+
+func (c *Core) GetSchools(status string) ([]entity.School, error) {
+	if c.repo == nil {
+		return nil, fmt.Errorf("repository is not set")
+	}
+
+	ctx := context.Background()
+
+	switch status {
+	case "active":
+		return c.repo.GetAllActiveSchools(ctx)
+	case "inactive":
+		return c.repo.GetInactiveSchools(ctx)
+	default:
+		return c.repo.GetAllSchools(ctx)
+	}
+}
+
+func (c *Core) SetSchoolActive(id string, active bool) error {
+	if c.repo == nil {
+		return fmt.Errorf("repository is not set")
+	}
+
+	return c.repo.SetSchoolActive(context.Background(), id, active)
 }

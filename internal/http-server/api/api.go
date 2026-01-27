@@ -10,6 +10,7 @@ import (
 	"DarkCS/internal/http-server/handlers/promo"
 	qr_stat "DarkCS/internal/http-server/handlers/qr-stat"
 	"DarkCS/internal/http-server/handlers/response"
+	"DarkCS/internal/http-server/handlers/school"
 	"DarkCS/internal/http-server/handlers/service"
 	"DarkCS/internal/http-server/handlers/smart"
 	"DarkCS/internal/http-server/handlers/user"
@@ -45,6 +46,7 @@ type Handler interface {
 	key.Core
 	qr_stat.Core
 	mcp.Core
+	school.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler) error {
@@ -102,6 +104,11 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 		v1.Route("/qr", func(r chi.Router) {
 			r.Post("/follow", qr_stat.FollowQr(log, handler))
 			r.Post("/stat", qr_stat.GetStat(log, handler))
+		})
+		v1.Route("/school", func(r chi.Router) {
+			r.Post("/add", school.AddSchools(log, handler))
+			r.Get("/list", school.ListSchools(log, handler))
+			r.Post("/status", school.SetStatus(log, handler))
 		})
 		v1.Post("/mcp", mcp.Handler(log, handler))
 	})

@@ -122,6 +122,76 @@ func (m *MongoDB) DeleteSchool(ctx context.Context, id string) error {
 	return err
 }
 
+// GetAllSchools retrieves all schools regardless of active status, sorted by name.
+func (m *MongoDB) GetAllSchools(ctx context.Context) ([]entity.School, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(schoolsCollection)
+
+	opts := options.Find().SetSort(bson.D{{"name", 1}})
+
+	cursor, err := collection.Find(ctx, bson.D{}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var schools []entity.School
+	if err = cursor.All(ctx, &schools); err != nil {
+		return nil, err
+	}
+
+	return schools, nil
+}
+
+// GetInactiveSchools retrieves all inactive schools, sorted by name.
+func (m *MongoDB) GetInactiveSchools(ctx context.Context) ([]entity.School, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(schoolsCollection)
+
+	filter := bson.D{{"active", false}}
+	opts := options.Find().SetSort(bson.D{{"name", 1}})
+
+	cursor, err := collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var schools []entity.School
+	if err = cursor.All(ctx, &schools); err != nil {
+		return nil, err
+	}
+
+	return schools, nil
+}
+
+// SetSchoolActive sets the active status of a school by ID.
+func (m *MongoDB) SetSchoolActive(ctx context.Context, id string, active bool) error {
+	connection, err := m.connect()
+	if err != nil {
+		return err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(schoolsCollection)
+
+	filter := bson.D{{"_id", id}}
+	update := bson.D{{"$set", bson.D{{"active", active}}}}
+
+	_, err = collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
 // CountActiveSchools returns the count of active schools.
 func (m *MongoDB) CountActiveSchools(ctx context.Context) (int64, error) {
 	connection, err := m.connect()

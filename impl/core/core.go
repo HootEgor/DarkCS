@@ -3,6 +3,7 @@ package core
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"time"
@@ -21,6 +22,12 @@ type Repository interface {
 
 	FollowQr(smartSenderId string) error
 	RegisterQr(smartSenderId string) error
+
+	UpsertSchool(ctx context.Context, school *entity.School) error
+	GetAllSchools(ctx context.Context) ([]entity.School, error)
+	GetAllActiveSchools(ctx context.Context) ([]entity.School, error)
+	GetInactiveSchools(ctx context.Context) ([]entity.School, error)
+	SetSchoolActive(ctx context.Context, id string, active bool) error
 }
 
 type ProductService interface {
