@@ -158,13 +158,25 @@ func (s *CheckUserStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workf
 	user, _ := s.authService.UserExists("", phone, state.UserID)
 
 	if user != nil && user.Name != "" {
-		// User exists with name, check if we need to update Zoho ID
+		needsUpdate := false
+
+		// Update telegram ID if missing
+		if user.TelegramId == 0 && state.UserID != 0 {
+			user.TelegramId = state.UserID
+			needsUpdate = true
+		}
+
+		// Check if we need to update Zoho ID
 		if user.ZohoId == "" && s.zohoService != nil {
 			zohoId, err := s.zohoService.CreateContact(user)
 			if err == nil && zohoId != "" {
 				user.ZohoId = zohoId
-				s.authService.UpdateUser(user)
+				needsUpdate = true
 			}
+		}
+
+		if needsUpdate {
+			s.authService.UpdateUser(user)
 		}
 
 		// Save info and skip name entry
