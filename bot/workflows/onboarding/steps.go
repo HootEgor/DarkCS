@@ -53,7 +53,9 @@ func (s *HelloStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.
 	if state.DeepLink.IsSchoolDeepLink() {
 		msg = "Привіт! Вітаємо із завершення курсу 🖤\nВпевнені, що твої знання та наш матеріал стануть кроком до ще більших можливостей!\n\nНадайте свій номер телефону у міжнародному форматі, починаючи з <b>+380...</b> 📱"
 	}
-	_, err := b.SendMessage(state.ChatID, msg, nil)
+	_, err := b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
+		ParseMode: "HTML",
+	})
 	if err != nil {
 		return workflow.StepResult{Error: err}
 	}
@@ -193,13 +195,13 @@ func NewRequestNameStep() *RequestNameStep {
 }
 
 func (s *RequestNameStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
+	msg := "Будь ласка, залиште ваші <b>ім’я та прізвище</b> для знайомства 😎"
 	if state.DeepLink.IsSchoolDeepLink() {
-		_, err := b.SendMessage(state.ChatID, "Залишай свої контакти та тримай знижку на перше замовлення! 😎", nil)
-		if err != nil {
-			return workflow.StepResult{Error: err}
-		}
+		msg = "Залишай свої контакти та тримай знижку на перше замовлення! 😎"
 	}
-	_, err := b.SendMessage(state.ChatID, "Будь ласка, залиште ваші <b>ім’я та прізвище</b> для знайомства 😎", nil)
+	_, err := b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
+		ParseMode: "HTML",
+	})
 	if err != nil {
 		return workflow.StepResult{Error: err}
 	}
@@ -379,6 +381,7 @@ func (s *SelectSchoolStep) sendSchoolList(ctx context.Context, b *tgbotapi.Bot, 
 	keyboard := ui.PaginatedList(items, state.Pagination.CurrentPage, state.Pagination.TotalPages)
 
 	_, err = b.SendMessage(state.ChatID, "<b>Розкажи, будь ласка, з якої школи ти дізнався/дізналася про нас 🖤</b>\nОберіть школу:", &tgbotapi.SendMessageOpts{
+		ParseMode:   "HTML",
 		ReplyMarkup: keyboard,
 	})
 	return err
@@ -415,7 +418,10 @@ func (s *SelectSchoolStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, 
 		}
 
 		// Save school selection
-		b.SendMessage(state.ChatID, "Отримай -15% на перше замовлення з промо-кодом <b>DARKSCHOOL</b> 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nP.S. Твоя особиста знижка -7% вже активна, і з часом може стати ще більшою ✨", nil)
+		b.SendMessage(state.ChatID, "Отримай -15% на перше замовлення з промо-кодом <b>DARKSCHOOL</b> 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nP.S. Твоя особиста знижка -7% вже активна, і з часом може стати ще більшою ✨",
+			&tgbotapi.SendMessageOpts{
+				ParseMode: "HTML",
+			})
 
 		return workflow.StepResult{
 			NextStep: StepMainMenu,

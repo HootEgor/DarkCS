@@ -358,6 +358,7 @@ func (s *ServiceRateStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *wor
 	msg := "Як вам сервіс? 🙌\nЗалиште, будь ласка, оцінку — це допоможе нам ставати кращими.\n\n<i> Ваш відгук важливий для нас!</i>"
 
 	_, err = b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
+		ParseMode:   "HTML",
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
@@ -412,7 +413,9 @@ func (s *ServiceRateStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c
 			return workflow.StepResult{NextStep: StepMainMenu}
 		}
 
-		b.SendMessage(state.ChatID, "<b>Ваша оцінка успішно створена! 🎉</b>\n\nДякуємо за ваш відгук!", nil)
+		b.SendMessage(state.ChatID, "<b>Ваша оцінка успішно створена! 🎉</b>\n\nДякуємо за ваш відгук!", &tgbotapi.SendMessageOpts{
+			ParseMode: "HTML",
+		})
 		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
