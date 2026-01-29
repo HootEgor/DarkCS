@@ -165,6 +165,13 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	userID := ctx.EffectiveUser.Id
 	chatID := ctx.EffectiveChat.Id
 
+	user, err := b.authService.GetUser("", "", userID)
+	if err != nil || user == nil || user.Name == "" {
+		// User doesn't exist or incomplete - send update message and start onboarding
+		bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
+		return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
+	}
+
 	// Check if user has active workflow
 	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
 	if err != nil {
@@ -175,12 +182,6 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	if !hasWorkflow {
 		// No active workflow - check if user exists in DB
 		if b.authService != nil {
-			user, err := b.authService.GetUser("", "", userID)
-			if err != nil || user == nil || user.Name == "" {
-				// User doesn't exist or incomplete - send update message and start onboarding
-				bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
-				return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
-			}
 			// User exists - start main menu workflow
 			return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
 		}
@@ -206,6 +207,13 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	userID := ctx.EffectiveUser.Id
 	chatID := ctx.EffectiveChat.Id
 
+	user, err := b.authService.GetUser("", "", userID)
+	if err != nil || user == nil || user.Name == "" {
+		// User doesn't exist or incomplete - send update message and start onboarding
+		bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
+		return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
+	}
+
 	// Check if user has active workflow
 	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
 	if err != nil {
@@ -216,12 +224,6 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	if !hasWorkflow {
 		// No active workflow - check if user exists in DB
 		if b.authService != nil {
-			user, err := b.authService.GetUser("", "", userID)
-			if err != nil || user == nil || user.Name == "" {
-				// User doesn't exist or incomplete - send update message and start onboarding
-				bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
-				return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
-			}
 			// User exists - start main menu workflow
 			return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
 		}
