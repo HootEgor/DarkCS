@@ -54,7 +54,7 @@ func (s *MainMenuStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workfl
 		{BtnAIConsultant, BtnMakeOrder},
 	})
 
-	_, err := b.SendMessage(state.ChatID, "Оберіть опцію:", &tgbotapi.SendMessageOpts{
+	_, err := b.SendMessage(state.ChatID, "Натисніть на потрібний варіант, щоб перейти у бажаний розділ 👇", &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
@@ -93,12 +93,11 @@ func NewMyOfficeStep() *MyOfficeStep {
 
 func (s *MyOfficeStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	keyboard := ui.ReplyKeyboard([][]string{
-		{BtnCurrentOrder},
-		{BtnCompletedOrders},
+		{BtnCurrentOrder, BtnCompletedOrders},
 		{BtnBack},
 	})
 
-	_, err := b.SendMessage(state.ChatID, "Мій кабінет:", &tgbotapi.SendMessageOpts{
+	_, err := b.SendMessage(state.ChatID, "Що саме цікавить?", &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
@@ -356,7 +355,7 @@ func (s *ServiceRateStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *wor
 	state.Set("rating_order_number", latestOrder.ID)
 
 	keyboard := ui.RatingKeyboard()
-	msg := fmt.Sprintf("Оцініть наш сервіс від 1 до 5:\n\nЗамовлення: %s", latestOrder.ID)
+	msg := "Як вам сервіс? 🙌\nЗалиште, будь ласка, оцінку — це допоможе нам ставати кращими.\n\n<i> Ваш відгук важливий для нас!</i>"
 
 	_, err = b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
@@ -413,7 +412,7 @@ func (s *ServiceRateStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c
 			return workflow.StepResult{NextStep: StepMainMenu}
 		}
 
-		b.SendMessage(state.ChatID, fmt.Sprintf("Дякуємо за вашу оцінку: %d!", rating), nil)
+		b.SendMessage(state.ChatID, "<b>Ваша оцінка успішно створена! 🎉</b>\n\nДякуємо за ваш відгук!", nil)
 		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
@@ -446,7 +445,7 @@ func NewAIConsultantStep(authService AuthService, aiService AIService) *AIConsul
 func (s *AIConsultantStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	keyboard := ui.BackButtonKeyboard(BtnBack)
 
-	_, err := b.SendMessage(state.ChatID, "Ви в режимі AI консультанта. Задайте своє питання або натисніть 'Назад' для повернення.", &tgbotapi.SendMessageOpts{
+	_, err := b.SendMessage(state.ChatID, "Привіт! Я — консультант бренду DARK 🖤\nДопоможу з вибором товарів, проконсультую щодо продукції та оформлення замовлення.", &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
@@ -473,8 +472,7 @@ func (s *AIConsultantStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c
 	b.SendChatAction(state.ChatID, "typing", nil)
 
 	// Get AI response
-	systemMsg := "Ви працюєте в режимі Telegram бота як консультант. Відповідайте коротко та по суті."
-	response, err := s.aiService.ComposeResponse(user, systemMsg, text)
+	response, err := s.aiService.ProcessUserRequest(user, text)
 	if err != nil {
 		b.SendMessage(state.ChatID, "Виникла помилка при обробці запиту. Спробуйте ще раз.", nil)
 		return workflow.StepResult{}
@@ -502,7 +500,7 @@ func NewMakeOrderStep(authService AuthService, aiService AIService) *MakeOrderSt
 func (s *MakeOrderStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	keyboard := ui.BackButtonKeyboard(BtnBack)
 
-	_, err := b.SendMessage(state.ChatID, "Ви в режимі замовлення. Опишіть, що ви хочете замовити, або натисніть 'Назад' для повернення.", &tgbotapi.SendMessageOpts{
+	_, err := b.SendMessage(state.ChatID, "Готові оформити замовлення!", &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
@@ -529,8 +527,7 @@ func (s *MakeOrderStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *e
 	b.SendChatAction(state.ChatID, "typing", nil)
 
 	// Get AI response - route to OrderManager
-	systemMsg := "Ви працюєте в режимі Telegram бота як менеджер замовлень. Допоможіть користувачу зробити замовлення."
-	response, err := s.aiService.ComposeResponse(user, systemMsg, text)
+	response, err := s.aiService.ProcessUserRequest(user, text)
 	if err != nil {
 		b.SendMessage(state.ChatID, "Виникла помилка при обробці запиту. Спробуйте ще раз.", nil)
 		return workflow.StepResult{}

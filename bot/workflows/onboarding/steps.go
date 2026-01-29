@@ -49,7 +49,10 @@ func NewHelloStep() *HelloStep {
 }
 
 func (s *HelloStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
-	msg := "👋 Вітаємо!\n\nДля продовження, будь ласка, поділіться своїм номером телефону."
+	msg := "<b>Привіт! 🖤</b>\nДля швидкої перевірки в системі, будь ласка, надайте свій номер телефону у міжнародному форматі, починаючи з <b>+380...</b> 📱"
+	if state.DeepLink.IsSchoolDeepLink() {
+		msg = "Привіт! Вітаємо із завершення курсу 🖤\nВпевнені, що твої знання та наш матеріал стануть кроком до ще більших можливостей!\n\nНадайте свій номер телефону у міжнародному форматі, починаючи з <b>+380...</b> 📱"
+	}
 	_, err := b.SendMessage(state.ChatID, msg, nil)
 	if err != nil {
 		return workflow.StepResult{Error: err}
@@ -190,7 +193,13 @@ func NewRequestNameStep() *RequestNameStep {
 }
 
 func (s *RequestNameStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
-	_, err := b.SendMessage(state.ChatID, "Як вас звати? Введіть ваше ім'я:", nil)
+	if state.DeepLink.IsSchoolDeepLink() {
+		_, err := b.SendMessage(state.ChatID, "Залишай свої контакти та тримай знижку на перше замовлення! 😎", nil)
+		if err != nil {
+			return workflow.StepResult{Error: err}
+		}
+	}
+	_, err := b.SendMessage(state.ChatID, "Будь ласка, залиште ваші <b>ім’я та прізвище</b> для знайомства 😎", nil)
 	if err != nil {
 		return workflow.StepResult{Error: err}
 	}
@@ -369,7 +378,7 @@ func (s *SelectSchoolStep) sendSchoolList(ctx context.Context, b *tgbotapi.Bot, 
 
 	keyboard := ui.PaginatedList(items, state.Pagination.CurrentPage, state.Pagination.TotalPages)
 
-	_, err = b.SendMessage(state.ChatID, "🏫 Оберіть вашу школу:", &tgbotapi.SendMessageOpts{
+	_, err = b.SendMessage(state.ChatID, "<b>Розкажи, будь ласка, з якої школи ти дізнався/дізналася про нас 🖤</b>\nОберіть школу:", &tgbotapi.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
 	return err
@@ -406,7 +415,7 @@ func (s *SelectSchoolStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, 
 		}
 
 		// Save school selection
-		b.SendMessage(state.ChatID, fmt.Sprintf("✅ Ви обрали: %s", school.Name), nil)
+		b.SendMessage(state.ChatID, "Отримай -15% на перше замовлення з промо-кодом <b>DARKSCHOOL</b> 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nP.S. Твоя особиста знижка -7% вже активна, і з часом може стати ще більшою ✨", nil)
 
 		return workflow.StepResult{
 			NextStep: StepMainMenu,
@@ -460,7 +469,7 @@ func NewMainMenuStep() *MainMenuStep {
 
 func (s *MainMenuStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workflow.UserState) workflow.StepResult {
 	name := state.GetString(KeyName)
-	msg := fmt.Sprintf("🎉 Вітаємо, %s!\n\nВи успішно зареєструвалися. Тепер ви можете користуватися нашим ботом.", name)
+	msg := fmt.Sprintf("%s, цей чат-бот для того, щоб зробити нашу взаємодію ще зручнішою!", name)
 
 	_, err := b.SendMessage(state.ChatID, msg, nil)
 	if err != nil {

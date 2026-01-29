@@ -48,6 +48,29 @@ func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	return c.processRequest(msg)
 }
 
+func (c *Core) ProcessUserRequest(user *entity.User, message string) (*entity.AiAnswer, error) {
+	if c.ass == nil {
+		return nil, fmt.Errorf("assistant not initialized")
+	}
+
+	if user.Blocked {
+		return nil, fmt.Errorf("user is blocked")
+	}
+
+	assistants := user.GetAssistants()
+	systemMsg := "Available assistants: "
+	for _, a := range assistants {
+		systemMsg = fmt.Sprintf("%s %s,", systemMsg, a)
+	}
+
+	answer, err := c.ass.ComposeResponse(user, systemMsg, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &answer, nil
+}
+
 func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) {
 	if c.ass == nil {
 		return nil, fmt.Errorf("assistant not initialized")

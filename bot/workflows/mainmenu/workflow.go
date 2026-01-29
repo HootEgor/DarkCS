@@ -30,14 +30,14 @@ const (
 
 // Menu button texts
 const (
-	BtnMyOffice        = "Мій кабінет"
-	BtnServiceRate     = "Оцінка сервісу"
-	BtnOrderStatus     = "Статус замовлення"
-	BtnAIConsultant    = "AI консультант"
-	BtnMakeOrder       = "Зробити замовлення"
-	BtnCurrentOrder    = "Поточне замовлення"
-	BtnCompletedOrders = "Виконані замовлення"
-	BtnBack            = "Назад"
+	BtnMyOffice        = "📦Особистий кабінет"
+	BtnServiceRate     = "⭐Оцінка сервісу"
+	BtnOrderStatus     = "🛒Статус замовлення"
+	BtnAIConsultant    = "👋 AI-консультація"
+	BtnMakeOrder       = "Зробити замовлення😎"
+	BtnCurrentOrder    = "🛍️Поточні замовлення"
+	BtnCompletedOrders = "✅Виконані замовлення"
+	BtnBack            = "↩️Назад"
 )
 
 // AuthService defines the interface for user authentication operations.
@@ -56,7 +56,7 @@ type ZohoService interface {
 
 // AIService defines the interface for AI assistant operations.
 type AIService interface {
-	ComposeResponse(user *entity.User, systemMsg, userMsg string) (entity.AiAnswer, error)
+	ProcessUserRequest(user *entity.User, message string) (*entity.AiAnswer, error)
 }
 
 // MainMenuWorkflow implements the main menu workflow.
