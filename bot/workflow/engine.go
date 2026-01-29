@@ -180,6 +180,17 @@ func (e *WorkflowEngine) processResult(ctx context.Context, b *tgbotapi.Bot, sta
 			slog.Int64("user_id", state.UserID),
 			slog.String("workflow_id", string(state.WorkflowID)),
 		)
+
+		// Check if there's a next workflow to chain to
+		nextWorkflowID := state.GetString("next_workflow")
+		if nextWorkflowID != "" {
+			// Delete current state and start next workflow
+			if err := e.storage.Delete(ctx, state.UserID); err != nil {
+				return err
+			}
+			return e.StartWorkflow(ctx, b, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), state.DeepLink)
+		}
+
 		return e.storage.Delete(ctx, state.UserID)
 	}
 
@@ -226,6 +237,17 @@ func (e *WorkflowEngine) processResult(ctx context.Context, b *tgbotapi.Bot, sta
 				slog.Int64("user_id", state.UserID),
 				slog.String("workflow_id", string(state.WorkflowID)),
 			)
+
+			// Check if there's a next workflow to chain to
+			nextWorkflowID := state.GetString("next_workflow")
+			if nextWorkflowID != "" {
+				// Delete current state and start next workflow
+				if err := e.storage.Delete(ctx, state.UserID); err != nil {
+					return err
+				}
+				return e.StartWorkflow(ctx, b, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), state.DeepLink)
+			}
+
 			return e.storage.Delete(ctx, state.UserID)
 		}
 	}

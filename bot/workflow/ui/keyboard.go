@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	tgbotapi "github.com/PaulSonOfLars/gotgbot/v2"
 )
 
@@ -106,5 +108,53 @@ func MainMenuKeyboard(buttons [][]SelectableItem) tgbotapi.InlineKeyboardMarkup 
 	}
 	return tgbotapi.InlineKeyboardMarkup{
 		InlineKeyboard: rows,
+	}
+}
+
+// ReplyKeyboard creates a reply keyboard from rows of button texts.
+func ReplyKeyboard(rows [][]string) tgbotapi.ReplyKeyboardMarkup {
+	keyboard := make([][]tgbotapi.KeyboardButton, len(rows))
+	for i, row := range rows {
+		keyboard[i] = make([]tgbotapi.KeyboardButton, len(row))
+		for j, text := range row {
+			keyboard[i][j] = tgbotapi.KeyboardButton{Text: text}
+		}
+	}
+	return tgbotapi.ReplyKeyboardMarkup{
+		Keyboard:       keyboard,
+		ResizeKeyboard: true,
+	}
+}
+
+// BackButtonKeyboard creates a reply keyboard with just a back button.
+func BackButtonKeyboard(text string) tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.ReplyKeyboardMarkup{
+		Keyboard: [][]tgbotapi.KeyboardButton{
+			{{Text: text}},
+		},
+		ResizeKeyboard: true,
+	}
+}
+
+// RatingKeyboard creates an inline keyboard with rating buttons 1-5.
+func RatingKeyboard() tgbotapi.InlineKeyboardMarkup {
+	buttons := make([]tgbotapi.InlineKeyboardButton, 5)
+	for i := 1; i <= 5; i++ {
+		buttons[i-1] = tgbotapi.InlineKeyboardButton{
+			Text:         fmt.Sprintf("%d", i),
+			CallbackData: fmt.Sprintf("wf:rate:%d", i),
+		}
+	}
+	return tgbotapi.InlineKeyboardMarkup{
+		InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{buttons},
+	}
+}
+
+// OrderProductsButton creates an inline keyboard with a products button for an order.
+func OrderProductsButton(orderID, text string) tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.InlineKeyboardMarkup{
+		InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{
+			{{Text: text, CallbackData: "wf:products:" + orderID}},
+		},
 	}
 }

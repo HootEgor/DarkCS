@@ -107,3 +107,102 @@ func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) 
 
 	return orders, nil
 }
+
+// GetOrdersDetailed retrieves detailed order information for a user.
+func (s *ZohoService) GetOrdersDetailed(userInfo entity.UserInfo) ([]entity.OrderDetail, error) {
+	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+		err := s.refreshTokenCall()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	contact := userInfo.ToContact()
+
+	contactID, err := s.createContact(*contact)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.getOrdersDetailed(contactID)
+}
+
+// GetOrdersDetailedByZohoId retrieves detailed order information using a stored Zoho contact ID.
+func (s *ZohoService) GetOrdersDetailedByZohoId(zohoId string) ([]entity.OrderDetail, error) {
+	if zohoId == "" {
+		return nil, fmt.Errorf("zoho id is empty")
+	}
+
+	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+		err := s.refreshTokenCall()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return s.getOrdersDetailed(zohoId)
+}
+
+func (s *ZohoService) getOrdersDetailed(contactID string) ([]entity.OrderDetail, error) {
+	// Build URL
+	path := fmt.Sprintf("Contacts/%s/SalesOrders", contactID)
+	fullURL, err := buildURL(s.crmUrl, s.scope, "v7", path)
+	if err != nil {
+		return nil, fmt.Errorf("build url: %w", err)
+	}
+
+	fullURL = fullURL + "?fields=Name,Owner,Subject,Status,Contact_Name,Aa2e053928236368ec7865f3558a58c4f"
+
+	// Create request
+	req, err := http.NewRequest(http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	log := s.log.With(
+		slog.String("url", fullURL),
+		slog.String("method", req.Method),
+	)
+
+	t := time.Now()
+	defer func() {
+		log = log.With(slog.Duration("duration", time.Since(t)))
+		if err != nil {
+			log.Error("get orders detailed", sl.Err(err))
+		} else {
+			log.Debug("get orders detailed")
+		}
+	}()
+
+	// Execute request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
+
+	log.With(slog.String("response", string(bodyBytes))).Debug("get orders detailed response")
+
+	if bodyBytes == nil || len(bodyBytes) == 0 {
+		return nil, nil
+	}
+
+	// Parse response
+	var result struct {
+		Data []entity.OrderDetail `json:"data"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return result.Data, nil
+}

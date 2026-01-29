@@ -15,6 +15,7 @@ type User struct {
 	Address       string          `json:"address" bson:"address" validate:"omitempty"`
 	TelegramId    int64           `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
 	SmartSenderId string          `json:"smart_sender_id" bson:"smart_sender_id" validate:"omitempty"`
+	ZohoId        string          `json:"zoho_id" bson:"zoho_id" validate:"omitempty"`
 	Role          string          `json:"role" bson:"role" validate:"omitempty"`
 	Blocked       bool            `json:"blocked" bson:"blocked" validate:"omitempty"`
 	LastSeen      time.Time       `json:"last_seen" bson:"lastSeen"`

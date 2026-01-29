@@ -81,9 +81,18 @@ type ZohoService interface {
 	// GetOrders retrieves a list of orders for a specific user
 	GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus, error)
 
+	// GetOrdersDetailed retrieves detailed order information for a user
+	GetOrdersDetailed(userInfo entity.UserInfo) ([]entity.OrderDetail, error)
+
+	// GetOrdersDetailedByZohoId retrieves detailed order information using a stored Zoho contact ID
+	GetOrdersDetailedByZohoId(zohoId string) ([]entity.OrderDetail, error)
+
 	GetOrderProducts(orderId string) (string, error)
 
 	CreateContact(user *entity.User) (string, error)
+
+	// CreateRating creates a service rating in Zoho CRM
+	CreateRating(rating entity.ServiceRating) error
 }
 
 type Core struct {

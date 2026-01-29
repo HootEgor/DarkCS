@@ -137,12 +137,14 @@ func (s *ValidatePhoneStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *w
 type CheckUserStep struct {
 	BaseStep
 	authService AuthService
+	zohoService ZohoService
 }
 
-func NewCheckUserStep(authService AuthService) *CheckUserStep {
+func NewCheckUserStep(authService AuthService, zohoService ZohoService) *CheckUserStep {
 	return &CheckUserStep{
 		BaseStep:    BaseStep{id: StepCheckUser},
 		authService: authService,
+		zohoService: zohoService,
 	}
 }
 
@@ -151,7 +153,16 @@ func (s *CheckUserStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workf
 	user, _ := s.authService.UserExists("", phone, state.UserID)
 
 	if user != nil && user.Name != "" {
-		// User exists with name, save info and skip name entry
+		// User exists with name, check if we need to update Zoho ID
+		if user.ZohoId == "" && s.zohoService != nil {
+			zohoId, err := s.zohoService.CreateContact(user)
+			if err == nil && zohoId != "" {
+				user.ZohoId = zohoId
+				s.authService.UpdateUser(user)
+			}
+		}
+
+		// Save info and skip name entry
 		return workflow.StepResult{
 			NextStep: StepProcessDeepCode,
 			UpdateState: map[string]any{
@@ -203,12 +214,14 @@ func (s *RequestNameStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c 
 type ConfirmDataStep struct {
 	BaseStep
 	authService AuthService
+	zohoService ZohoService
 }
 
-func NewConfirmDataStep(authService AuthService) *ConfirmDataStep {
+func NewConfirmDataStep(authService AuthService, zohoService ZohoService) *ConfirmDataStep {
 	return &ConfirmDataStep{
 		BaseStep:    BaseStep{id: StepConfirmData},
 		authService: authService,
+		zohoService: zohoService,
 	}
 }
 
@@ -252,11 +265,24 @@ func (s *ConfirmDataStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c
 			return workflow.StepResult{Error: err}
 		}
 
+		// Check if name or phone changed, or if ZohoId is missing
+		needsZohoUpdate := user.ZohoId == "" || user.Name != name || user.Phone != phone
+
 		// Update name if user already existed
 		if user.Name != name {
 			user.Name = name
-			s.authService.UpdateUser(user)
 		}
+
+		// Create or update Zoho contact if needed
+		if needsZohoUpdate && s.zohoService != nil {
+			zohoId, zohoErr := s.zohoService.CreateContact(user)
+			if zohoErr == nil && zohoId != "" {
+				user.ZohoId = zohoId
+			}
+		}
+
+		// Save user with updated ZohoId
+		s.authService.UpdateUser(user)
 
 		state.Set(KeyUserUUID, user.UUID)
 
@@ -385,7 +411,6 @@ func (s *SelectSchoolStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, 
 		return workflow.StepResult{
 			NextStep: StepMainMenu,
 			UpdateState: map[string]any{
-				KeySchoolID:   school.Name,
 				KeySchoolName: school.Name,
 			},
 		}
@@ -424,7 +449,7 @@ func (s *SelectSchoolStep) updateSchoolList(ctx context.Context, b *tgbotapi.Bot
 	})
 }
 
-// MainMenuStep - Show main menu and complete workflow
+// MainMenuStep - Show main menu and complete workflow, then chain to mainmenu workflow
 type MainMenuStep struct {
 	BaseStep
 }
@@ -441,7 +466,12 @@ func (s *MainMenuStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *workfl
 	if err != nil {
 		return workflow.StepResult{Error: err}
 	}
-	return workflow.StepResult{Complete: true}
+	return workflow.StepResult{
+		Complete: true,
+		UpdateState: map[string]any{
+			"next_workflow": "mainmenu",
+		},
+	}
 }
 
 // Helper functions

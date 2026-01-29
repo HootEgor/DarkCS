@@ -7,6 +7,7 @@ import (
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
 	"DarkCS/bot/workflow"
+	"DarkCS/bot/workflows/mainmenu"
 	"DarkCS/bot/workflows/onboarding"
 	"DarkCS/impl/core"
 	"DarkCS/internal/config"
@@ -68,6 +69,10 @@ func main() {
 			sl.Err(err),
 		).Error("mongo client")
 	}
+	// Variables to hold userBot and workflowEngine for later workflow registration
+	var userBot *bot.UserBot
+	var workflowEngine *workflow.WorkflowEngine
+
 	if db != nil {
 		authService.SetRepository(db)
 		handler.SetRepository(db)
@@ -81,26 +86,16 @@ func main() {
 
 		// Initialize user bot with workflow engine if enabled
 		if conf.UserBot.Enabled {
-			userBot, err := bot.NewUserBot(conf.UserBot.BotName, conf.UserBot.ApiKey, lg)
+			var err error
+			userBot, err = bot.NewUserBot(conf.UserBot.BotName, conf.UserBot.ApiKey, lg)
 			if err != nil {
 				lg.Error("failed to initialize user bot", slog.String("error", err.Error()))
 			} else {
 				stateStorage := workflow.NewMongoStateStorage(db)
-				workflowEngine := workflow.NewWorkflowEngine(stateStorage, lg)
-
-				// Register onboarding workflow
-				onboardingWorkflow := onboarding.NewOnboardingWorkflow(authService, db, lg)
-				workflowEngine.RegisterWorkflow(onboardingWorkflow)
+				workflowEngine = workflow.NewWorkflowEngine(stateStorage, lg)
 
 				userBot.SetWorkflowEngine(workflowEngine)
 				lg.Info("workflow engine initialized for user bot")
-
-				// Start user bot in a goroutine
-				go func() {
-					if err := userBot.Start(); err != nil {
-						lg.Error("user bot error", slog.String("error", err.Error()))
-					}
-				}()
 			}
 		}
 	}
@@ -142,6 +137,24 @@ func main() {
 	smartService := smart_sender.NewSmartSenderService(conf, lg)
 	handler.SetSmartService(smartService)
 	handler.SetZohoService(zohoService)
+
+	// Register workflows and start user bot after all services are initialized
+	if userBot != nil && workflowEngine != nil {
+		// Register onboarding workflow with zoho service for contact creation
+		onboardingWorkflow := onboarding.NewOnboardingWorkflow(authService, zohoService, db, lg)
+		workflowEngine.RegisterWorkflow(onboardingWorkflow)
+
+		// Register mainmenu workflow with all required services
+		mainmenuWorkflow := mainmenu.NewMainMenuWorkflow(authService, zohoService, overseer, lg)
+		workflowEngine.RegisterWorkflow(mainmenuWorkflow)
+
+		// Start user bot in a goroutine
+		go func() {
+			if err := userBot.Start(); err != nil {
+				lg.Error("user bot error", slog.String("error", err.Error()))
+			}
+		}()
+	}
 
 	handler.Init()
 

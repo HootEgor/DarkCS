@@ -29,7 +29,8 @@ type ZohoOrder struct {
 }
 
 type ContactName struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type OrderedItem struct {
@@ -66,6 +67,29 @@ type LineTax struct {
 
 type OrderStatus struct {
 	Status string `json:"Status"`
+}
+
+// OrderDetail contains detailed information about an order.
+type OrderDetail struct {
+	ID          string      `json:"id"`
+	Subject     string      `json:"Subject"`
+	Status      string      `json:"Status"`
+	ContactName ContactName `json:"Contact_Name"`
+	TTN         string      `json:"Aa2e053928236368ec7865f3558a58c4f"`
+}
+
+// ServiceRating represents a service rating to be sent to Zoho CRM.
+type ServiceRating struct {
+	OrderNumber   string `json:"Sales_Orders_raiting"`
+	ContactID     string `json:"Contact_raiting"`
+	ServiceRating int    `json:"Servise_rating"`
+}
+
+// IsActive returns true if the order is in an active status.
+func (o *OrderDetail) IsActive() bool {
+	return o.Status == OrderStatusNew ||
+		o.Status == OrderStatusProcessing ||
+		o.Status == OrderStatusInvoiced
 }
 
 const (

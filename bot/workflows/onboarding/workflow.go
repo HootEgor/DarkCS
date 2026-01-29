@@ -44,6 +44,11 @@ type AuthService interface {
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 }
 
+// ZohoService defines the interface for Zoho CRM operations.
+type ZohoService interface {
+	CreateContact(user *entity.User) (string, error)
+}
+
 // SchoolRepository defines the interface for school operations.
 type SchoolRepository interface {
 	GetSchoolByCode(ctx context.Context, code string) (*entity.School, error)
@@ -55,15 +60,17 @@ type SchoolRepository interface {
 type OnboardingWorkflow struct {
 	steps       map[workflow.StepID]workflow.Step
 	authService AuthService
+	zohoService ZohoService
 	schoolRepo  SchoolRepository
 	log         *slog.Logger
 }
 
 // NewOnboardingWorkflow creates a new onboarding workflow.
-func NewOnboardingWorkflow(authService AuthService, schoolRepo SchoolRepository, log *slog.Logger) *OnboardingWorkflow {
+func NewOnboardingWorkflow(authService AuthService, zohoService ZohoService, schoolRepo SchoolRepository, log *slog.Logger) *OnboardingWorkflow {
 	w := &OnboardingWorkflow{
 		steps:       make(map[workflow.StepID]workflow.Step),
 		authService: authService,
+		zohoService: zohoService,
 		schoolRepo:  schoolRepo,
 		log:         log,
 	}
@@ -104,9 +111,9 @@ func (w *OnboardingWorkflow) registerSteps() {
 	w.steps[StepHello] = NewHelloStep()
 	w.steps[StepRequestPhone] = NewRequestPhoneStep()
 	w.steps[StepValidatePhone] = NewValidatePhoneStep()
-	w.steps[StepCheckUser] = NewCheckUserStep(w.authService)
+	w.steps[StepCheckUser] = NewCheckUserStep(w.authService, w.zohoService)
 	w.steps[StepRequestName] = NewRequestNameStep()
-	w.steps[StepConfirmData] = NewConfirmDataStep(w.authService)
+	w.steps[StepConfirmData] = NewConfirmDataStep(w.authService, w.zohoService)
 	w.steps[StepProcessDeepCode] = NewProcessDeepCodeStep()
 	w.steps[StepSelectSchool] = NewSelectSchoolStep(w.schoolRepo)
 	w.steps[StepMainMenu] = NewMainMenuStep()

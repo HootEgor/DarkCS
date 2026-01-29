@@ -16,6 +16,9 @@ const (
 	ActionSelect   = "select"
 	ActionMenu     = "menu"
 	ActionNoop     = "noop"
+	ActionRate     = "rate"
+	ActionProducts = "products"
+	ActionBack     = "back"
 )
 
 // CallbackData represents parsed callback data.
@@ -124,4 +127,39 @@ func (c *CallbackData) MenuID() string {
 		return ""
 	}
 	return c.Value
+}
+
+// IsRate checks if the callback is a "rate" action.
+func (c *CallbackData) IsRate() bool {
+	return c.Action == ActionRate
+}
+
+// RatingValue returns the rating value for rate callbacks.
+func (c *CallbackData) RatingValue() int {
+	if c.Action != ActionRate {
+		return 0
+	}
+	n, err := strconv.Atoi(c.Value)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// IsProducts checks if the callback is a "products" action.
+func (c *CallbackData) IsProducts() bool {
+	return c.Action == ActionProducts
+}
+
+// ProductsOrderID returns the order ID for products callbacks.
+func (c *CallbackData) ProductsOrderID() string {
+	if c.Action != ActionProducts {
+		return ""
+	}
+	return c.Value
+}
+
+// IsBack checks if the callback is a "back" action.
+func (c *CallbackData) IsBack() bool {
+	return c.Action == ActionBack
 }
