@@ -60,6 +60,16 @@ func (s *Service) RegisterUser(name, email, phone string, telegramId int64) (*en
 			return nil, err
 		}
 		s.users = append(s.users, *user)
+	} else {
+		// Update telegram ID if provided and missing/different
+		if telegramId != 0 && user.TelegramId != telegramId {
+			user.TelegramId = telegramId
+			err := s.repository.UpsertUser(*user)
+			if err != nil {
+				return nil, err
+			}
+			s.updateUser(*user)
+		}
 	}
 
 	return user, nil

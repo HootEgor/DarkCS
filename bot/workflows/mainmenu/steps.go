@@ -144,9 +144,6 @@ func (s *CurrentOrderStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *wo
 		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
-	//log user info
-	return workflow.StepResult{Error: fmt.Errorf("user info: %v", user)}
-
 	// Get orders using stored ZohoId if available
 	var orders []entity.OrderDetail
 	if user.ZohoId != "" {
