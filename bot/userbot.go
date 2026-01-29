@@ -165,6 +165,26 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	userID := ctx.EffectiveUser.Id
 	chatID := ctx.EffectiveChat.Id
 
+	// Check if user has active workflow first
+	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
+	if err != nil {
+		b.log.Error("check active workflow error", sl.Err(err))
+		return err
+	}
+
+	if hasWorkflow {
+		// User has active workflow - handle contact through it
+		err = b.workflowEngine.HandleContact(context.Background(), bot, ctx)
+		if err != nil {
+			b.log.Error("workflow contact error",
+				slog.Int64("user_id", userID),
+				sl.Err(err),
+			)
+		}
+		return err
+	}
+
+	// No active workflow - check if user exists and has completed registration
 	user, err := b.authService.GetUser("", "", userID)
 	if err != nil || user == nil || user.Name == "" {
 		// User doesn't exist or incomplete - send update message and start onboarding
@@ -172,30 +192,8 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 		return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
 	}
 
-	// Check if user has active workflow
-	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
-	if err != nil {
-		b.log.Error("check active workflow error", sl.Err(err))
-		return err
-	}
-
-	if !hasWorkflow {
-		// No active workflow - check if user exists in DB
-		if b.authService != nil {
-			// User exists - start main menu workflow
-			return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
-		}
-		return nil
-	}
-
-	err = b.workflowEngine.HandleContact(context.Background(), bot, ctx)
-	if err != nil {
-		b.log.Error("workflow contact error",
-			slog.Int64("user_id", userID),
-			sl.Err(err),
-		)
-	}
-	return err
+	// User exists with complete profile - start main menu workflow
+	return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
 }
 
 // handleMessage handles text messages for workflows.
@@ -207,6 +205,26 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	userID := ctx.EffectiveUser.Id
 	chatID := ctx.EffectiveChat.Id
 
+	// Check if user has active workflow first
+	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
+	if err != nil {
+		b.log.Error("check active workflow error", sl.Err(err))
+		return err
+	}
+
+	if hasWorkflow {
+		// User has active workflow - handle message through it
+		err = b.workflowEngine.HandleMessage(context.Background(), bot, ctx)
+		if err != nil {
+			b.log.Error("workflow message error",
+				slog.Int64("user_id", userID),
+				sl.Err(err),
+			)
+		}
+		return err
+	}
+
+	// No active workflow - check if user exists and has completed registration
 	user, err := b.authService.GetUser("", "", userID)
 	if err != nil || user == nil || user.Name == "" {
 		// User doesn't exist or incomplete - send update message and start onboarding
@@ -214,28 +232,6 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 		return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
 	}
 
-	// Check if user has active workflow
-	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
-	if err != nil {
-		b.log.Error("check active workflow error", sl.Err(err))
-		return err
-	}
-
-	if !hasWorkflow {
-		// No active workflow - check if user exists in DB
-		if b.authService != nil {
-			// User exists - start main menu workflow
-			return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
-		}
-		return nil
-	}
-
-	err = b.workflowEngine.HandleMessage(context.Background(), bot, ctx)
-	if err != nil {
-		b.log.Error("workflow message error",
-			slog.Int64("user_id", userID),
-			sl.Err(err),
-		)
-	}
-	return err
+	// User exists with complete profile - start main menu workflow
+	return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
 }
