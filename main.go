@@ -146,7 +146,7 @@ func main() {
 		workflowEngine.RegisterWorkflow(onboardingWorkflow)
 
 		// Register mainmenu workflow with all required services
-		mainmenuWorkflow := mainmenu.NewMainMenuWorkflow(authService, zohoService, overseer, lg)
+		mainmenuWorkflow := mainmenu.NewMainMenuWorkflow(authService, zohoService, handler, lg)
 		workflowEngine.RegisterWorkflow(mainmenuWorkflow)
 
 		// Start user bot in a goroutine
