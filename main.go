@@ -95,6 +95,7 @@ func main() {
 				workflowEngine = workflow.NewWorkflowEngine(stateStorage, lg)
 
 				userBot.SetWorkflowEngine(workflowEngine)
+				userBot.SetAuthService(authService)
 				lg.Info("workflow engine initialized for user bot")
 			}
 		}

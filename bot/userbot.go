@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"DarkCS/bot/workflow"
+	"DarkCS/bot/workflows/mainmenu"
 	"DarkCS/bot/workflows/onboarding"
+	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 
 	tgbotapi "github.com/PaulSonOfLars/gotgbot/v2"
@@ -17,12 +19,18 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/message"
 )
 
+// AuthService defines the interface for user authentication operations.
+type AuthService interface {
+	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+}
+
 // UserBot is the Telegram bot for general users with workflow support.
 type UserBot struct {
 	log            *slog.Logger
 	api            *tgbotapi.Bot
 	botUsername    string
 	workflowEngine workflow.Engine
+	authService    AuthService
 }
 
 // NewUserBot creates a new user bot instance.
@@ -44,6 +52,11 @@ func NewUserBot(botName, apiKey string, log *slog.Logger) (*UserBot, error) {
 // SetWorkflowEngine sets the workflow engine for the bot.
 func (b *UserBot) SetWorkflowEngine(engine workflow.Engine) {
 	b.workflowEngine = engine
+}
+
+// SetAuthService sets the auth service for the bot.
+func (b *UserBot) SetAuthService(authService AuthService) {
+	b.authService = authService
 }
 
 // Start begins polling for updates and handling them.
@@ -150,6 +163,7 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	userID := ctx.EffectiveUser.Id
+	chatID := ctx.EffectiveChat.Id
 
 	// Check if user has active workflow
 	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
@@ -159,6 +173,17 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	if !hasWorkflow {
+		// No active workflow - check if user exists in DB
+		if b.authService != nil {
+			user, err := b.authService.GetUser("", "", userID)
+			if err != nil || user == nil || user.Name == "" {
+				// User doesn't exist or incomplete - send update message and start onboarding
+				bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
+				return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
+			}
+			// User exists - start main menu workflow
+			return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
+		}
 		return nil
 	}
 
@@ -179,6 +204,7 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	userID := ctx.EffectiveUser.Id
+	chatID := ctx.EffectiveChat.Id
 
 	// Check if user has active workflow
 	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
@@ -188,6 +214,17 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	if !hasWorkflow {
+		// No active workflow - check if user exists in DB
+		if b.authService != nil {
+			user, err := b.authService.GetUser("", "", userID)
+			if err != nil || user == nil || user.Name == "" {
+				// User doesn't exist or incomplete - send update message and start onboarding
+				bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
+				return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
+			}
+			// User exists - start main menu workflow
+			return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
+		}
 		return nil
 	}
 
