@@ -564,7 +564,7 @@ func formatOrderMessageNumbered(order *entity.OrderDetail, customerName string, 
 	}
 
 	if order.TTN != "" {
-		msg += fmt.Sprintf("\n<b>ТТН:</b> <a href=\"https://novaposhta.ua/tracking/%s\">%s</a>", order.TTN, order.TTN)
+		msg += fmt.Sprintf("\n<b>ТТН:</b><a href=\"https://novaposhta.ua/tracking/%s\">%s</a>", order.TTN, order.TTN)
 	}
 
 	return msg
