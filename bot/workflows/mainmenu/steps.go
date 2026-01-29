@@ -157,33 +157,31 @@ func (s *CurrentOrderStep) Enter(ctx context.Context, b *tgbotapi.Bot, state *wo
 		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
-	// Filter active orders
-	var activeOrders []entity.OrderDetail
+	// Find first active order
+	var activeOrder *entity.OrderDetail
 	for _, order := range orders {
 		if order.IsActive() {
-			activeOrders = append(activeOrders, order)
+			activeOrder = &order
+			break
 		}
 	}
 
-	if len(activeOrders) == 0 {
+	if activeOrder == nil {
 		b.SendMessage(state.ChatID, "У вас немає активних замовлень.", nil)
 		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
-	// Send each active order
-	for _, order := range activeOrders {
-		msg := fmt.Sprintf("Замовлення: %s\nСтатус: %s", order.ID, order.Status)
-		if order.Subject != "" {
-			msg = fmt.Sprintf("Замовлення: %s\n%s\nСтатус: %s", order.ID, order.Subject, order.Status)
-		}
+	// Format order message
+	msg := formatOrderMessage(activeOrder, user.Name)
 
-		keyboard := ui.OrderProductsButton(order.ID, "Товари")
-		b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
-			ReplyMarkup: keyboard,
-		})
-	}
+	keyboard := ui.OrderProductsButton(activeOrder.ID, "Товари")
+	b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
+		ParseMode:   "HTML",
+		ReplyMarkup: keyboard,
+	})
 
-	return workflow.StepResult{NextStep: StepMainMenu}
+	// Stay in this step to handle callback
+	return workflow.StepResult{}
 }
 
 func (s *CurrentOrderStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
@@ -199,13 +197,22 @@ func (s *CurrentOrderStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, 
 		products, err := s.zohoService.GetOrderProducts(orderID)
 		if err != nil {
 			b.SendMessage(state.ChatID, "Не вдалося отримати товари замовлення.", nil)
-			return workflow.StepResult{}
+			return workflow.StepResult{NextStep: StepMainMenu}
 		}
 
 		b.SendMessage(state.ChatID, products, nil)
+		return workflow.StepResult{NextStep: StepMainMenu}
 	}
 
-	return workflow.StepResult{}
+	return workflow.StepResult{NextStep: StepMainMenu}
+}
+
+func (s *CurrentOrderStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
+	text := strings.TrimSpace(c.EffectiveMessage.Text)
+	if text == BtnBack {
+		return workflow.StepResult{NextStep: StepMainMenu}
+	}
+	return workflow.StepResult{NextStep: StepMainMenu}
 }
 
 // CompletedOrdersStep - Show last 3 completed orders
@@ -261,20 +268,19 @@ func (s *CompletedOrdersStep) Enter(ctx context.Context, b *tgbotapi.Bot, state 
 		completedOrders = completedOrders[:3]
 	}
 
-	// Send each completed order
-	for _, order := range completedOrders {
-		msg := fmt.Sprintf("Замовлення: %s\nСтатус: %s", order.ID, order.Status)
-		if order.Subject != "" {
-			msg = fmt.Sprintf("Замовлення: %s\n%s\nСтатус: %s", order.ID, order.Subject, order.Status)
-		}
+	// Send each completed order with formatted message
+	for i, order := range completedOrders {
+		msg := formatOrderMessageNumbered(&order, user.Name, i+1)
 
 		keyboard := ui.OrderProductsButton(order.ID, "Товари")
 		b.SendMessage(state.ChatID, msg, &tgbotapi.SendMessageOpts{
+			ParseMode:   "HTML",
 			ReplyMarkup: keyboard,
 		})
 	}
 
-	return workflow.StepResult{NextStep: StepMyOffice}
+	// Stay in this step to handle callbacks
+	return workflow.StepResult{}
 }
 
 func (s *CompletedOrdersStep) HandleCallback(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState, data string) workflow.StepResult {
@@ -290,13 +296,22 @@ func (s *CompletedOrdersStep) HandleCallback(ctx context.Context, b *tgbotapi.Bo
 		products, err := s.zohoService.GetOrderProducts(orderID)
 		if err != nil {
 			b.SendMessage(state.ChatID, "Не вдалося отримати товари замовлення.", nil)
-			return workflow.StepResult{}
+			return workflow.StepResult{NextStep: StepMyOffice}
 		}
 
 		b.SendMessage(state.ChatID, products, nil)
+		return workflow.StepResult{NextStep: StepMyOffice}
 	}
 
-	return workflow.StepResult{}
+	return workflow.StepResult{NextStep: StepMyOffice}
+}
+
+func (s *CompletedOrdersStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *ext.Context, state *workflow.UserState) workflow.StepResult {
+	text := strings.TrimSpace(c.EffectiveMessage.Text)
+	if text == BtnBack {
+		return workflow.StepResult{NextStep: StepMyOffice}
+	}
+	return workflow.StepResult{NextStep: StepMyOffice}
 }
 
 // ServiceRateStep - Rating 1-5 inline keyboard
@@ -523,4 +538,34 @@ func (s *MakeOrderStep) HandleMessage(ctx context.Context, b *tgbotapi.Bot, c *e
 
 	b.SendMessage(state.ChatID, response.Text, nil)
 	return workflow.StepResult{}
+}
+
+// formatOrderMessage formats an order for display without number prefix (HTML format).
+func formatOrderMessage(order *entity.OrderDetail, customerName string) string {
+	msg := fmt.Sprintf("<b>Замовник:</b> %s\n<b>Статус:</b> %s", customerName, order.Status)
+
+	if order.Subject != "" {
+		msg += fmt.Sprintf("\n<b>Номер замовлення:</b> %s", order.Subject)
+	}
+
+	if order.TTN != "" {
+		msg += fmt.Sprintf("\n<b>ТТН:</b> %s (https://novaposhta.ua/tracking/%s)", order.TTN, order.TTN)
+	}
+
+	return msg
+}
+
+// formatOrderMessageNumbered formats an order for display with order number prefix (HTML format).
+func formatOrderMessageNumbered(order *entity.OrderDetail, customerName string, orderNum int) string {
+	msg := fmt.Sprintf("<b>Замовлення №%d</b>\n\n<b>Замовник:</b> %s\n<b>Статус:</b> %s", orderNum, customerName, order.Status)
+
+	if order.Subject != "" {
+		msg += fmt.Sprintf("\n<b>Номер замовлення:</b> %s", order.Subject)
+	}
+
+	if order.TTN != "" {
+		msg += fmt.Sprintf("\n<b>ТТН:</b> %s (https://novaposhta.ua/tracking/%s)", order.TTN, order.TTN)
+	}
+
+	return msg
 }
