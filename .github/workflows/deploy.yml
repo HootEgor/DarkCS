@@ -66,6 +66,9 @@ jobs:
           ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
           ZOHO_REFRESH_URL: ${{ vars.ZOHO_REFRESH_URL }}
           ZOHO_CRM_URL: ${{ vars.ZOHO_CRM_URL }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_VERIFY_TOKEN: ${{ secrets.INSTAGRAM_VERIFY_TOKEN }}
+          INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
 
       - name: Copy Configuration to Server
         uses: appleboy/scp-action@master
