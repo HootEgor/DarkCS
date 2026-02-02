@@ -14,7 +14,7 @@ import (
 	"DarkCS/internal/lib/sl"
 )
 
-const graphAPIURL = "https://graph.instagram.com/v21.0/me/messages"
+const graphAPIURL = "https://graph.instagram.com/v24.0/me/messages"
 
 // InstaBot handles Instagram messaging via the Graph API
 type InstaBot struct {
@@ -95,6 +95,8 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	b.log.Debug("webhook payload", slog.String("body", string(body)))
 
 	// Verify signature if app secret is configured
 	if b.appSecret != "" {
