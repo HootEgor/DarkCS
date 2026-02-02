@@ -39,6 +39,9 @@ jobs:
           sed -i 's|${ZOHO_REFRESH_TOKEN}|'"$ZOHO_REFRESH_TOKEN"'|g' darkcs-conf.yml
           sed -i 's|${ZOHO_REFRESH_URL}|'"$ZOHO_REFRESH_URL"'|g' darkcs-conf.yml
           sed -i 's|${ZOHO_CRM_URL}|'"$ZOHO_CRM_URL"'|g' darkcs-conf.yml
+          sed -i 's|${INSTAGRAM_ACCESS_TOKEN}|'"$INSTAGRAM_ACCESS_TOKEN"'|g' darkcs-conf.yml
+          sed -i 's|${INSTAGRAM_VERIFY_TOKEN}|'"$INSTAGRAM_VERIFY_TOKEN"'|g' darkcs-conf.yml
+          sed -i 's|${INSTAGRAM_APP_SECRET}|'"$INSTAGRAM_APP_SECRET"'|g' darkcs-conf.yml
         env:
           TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
           USERBOT_API_KEY: ${{ secrets.USERBOT_API_KEY }}

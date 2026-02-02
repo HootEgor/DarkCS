@@ -1,9 +1,20 @@
 package api
 
 import (
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/render"
+
+	"DarkCS/bot/insta"
 	"DarkCS/internal/config"
 	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/errors"
+	"DarkCS/internal/http-server/handlers/instagram"
 	"DarkCS/internal/http-server/handlers/key"
 	"DarkCS/internal/http-server/handlers/mcp"
 	"DarkCS/internal/http-server/handlers/product"
@@ -18,19 +29,23 @@ import (
 	"DarkCS/internal/http-server/middleware/authenticate"
 	"DarkCS/internal/http-server/middleware/timeout"
 	"DarkCS/internal/lib/sl"
-	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/render"
-	"log/slog"
-	"net"
-	"net/http"
 )
 
 type Server struct {
 	conf       *config.Config
 	httpServer *http.Server
 	log        *slog.Logger
+	instaBot   *insta.InstaBot
+}
+
+// Option is a functional option for configuring the server
+type Option func(*Server)
+
+// WithInstaBot sets the Instagram bot for the server
+func WithInstaBot(bot *insta.InstaBot) Option {
+	return func(s *Server) {
+		s.instaBot = bot
+	}
 }
 
 type Handler interface {
@@ -49,11 +64,15 @@ type Handler interface {
 	school.Core
 }
 
-func New(conf *config.Config, log *slog.Logger, handler Handler) error {
+func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option) error {
 
 	server := Server{
 		conf: conf,
 		log:  log.With(sl.Module("api.server")),
+	}
+
+	for _, opt := range opts {
+		opt(&server)
 	}
 
 	router := chi.NewRouter()
@@ -61,12 +80,21 @@ func New(conf *config.Config, log *slog.Logger, handler Handler) error {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
 	router.Use(render.SetContentType(render.ContentTypeJSON))
-	router.Use(authenticate.New(log, handler))
 
 	router.NotFound(errors.NotFound(log))
 	router.MethodNotAllowed(errors.NotAllowed(log))
 
+	// Instagram webhook routes (no auth required for Meta verification)
+	if server.instaBot != nil {
+		router.Route("/instagram", func(r chi.Router) {
+			r.Get("/webhook", instagram.WebhookVerify(log, server.instaBot))
+			r.Post("/webhook", instagram.WebhookHandler(log, server.instaBot))
+		})
+	}
+
+	// Authenticated routes
 	router.Route("/api/v1", func(v1 chi.Router) {
+		v1.Use(authenticate.New(log, handler))
 		v1.Route("/products", func(r chi.Router) {
 			r.Post("/info", product.ProductsInfo(log, handler))
 		})

@@ -64,6 +64,12 @@ type Config struct {
 		Scope        string `yaml:"scope" env-default:""`
 		ApiVersion   string `yaml:"api_version" env-default:""`
 	} `yaml:"zoho"`
+	Instagram struct {
+		Enabled     bool   `yaml:"enabled" env-default:"false"`
+		AccessToken string `yaml:"access_token" env-default:""`
+		VerifyToken string `yaml:"verify_token" env-default:""`
+		AppSecret   string `yaml:"app_secret" env-default:""`
+	} `yaml:"instagram"`
 }
 
 var instance *Config

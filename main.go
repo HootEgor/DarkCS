@@ -6,6 +6,7 @@ import (
 
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
+	"DarkCS/bot/insta"
 	"DarkCS/bot/workflow"
 	"DarkCS/bot/workflows/mainmenu"
 	"DarkCS/bot/workflows/onboarding"
@@ -159,8 +160,24 @@ func main() {
 
 	handler.Init()
 
+	// Initialize Instagram bot if enabled
+	var instaBot *insta.InstaBot
+	if conf.Instagram.Enabled {
+		instaBot = insta.NewInstaBot(
+			conf.Instagram.AccessToken,
+			conf.Instagram.VerifyToken,
+			conf.Instagram.AppSecret,
+			lg,
+		)
+		lg.Info("instagram bot initialized")
+	}
+
 	// *** blocking start with http server ***
-	err = api.New(conf, lg, handler)
+	var apiOpts []api.Option
+	if instaBot != nil {
+		apiOpts = append(apiOpts, api.WithInstaBot(instaBot))
+	}
+	err = api.New(conf, lg, handler, apiOpts...)
 	if err != nil {
 		lg.Error("server start", sl.Err(err))
 		return

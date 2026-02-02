@@ -49,3 +49,8 @@ zoho:
   crm_url: ${ZOHO_CRM_URL}
   scope: crm
   api_version: v6
+instagram:
+  enabled: true
+  access_token: ${INSTAGRAM_ACCESS_TOKEN}
+  verify_token: ${INSTAGRAM_VERIFY_TOKEN}
+  app_secret: ${INSTAGRAM_APP_SECRET}
