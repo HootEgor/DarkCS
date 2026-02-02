@@ -72,6 +72,13 @@ func (b *InstaBot) HandleWebhookVerification(w http.ResponseWriter, r *http.Requ
 	token := r.URL.Query().Get("hub.verify_token")
 	challenge := r.URL.Query().Get("hub.challenge")
 
+	b.log.Debug("verification attempt",
+		slog.String("mode", mode),
+		slog.String("received_token", token),
+		slog.String("expected_token", b.verifyToken),
+		slog.Bool("has_challenge", challenge != ""),
+	)
+
 	if mode == "subscribe" && token == b.verifyToken {
 		b.log.Info("webhook verified successfully")
 		w.WriteHeader(http.StatusOK)
@@ -79,7 +86,10 @@ func (b *InstaBot) HandleWebhookVerification(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	b.log.Warn("webhook verification failed", slog.String("mode", mode))
+	b.log.Warn("webhook verification failed",
+		slog.String("mode", mode),
+		slog.Bool("token_match", token == b.verifyToken),
+	)
 	http.Error(w, "Forbidden", http.StatusForbidden)
 }
 
