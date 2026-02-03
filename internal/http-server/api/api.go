@@ -86,9 +86,9 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 
 	// Instagram webhook routes (no auth required for Meta verification)
 	if server.instaBot != nil {
-		router.Route("/instagram", func(r chi.Router) {
-			r.Get("/webhook", instagram.WebhookVerify(log, server.instaBot))
-			r.Post("/webhook", instagram.WebhookHandler(log, server.instaBot))
+		router.Route("/webhook", func(r chi.Router) {
+			r.Get("/instagram", instagram.WebhookVerify(log, server.instaBot))
+			r.Post("/instagram", instagram.WebhookHandler(log, server.instaBot))
 		})
 	}
 
