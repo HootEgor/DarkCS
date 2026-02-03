@@ -73,7 +73,7 @@ func (b *InstaBot) HandleWebhookVerification(w http.ResponseWriter, r *http.Requ
 	challenge := r.URL.Query().Get("hub.challenge")
 
 	if mode == "subscribe" && token == b.verifyToken {
-		b.log.Info("webhook verified successfully")
+		b.log.Info("webhook verified")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(challenge))
 		return
