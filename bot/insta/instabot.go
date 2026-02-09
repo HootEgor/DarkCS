@@ -97,27 +97,31 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	// Always respond with 200 OK to acknowledge receipt (Meta requires quick response)
+	w.WriteHeader(http.StatusOK)
+
 	// Verify signature if app secret is configured
+	sigValid := true
 	if b.appSecret != "" {
 		signature := r.Header.Get("X-Hub-Signature-256")
 		if !b.verifySignature(body, signature) {
 			b.log.With(
 				slog.String("body", string(body)),
 			).Warn("invalid webhook signature")
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
+			sigValid = false
 		}
 	}
 
 	var payload WebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
 		b.log.Error("failed to parse webhook payload", sl.Err(err))
-		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
-	// Always respond with 200 OK to acknowledge receipt
-	w.WriteHeader(http.StatusOK)
+	// Only process messages with valid signatures
+	if !sigValid {
+		return
+	}
 
 	// Process messages asynchronously
 	go b.processPayload(payload)
