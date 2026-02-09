@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/render"
 
 	"DarkCS/bot/insta"
+	"DarkCS/bot/whatsapp"
 	"DarkCS/internal/config"
 	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/errors"
@@ -19,12 +20,13 @@ import (
 	"DarkCS/internal/http-server/handlers/mcp"
 	"DarkCS/internal/http-server/handlers/product"
 	"DarkCS/internal/http-server/handlers/promo"
-	qr_stat "DarkCS/internal/http-server/handlers/qr-stat"
+	"DarkCS/internal/http-server/handlers/qr-stat"
 	"DarkCS/internal/http-server/handlers/response"
 	"DarkCS/internal/http-server/handlers/school"
 	"DarkCS/internal/http-server/handlers/service"
 	"DarkCS/internal/http-server/handlers/smart"
 	"DarkCS/internal/http-server/handlers/user"
+	wa "DarkCS/internal/http-server/handlers/whatsapp"
 	"DarkCS/internal/http-server/handlers/zoho"
 	"DarkCS/internal/http-server/middleware/authenticate"
 	"DarkCS/internal/http-server/middleware/timeout"
@@ -32,10 +34,11 @@ import (
 )
 
 type Server struct {
-	conf       *config.Config
-	httpServer *http.Server
-	log        *slog.Logger
-	instaBot   *insta.InstaBot
+	conf        *config.Config
+	httpServer  *http.Server
+	log         *slog.Logger
+	instaBot    *insta.InstaBot
+	whatsappBot *whatsapp.WhatsAppBot
 }
 
 // Option is a functional option for configuring the server
@@ -45,6 +48,13 @@ type Option func(*Server)
 func WithInstaBot(bot *insta.InstaBot) Option {
 	return func(s *Server) {
 		s.instaBot = bot
+	}
+}
+
+// WithWhatsAppBot sets the WhatsApp bot for the server
+func WithWhatsAppBot(bot *whatsapp.WhatsAppBot) Option {
+	return func(s *Server) {
+		s.whatsappBot = bot
 	}
 }
 
@@ -84,13 +94,17 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	router.NotFound(errors.NotFound(log))
 	router.MethodNotAllowed(errors.NotAllowed(log))
 
-	// Instagram webhook routes (no auth required for Meta verification)
-	if server.instaBot != nil {
-		router.Route("/webhook", func(r chi.Router) {
+	// Webhook routes (no auth required for Meta verification)
+	router.Route("/webhook", func(r chi.Router) {
+		if server.instaBot != nil {
 			r.Get("/instagram", instagram.WebhookVerify(log, server.instaBot))
 			r.Post("/instagram", instagram.WebhookHandler(log, server.instaBot))
-		})
-	}
+		}
+		if server.whatsappBot != nil {
+			r.Get("/whatsapp", wa.WebhookVerify(log, server.whatsappBot))
+			r.Post("/whatsapp", wa.WebhookHandler(log, server.whatsappBot))
+		}
+	})
 
 	// Authenticated routes
 	router.Route("/api/v1", func(v1 chi.Router) {

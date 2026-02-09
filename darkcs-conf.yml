@@ -54,3 +54,9 @@ instagram:
   access_token: ${INSTAGRAM_ACCESS_TOKEN}
   verify_token: ${INSTAGRAM_VERIFY_TOKEN}
   app_secret: ${INSTAGRAM_APP_SECRET}
+whatsapp:
+  enabled: false
+  access_token: ${WHATSAPP_ACCESS_TOKEN}
+  verify_token: ${WHATSAPP_VERIFY_TOKEN}
+  app_secret: ${WHATSAPP_APP_SECRET}
+  phone_number_id: ${WHATSAPP_PHONE_NUMBER_ID}

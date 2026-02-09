@@ -7,6 +7,7 @@ import (
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
 	"DarkCS/bot/insta"
+	"DarkCS/bot/whatsapp"
 	"DarkCS/bot/workflow"
 	"DarkCS/bot/workflows/mainmenu"
 	"DarkCS/bot/workflows/onboarding"
@@ -18,7 +19,7 @@ import (
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/service/auth"
 	"DarkCS/internal/service/product"
-	smart_sender "DarkCS/internal/service/smart-sender"
+	"DarkCS/internal/service/smart-sender"
 	services "DarkCS/internal/service/zoho"
 )
 
@@ -172,10 +173,26 @@ func main() {
 		lg.Info("instagram bot initialized")
 	}
 
+	// Initialize WhatsApp bot if enabled
+	var whatsappBot *whatsapp.WhatsAppBot
+	if conf.WhatsApp.Enabled {
+		whatsappBot = whatsapp.NewWhatsAppBot(
+			conf.WhatsApp.AccessToken,
+			conf.WhatsApp.VerifyToken,
+			conf.WhatsApp.AppSecret,
+			conf.WhatsApp.PhoneNumberID,
+			lg,
+		)
+		lg.Info("whatsapp bot initialized")
+	}
+
 	// *** blocking start with http server ***
 	var apiOpts []api.Option
 	if instaBot != nil {
 		apiOpts = append(apiOpts, api.WithInstaBot(instaBot))
+	}
+	if whatsappBot != nil {
+		apiOpts = append(apiOpts, api.WithWhatsAppBot(whatsappBot))
 	}
 	err = api.New(conf, lg, handler, apiOpts...)
 	if err != nil {

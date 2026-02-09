@@ -28,3 +28,14 @@ prod-service:
   login: chatbot
   password: pass
   base_url: repository-url
+instagram:
+  enabled: false
+  access_token: your-instagram-access-token
+  verify_token: your-instagram-verify-token
+  app_secret: your-instagram-app-secret
+whatsapp:
+  enabled: false
+  access_token: your-whatsapp-access-token
+  verify_token: your-whatsapp-verify-token
+  app_secret: your-whatsapp-app-secret
+  phone_number_id: your-whatsapp-phone-number-id

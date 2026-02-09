@@ -42,6 +42,10 @@ jobs:
           sed -i 's|${INSTAGRAM_ACCESS_TOKEN}|'"$INSTAGRAM_ACCESS_TOKEN"'|g' darkcs-conf.yml
           sed -i 's|${INSTAGRAM_VERIFY_TOKEN}|'"$INSTAGRAM_VERIFY_TOKEN"'|g' darkcs-conf.yml
           sed -i 's|${INSTAGRAM_APP_SECRET}|'"$INSTAGRAM_APP_SECRET"'|g' darkcs-conf.yml
+#          sed -i 's|${WHATSAPP_ACCESS_TOKEN}|'"$WHATSAPP_ACCESS_TOKEN"'|g' darkcs-conf.yml
+#          sed -i 's|${WHATSAPP_VERIFY_TOKEN}|'"$WHATSAPP_VERIFY_TOKEN"'|g' darkcs-conf.yml
+#          sed -i 's|${WHATSAPP_APP_SECRET}|'"$WHATSAPP_APP_SECRET"'|g' darkcs-conf.yml
+#          sed -i 's|${WHATSAPP_PHONE_NUMBER_ID}|'"$WHATSAPP_PHONE_NUMBER_ID"'|g' darkcs-conf.yml
         env:
           TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
           USERBOT_API_KEY: ${{ secrets.USERBOT_API_KEY }}
@@ -69,6 +73,10 @@ jobs:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           INSTAGRAM_VERIFY_TOKEN: ${{ secrets.INSTAGRAM_VERIFY_TOKEN }}
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
+#          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+#          WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+#          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
+#          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
 
       - name: Copy Configuration to Server
         uses: appleboy/scp-action@master

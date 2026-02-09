@@ -70,6 +70,13 @@ type Config struct {
 		VerifyToken string `yaml:"verify_token" env-default:""`
 		AppSecret   string `yaml:"app_secret" env-default:""`
 	} `yaml:"instagram"`
+	WhatsApp struct {
+		Enabled       bool   `yaml:"enabled" env-default:"false"`
+		AccessToken   string `yaml:"access_token" env-default:""`
+		VerifyToken   string `yaml:"verify_token" env-default:""`
+		AppSecret     string `yaml:"app_secret" env-default:""`
+		PhoneNumberID string `yaml:"phone_number_id" env-default:""`
+	} `yaml:"whatsapp"`
 }
 
 var instance *Config
