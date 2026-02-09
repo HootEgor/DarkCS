@@ -97,13 +97,13 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	b.log.Debug("webhook payload", slog.String("body", string(body)))
-
 	// Verify signature if app secret is configured
 	if b.appSecret != "" {
 		signature := r.Header.Get("X-Hub-Signature-256")
 		if !b.verifySignature(body, signature) {
-			b.log.Warn("invalid webhook signature")
+			b.log.With(
+				slog.String("body", string(body)),
+			).Warn("invalid webhook signature")
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -135,10 +135,10 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 				senderID := messaging.Sender.ID
 				text := messaging.Message.Text
 
-				b.log.Info("received message",
-					slog.String("sender_id", senderID),
-					slog.String("text", text),
-				)
+				//b.log.Info("received message",
+				//	slog.String("sender_id", senderID),
+				//	slog.String("text", text),
+				//)
 
 				// Echo the message back
 				echoText := fmt.Sprintf("Echo: %s", text)
@@ -182,6 +182,8 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 
 // verifySignature verifies the X-Hub-Signature-256 header
 func (b *InstaBot) verifySignature(body []byte, signature string) bool {
+	b.log.Debug("verifying webhook signature", slog.String("signature", signature))
+
 	if signature == "" {
 		return false
 	}

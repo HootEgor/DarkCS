@@ -19,7 +19,7 @@ func WebhookVerify(log *slog.Logger, bot *insta.InstaBot) http.HandlerFunc {
 // WebhookHandler handles POST requests for incoming messages
 func WebhookHandler(log *slog.Logger, bot *insta.InstaBot) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.With(sl.Module("instagram.webhook")).Debug("webhook message received")
+		//log.With(sl.Module("instagram.webhook")).Debug("webhook message received")
 		bot.HandleWebhook(w, r)
 	}
 }
