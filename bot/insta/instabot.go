@@ -39,8 +39,9 @@ type WebhookPayload struct {
 			} `json:"recipient"`
 			Timestamp int64 `json:"timestamp"`
 			Message   *struct {
-				Mid  string `json:"mid"`
-				Text string `json:"text"`
+				Mid    string `json:"mid"`
+				Text   string `json:"text"`
+				IsEcho bool   `json:"is_echo,omitempty"`
 			} `json:"message,omitempty"`
 		} `json:"messaging"`
 	} `json:"entry"`
@@ -102,13 +103,7 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	if b.appSecret != "" {
 		signature := r.Header.Get("X-Hub-Signature-256")
 		if !b.verifySignature(body, signature) {
-			mac := hmac.New(sha256.New, []byte(b.appSecret))
-			mac.Write(body)
-			computed := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-			b.log.Warn("invalid webhook signature",
-				slog.String("received", signature),
-				slog.String("computed", computed),
-			)
+			b.log.Warn("invalid webhook signature")
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -136,7 +131,7 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 
 	for _, entry := range payload.Entry {
 		for _, messaging := range entry.Messaging {
-			if messaging.Message != nil && messaging.Message.Text != "" {
+			if messaging.Message != nil && messaging.Message.Text != "" && !messaging.Message.IsEcho {
 				senderID := messaging.Sender.ID
 				text := messaging.Message.Text
 
