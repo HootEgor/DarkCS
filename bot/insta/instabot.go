@@ -102,7 +102,13 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	if b.appSecret != "" {
 		signature := r.Header.Get("X-Hub-Signature-256")
 		if !b.verifySignature(body, signature) {
-			b.log.Warn("invalid webhook signature")
+			mac := hmac.New(sha256.New, []byte(b.appSecret))
+			mac.Write(body)
+			computed := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+			b.log.Warn("invalid webhook signature",
+				slog.String("received", signature),
+				slog.String("computed", computed),
+			)
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
