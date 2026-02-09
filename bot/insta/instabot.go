@@ -186,8 +186,6 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 
 // verifySignature verifies the X-Hub-Signature-256 header
 func (b *InstaBot) verifySignature(body []byte, signature string) bool {
-	b.log.Debug("verifying webhook signature", slog.String("signature", signature))
-
 	if signature == "" {
 		return false
 	}
