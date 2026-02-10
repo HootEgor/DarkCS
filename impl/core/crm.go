@@ -4,12 +4,58 @@ import (
 	"DarkCS/entity"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
-// GetActiveChats returns the list of active chats from MongoDB.
+// GetActiveChats returns the list of active chats from MongoDB, enriched with user names.
 func (c *Core) GetActiveChats() ([]entity.ChatSummary, error) {
-	return c.repo.GetActiveChats()
+	summaries, err := c.repo.GetActiveChats()
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range summaries {
+		user := c.lookupUserByPlatform(summaries[i].Platform, summaries[i].UserID)
+		if user != nil {
+			summaries[i].UserName = user.Name
+			switch summaries[i].Platform {
+			case "telegram":
+				summaries[i].MessengerName = user.TelegramUsername
+			case "instagram":
+				summaries[i].MessengerName = user.InstagramUsername
+			}
+		}
+	}
+
+	return summaries, nil
+}
+
+// lookupUserByPlatform finds a user by their platform-specific ID.
+func (c *Core) lookupUserByPlatform(platform, userID string) *entity.User {
+	if c.authService == nil {
+		return nil
+	}
+
+	var user *entity.User
+	var err error
+
+	switch platform {
+	case "telegram":
+		telegramId, _ := strconv.ParseInt(userID, 10, 64)
+		if telegramId != 0 {
+			user, err = c.authService.GetUser("", "", telegramId)
+		}
+	case "instagram":
+		user, err = c.authService.GetUserByInstagramId(userID)
+	case "whatsapp":
+		user, err = c.authService.GetUser("", userID, 0)
+	}
+
+	if err != nil || user == nil {
+		return nil
+	}
+	return user
 }
 
 // GetChatMessages returns paginated message history from MongoDB.
@@ -54,6 +100,41 @@ func (c *Core) SendCrmMessage(platform, userID, text string) error {
 	}
 
 	return nil
+}
+
+// UpdateUserPlatformInfo saves a platform-specific username for the user.
+func (c *Core) UpdateUserPlatformInfo(platform, userID, messengerName string) {
+	if c.authService == nil || messengerName == "" {
+		return
+	}
+
+	user := c.lookupUserByPlatform(platform, userID)
+	if user == nil {
+		return
+	}
+
+	switch platform {
+	case "telegram":
+		if user.TelegramUsername == messengerName {
+			return
+		}
+		user.TelegramUsername = messengerName
+	case "instagram":
+		if user.InstagramUsername == messengerName {
+			return
+		}
+		user.InstagramUsername = messengerName
+	default:
+		return
+	}
+
+	if err := c.authService.UpdateUser(user); err != nil {
+		c.log.Error("failed to update platform username",
+			slog.String("platform", platform),
+			slog.String("user_id", userID),
+			slog.String("error", err.Error()),
+		)
+	}
 }
 
 // SaveAndBroadcastChatMessage saves a chat message and broadcasts it via WebSocket.

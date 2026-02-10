@@ -189,6 +189,11 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 			Text:      text,
 			CreatedAt: time.Now(),
 		})
+
+		// Save Telegram @username
+		if username := ctx.EffectiveUser.Username; username != "" {
+			listener.UpdateUserPlatformInfo("telegram", userID, "@"+username)
+		}
 	}
 
 	err := b.chatEngine.HandleMessage(context.Background(), messenger, "telegram", userID, chatID, text)

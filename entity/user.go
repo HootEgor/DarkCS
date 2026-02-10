@@ -8,20 +8,22 @@ import (
 )
 
 type User struct {
-	UUID          string          `json:"uuid" bson:"uuid"`
-	Name          string          `json:"name" bson:"name" validate:"omitempty"`
-	Email         string          `json:"email" bson:"email" validate:"omitempty,email"`
-	Phone         string          `json:"phone" bson:"phone" validate:"omitempty"`
-	Address       string          `json:"address" bson:"address" validate:"omitempty"`
-	TelegramId    int64           `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
-	InstagramId   string          `json:"instagram_id" bson:"instagram_id" validate:"omitempty"`
-	SmartSenderId string          `json:"smart_sender_id" bson:"smart_sender_id" validate:"omitempty"`
-	ZohoId        string          `json:"zoho_id" bson:"zoho_id" validate:"omitempty"`
-	Role          string          `json:"role" bson:"role" validate:"omitempty"`
-	Blocked       bool            `json:"blocked" bson:"blocked" validate:"omitempty"`
-	LastSeen      time.Time       `json:"last_seen" bson:"lastSeen"`
-	PromoExpire   time.Time       `json:"promo_expire" bson:"promoExpire" validate:"omitempty"`
-	Conversation  []DialogMessage `json:"conversation" bson:"conversation" validate:"omitempty"`
+	UUID              string          `json:"uuid" bson:"uuid"`
+	Name              string          `json:"name" bson:"name" validate:"omitempty"`
+	Email             string          `json:"email" bson:"email" validate:"omitempty,email"`
+	Phone             string          `json:"phone" bson:"phone" validate:"omitempty"`
+	Address           string          `json:"address" bson:"address" validate:"omitempty"`
+	TelegramId        int64           `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
+	TelegramUsername  string          `json:"telegram_username" bson:"telegram_username" validate:"omitempty"`
+	InstagramId       string          `json:"instagram_id" bson:"instagram_id" validate:"omitempty"`
+	InstagramUsername string          `json:"instagram_username" bson:"instagram_username" validate:"omitempty"`
+	SmartSenderId     string          `json:"smart_sender_id" bson:"smart_sender_id" validate:"omitempty"`
+	ZohoId            string          `json:"zoho_id" bson:"zoho_id" validate:"omitempty"`
+	Role              string          `json:"role" bson:"role" validate:"omitempty"`
+	Blocked           bool            `json:"blocked" bson:"blocked" validate:"omitempty"`
+	LastSeen          time.Time       `json:"last_seen" bson:"lastSeen"`
+	PromoExpire       time.Time       `json:"promo_expire" bson:"promoExpire" validate:"omitempty"`
+	Conversation      []DialogMessage `json:"conversation" bson:"conversation" validate:"omitempty"`
 }
 
 type DialogMessage struct {

@@ -7,4 +7,6 @@ import "DarkCS/entity"
 // without creating circular imports between bot packages and core.
 type MessageListener interface {
 	SaveAndBroadcastChatMessage(msg entity.ChatMessage)
+	// UpdateUserPlatformInfo saves a platform-specific username (e.g. @username) for the user.
+	UpdateUserPlatformInfo(platform, userID, messengerName string)
 }

@@ -162,6 +162,11 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 							Text:      text,
 							CreatedAt: time.Now(),
 						})
+
+						// Fetch and save Instagram @username
+						if username, err := b.GetUserUsername(senderID); err == nil && username != "" {
+							listener.UpdateUserPlatformInfo("instagram", senderID, "@"+username)
+						}
 					}
 				}
 
@@ -215,6 +220,29 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 
 	b.log.Info("message sent successfully", slog.String("recipient_id", recipientID))
 	return nil
+}
+
+// GetUserUsername fetches the Instagram username for a given user ID via Graph API.
+func (b *InstaBot) GetUserUsername(userID string) (string, error) {
+	url := fmt.Sprintf("https://graph.instagram.com/v24.0/%s?fields=username&access_token=%s", userID, b.accessToken)
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch user profile: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API error (status %d)", resp.StatusCode)
+	}
+
+	var result struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result.Username, nil
 }
 
 // verifySignature verifies the X-Hub-Signature-256 header

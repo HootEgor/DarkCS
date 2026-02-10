@@ -20,10 +20,11 @@ type ChatMessage struct {
 
 // ChatSummary represents a chat summary for the CRM chat list.
 type ChatSummary struct {
-	Platform    string    `json:"platform" bson:"platform"`
-	UserID      string    `json:"user_id" bson:"user_id"`
-	UserName    string    `json:"user_name" bson:"user_name"`
-	LastMessage string    `json:"last_message" bson:"last_message"`
-	LastTime    time.Time `json:"last_time" bson:"last_time"`
-	Unread      int       `json:"unread" bson:"unread"`
+	Platform      string    `json:"platform" bson:"platform"`
+	UserID        string    `json:"user_id" bson:"user_id"`
+	UserName      string    `json:"user_name" bson:"user_name"`
+	MessengerName string    `json:"messenger_name" bson:"messenger_name"`
+	LastMessage   string    `json:"last_message" bson:"last_message"`
+	LastTime      time.Time `json:"last_time" bson:"last_time"`
+	Unread        int       `json:"unread" bson:"unread"`
 }
