@@ -173,12 +173,39 @@ func (s *CurrentOrderStep) Enter(ctx context.Context, m chat.Messenger, state *c
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
+	state.Set("current_order_id", activeOrder.ID)
+
 	msg := formatOrderMessage(activeOrder, user.Name, state.Platform)
-	_ = m.SendText(state.ChatID, msg)
-	return chat.StepResult{NextStep: StepMainMenu}
+	buttons := []chat.InlineButton{
+		{Text: "📋 Товари", Data: "products:" + activeOrder.ID},
+	}
+	_ = m.SendInlineOptions(state.ChatID, msg, buttons)
+	return chat.StepResult{}
 }
 
 func (s *CurrentOrderStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	data := input.CallbackData
+	if data == "" {
+		orderID := state.GetString("current_order_id")
+		if orderID != "" {
+			buttons := []chat.InlineButton{
+				{Text: "📋 Товари", Data: "products:" + orderID},
+			}
+			data = chat.MatchNumberToInline(input.Text, buttons)
+		}
+	}
+
+	if strings.HasPrefix(data, "products:") {
+		orderID := strings.TrimPrefix(data, "products:")
+		products, err := s.zohoService.GetOrderProducts(orderID)
+		if err != nil {
+			_ = m.SendText(state.ChatID, "Не вдалося отримати товари.")
+		} else {
+			_ = m.SendText(state.ChatID, products)
+		}
+		return chat.StepResult{NextStep: StepMainMenu}
+	}
+
 	return chat.StepResult{NextStep: StepMainMenu}
 }
 
@@ -229,10 +256,49 @@ func (s *CompletedOrdersStep) Enter(ctx context.Context, m chat.Messenger, state
 		_ = m.SendText(state.ChatID, msg)
 	}
 
-	return chat.StepResult{NextStep: StepMyOffice}
+	buttons := make([]chat.InlineButton, len(completedOrders))
+	orderIDs := make([]string, len(completedOrders))
+	for i, order := range completedOrders {
+		buttons[i] = chat.InlineButton{
+			Text: fmt.Sprintf("📋 Товари №%d", i+1),
+			Data: "products:" + order.ID,
+		}
+		orderIDs[i] = order.ID
+	}
+	state.Set("completed_order_ids", strings.Join(orderIDs, ","))
+
+	_ = m.SendInlineOptions(state.ChatID, "Оберіть замовлення для перегляду товарів:", buttons)
+	return chat.StepResult{}
 }
 
 func (s *CompletedOrdersStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	data := input.CallbackData
+	if data == "" {
+		orderIDsStr := state.GetString("completed_order_ids")
+		if orderIDsStr != "" {
+			orderIDs := strings.Split(orderIDsStr, ",")
+			buttons := make([]chat.InlineButton, len(orderIDs))
+			for i, id := range orderIDs {
+				buttons[i] = chat.InlineButton{
+					Text: fmt.Sprintf("📋 Товари №%d", i+1),
+					Data: "products:" + id,
+				}
+			}
+			data = chat.MatchNumberToInline(input.Text, buttons)
+		}
+	}
+
+	if strings.HasPrefix(data, "products:") {
+		orderID := strings.TrimPrefix(data, "products:")
+		products, err := s.zohoService.GetOrderProducts(orderID)
+		if err != nil {
+			_ = m.SendText(state.ChatID, "Не вдалося отримати товари.")
+		} else {
+			_ = m.SendText(state.ChatID, products)
+		}
+		return chat.StepResult{NextStep: StepMyOffice}
+	}
+
 	return chat.StepResult{NextStep: StepMyOffice}
 }
 
