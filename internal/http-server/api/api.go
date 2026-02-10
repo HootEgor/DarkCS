@@ -102,6 +102,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	router.Use(timeout.Timeout(5))
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
+	router.Use(corsMiddleware)
 	router.Use(render.SetContentType(render.ContentTypeJSON))
 
 	router.NotFound(errors.NotFound(log))
@@ -198,4 +199,19 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	server.log.Info("starting api server", slog.String("address", serverAddress))
 
 	return server.httpServer.Serve(listener)
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
