@@ -7,8 +7,11 @@ import (
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
 	"DarkCS/bot/chat"
+	igmessenger "DarkCS/bot/chat/instagram"
 	chatmainmenu "DarkCS/bot/chat/mainmenu"
 	chatonboarding "DarkCS/bot/chat/onboarding"
+	tgmessenger "DarkCS/bot/chat/telegram"
+	wamessenger "DarkCS/bot/chat/whatsapp"
 	"DarkCS/bot/insta"
 	"DarkCS/bot/whatsapp"
 	"DarkCS/impl/core"
@@ -21,6 +24,7 @@ import (
 	"DarkCS/internal/service/product"
 	"DarkCS/internal/service/smart-sender"
 	services "DarkCS/internal/service/zoho"
+	"DarkCS/internal/ws"
 )
 
 func main() {
@@ -134,6 +138,11 @@ func main() {
 	handler.SetSmartService(smartService)
 	handler.SetZohoService(zohoService)
 
+	// Create WebSocket hub for CRM
+	wsHub := ws.NewHub()
+	go wsHub.Run()
+	handler.SetWsHub(wsHub)
+
 	handler.Init()
 
 	// Initialize unified ChatEngine shared by all platforms (Telegram, Instagram, WhatsApp)
@@ -149,12 +158,16 @@ func main() {
 		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, lg)
 		chatEngine.RegisterWorkflow(chatMainMenu)
 
+		// Wire message listener for CRM
+		chatEngine.SetMessageListener(handler)
+
 		lg.Info("chat engine initialized")
 	}
 
 	// Wire ChatEngine into user bot and start
 	if userBot != nil && chatEngine != nil {
 		userBot.SetChatEngine(chatEngine)
+		handler.SetPlatformMessenger("telegram", tgmessenger.NewMessenger(userBot.GetAPI()))
 		go func() {
 			if err := userBot.Start(); err != nil {
 				lg.Error("user bot error", slog.String("error", err.Error()))
@@ -174,6 +187,7 @@ func main() {
 		if chatEngine != nil {
 			instaBot.SetChatEngine(chatEngine)
 		}
+		handler.SetPlatformMessenger("instagram", igmessenger.NewMessenger(instaBot))
 		lg.Info("instagram bot initialized")
 	}
 
@@ -190,6 +204,7 @@ func main() {
 		if chatEngine != nil {
 			whatsappBot.SetChatEngine(chatEngine)
 		}
+		handler.SetPlatformMessenger("whatsapp", wamessenger.NewMessenger(whatsappBot))
 		lg.Info("whatsapp bot initialized")
 	}
 
@@ -201,6 +216,7 @@ func main() {
 	if whatsappBot != nil {
 		apiOpts = append(apiOpts, api.WithWhatsAppBot(whatsappBot))
 	}
+	apiOpts = append(apiOpts, api.WithWsHub(wsHub, handler))
 	err = api.New(conf, lg, handler, apiOpts...)
 	if err != nil {
 		lg.Error("server start", sl.Err(err))

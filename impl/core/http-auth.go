@@ -5,6 +5,15 @@ import (
 	"fmt"
 )
 
+// ValidateToken validates a token and returns the username (used by WebSocket auth).
+func (c *Core) ValidateToken(token string) (string, error) {
+	user, err := c.AuthenticateByToken(token)
+	if err != nil {
+		return "", err
+	}
+	return user.Username, nil
+}
+
 func (c *Core) AuthenticateByToken(token string) (*entity.UserAuth, error) {
 	if token == "" {
 		return nil, fmt.Errorf("token not provided")

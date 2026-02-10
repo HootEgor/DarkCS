@@ -1,8 +1,10 @@
 package core
 
 import (
+	"DarkCS/bot/chat"
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
+	"DarkCS/internal/ws"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -13,6 +15,12 @@ type Repository interface {
 	CheckApiKey(key string) (string, error)
 	SaveMessage(message entity.Message) error
 	GenerateApiKey(username string) (string, error)
+
+	SaveChatMessage(msg entity.ChatMessage) error
+	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
+	GetActiveChats() ([]entity.ChatSummary, error)
+	CleanupChatMessages() error
+	EnsureChatMessageIndexes() error
 
 	UpsertAssistant(assistant *entity.Assistant) (*entity.Assistant, error)
 	GetAssistant(name string) (*entity.Assistant, error)
@@ -107,12 +115,15 @@ type Core struct {
 	authKey      string
 	keys         map[string]string
 	log          *slog.Logger
+	wsHub        *ws.Hub
+	messengers   map[string]chat.Messenger
 }
 
 func New(log *slog.Logger) *Core {
 	return &Core{
-		log:  log.With(sl.Module("core")),
-		keys: make(map[string]string),
+		log:        log.With(sl.Module("core")),
+		keys:       make(map[string]string),
+		messengers: make(map[string]chat.Messenger),
 	}
 }
 
@@ -148,6 +159,14 @@ func (c *Core) SetZohoService(zoho ZohoService) {
 	c.zoho = zoho
 }
 
+func (c *Core) SetWsHub(hub *ws.Hub) {
+	c.wsHub = hub
+}
+
+func (c *Core) SetPlatformMessenger(platform string, m chat.Messenger) {
+	c.messengers[platform] = m
+}
+
 func (c *Core) Init() {
 	go func() {
 		for {
@@ -166,6 +185,31 @@ func (c *Core) Init() {
 			_ = c.AttachNewFile()
 		}
 	}()
+
+	// Chat message cleanup scheduler — runs daily at 03:00
+	go func() {
+		for {
+			now := time.Now()
+			nextRun := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
+			if now.After(nextRun) {
+				nextRun = nextRun.Add(24 * time.Hour)
+			}
+			c.log.With(
+				slog.Time("nextRun", nextRun),
+			).Info("next chat message cleanup")
+
+			time.Sleep(time.Until(nextRun))
+
+			if err := c.repo.CleanupChatMessages(); err != nil {
+				c.log.Error("chat message cleanup failed", slog.String("error", err.Error()))
+			}
+		}
+	}()
+
+	// Ensure chat message indexes
+	if err := c.repo.EnsureChatMessageIndexes(); err != nil {
+		c.log.Error("failed to ensure chat message indexes", slog.String("error", err.Error()))
+	}
 }
 
 func (c *Core) SendMail(message *entity.MailMessage) (interface{}, error) {

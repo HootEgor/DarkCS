@@ -11,9 +11,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"DarkCS/bot/chat"
 	wamessenger "DarkCS/bot/chat/whatsapp"
+	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -162,6 +164,21 @@ func (b *WhatsAppBot) processPayload(payload WebhookPayload) {
 				if message.Type == "text" && message.Text != nil && message.Text.Body != "" {
 					senderPhone := message.From
 					text := message.Text.Body
+
+					// Save incoming message for CRM
+					if b.chatEngine != nil {
+						if listener := b.chatEngine.GetMessageListener(); listener != nil {
+							listener.SaveAndBroadcastChatMessage(entity.ChatMessage{
+								Platform:  "whatsapp",
+								UserID:    senderPhone,
+								ChatID:    senderPhone,
+								Direction: "incoming",
+								Sender:    "user",
+								Text:      text,
+								CreatedAt: time.Now(),
+							})
+						}
+					}
 
 					// Delegate to ChatEngine if available
 					if b.chatEngine != nil {

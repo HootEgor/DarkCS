@@ -15,13 +15,14 @@ import (
 )
 
 const (
-	usersCollection      = "users"
-	basketCollection     = "baskets"
-	messagesCollection   = "messages"
-	apiKeysCollection    = "api-keys"
-	promoCodesCollection = "promo-codes"
-	assistantCollection  = "assistant"
-	qrStatCollection     = "qr-stat"
+	usersCollection        = "users"
+	basketCollection       = "baskets"
+	messagesCollection     = "messages"
+	apiKeysCollection      = "api-keys"
+	promoCodesCollection   = "promo-codes"
+	assistantCollection    = "assistant"
+	qrStatCollection       = "qr-stat"
+	chatMessagesCollection = "chat-messages"
 )
 
 type MongoDB struct {

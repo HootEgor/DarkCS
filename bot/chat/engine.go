@@ -9,9 +9,10 @@ import (
 
 // ChatEngine is the platform-agnostic workflow orchestrator.
 type ChatEngine struct {
-	workflows map[WorkflowID]Workflow
-	storage   ChatStateStorage
-	log       *slog.Logger
+	workflows       map[WorkflowID]Workflow
+	storage         ChatStateStorage
+	log             *slog.Logger
+	messageListener MessageListener
 }
 
 // NewChatEngine creates a new chat engine.
@@ -21,6 +22,16 @@ func NewChatEngine(storage ChatStateStorage, log *slog.Logger) *ChatEngine {
 		storage:   storage,
 		log:       log,
 	}
+}
+
+// SetMessageListener sets the listener for incoming messages.
+func (e *ChatEngine) SetMessageListener(l MessageListener) {
+	e.messageListener = l
+}
+
+// GetMessageListener returns the message listener (may be nil).
+func (e *ChatEngine) GetMessageListener() MessageListener {
+	return e.messageListener
 }
 
 // RegisterWorkflow adds a workflow to the engine.

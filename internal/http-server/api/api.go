@@ -14,6 +14,7 @@ import (
 	"DarkCS/bot/whatsapp"
 	"DarkCS/internal/config"
 	"DarkCS/internal/http-server/handlers/assistant"
+	"DarkCS/internal/http-server/handlers/crm"
 	"DarkCS/internal/http-server/handlers/errors"
 	"DarkCS/internal/http-server/handlers/instagram"
 	"DarkCS/internal/http-server/handlers/key"
@@ -31,6 +32,7 @@ import (
 	"DarkCS/internal/http-server/middleware/authenticate"
 	"DarkCS/internal/http-server/middleware/timeout"
 	"DarkCS/internal/lib/sl"
+	"DarkCS/internal/ws"
 )
 
 type Server struct {
@@ -39,6 +41,8 @@ type Server struct {
 	log         *slog.Logger
 	instaBot    *insta.InstaBot
 	whatsappBot *whatsapp.WhatsAppBot
+	wsHub       *ws.Hub
+	wsAuth      ws.Authenticator
 }
 
 // Option is a functional option for configuring the server
@@ -58,6 +62,14 @@ func WithWhatsAppBot(bot *whatsapp.WhatsAppBot) Option {
 	}
 }
 
+// WithWsHub sets the WebSocket hub and authenticator for the server
+func WithWsHub(hub *ws.Hub, auth ws.Authenticator) Option {
+	return func(s *Server) {
+		s.wsHub = hub
+		s.wsAuth = auth
+	}
+}
+
 type Handler interface {
 	authenticate.Authenticate
 	service.Service
@@ -72,6 +84,7 @@ type Handler interface {
 	qr_stat.Core
 	mcp.Core
 	school.Core
+	crm.Core
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option) error {
@@ -106,53 +119,68 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 		}
 	})
 
-	// Authenticated routes
+	// API v1 routes
 	router.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(authenticate.New(log, handler))
-		v1.Route("/products", func(r chi.Router) {
-			r.Post("/info", product.ProductsInfo(log, handler))
+		// WebSocket endpoint (handles its own auth via query param, no middleware)
+		if server.wsHub != nil && server.wsAuth != nil {
+			v1.Get("/crm/ws", func(w http.ResponseWriter, r *http.Request) {
+				ws.ServeWs(server.wsHub, server.wsAuth, log, w, r)
+			})
+		}
+
+		// Authenticated routes
+		v1.Group(func(auth chi.Router) {
+			auth.Use(authenticate.New(log, handler))
+			auth.Route("/products", func(r chi.Router) {
+				r.Post("/info", product.ProductsInfo(log, handler))
+			})
+			auth.Route("/response", func(r chi.Router) {
+				r.Post("/", response.ComposeResponse(log, handler))
+			})
+			auth.Route("/user", func(r chi.Router) {
+				r.Get("/", user.GetUser(log, handler))
+				r.Post("/create", user.CreateUser(log, handler))
+				r.Post("/block", user.BlockUser(log, handler))
+				r.Post("/promo", user.GetUserPromoAccess(log, handler))
+				r.Post("/activate", user.ActivateUserPromo(log, handler))
+				r.Post("/close", user.CloseUserPromo(log, handler))
+				r.Post("/phone", user.CheckPhone(log, handler))
+				r.Get("/reset_conv", user.ResetConversation(log, handler))
+			})
+			auth.Route("/assistant", func(r chi.Router) {
+				r.Get("/attach", assistant.AttachFile(log, handler))
+				r.Post("/update", assistant.Update(log, handler))
+				r.Get("/all", assistant.GetAllAssistants(log, handler))
+			})
+			auth.Route("/zoho", func(r chi.Router) {
+				r.Post("/order_products", zoho.GetOrderProducts(log, handler))
+			})
+			auth.Route("/promo", func(r chi.Router) {
+				r.Get("/get", promo.GetActivePromoCodes(log, handler))
+				r.Post("/generate", promo.GeneratePromoCodes(log, handler))
+			})
+			auth.Route("/smart", func(r chi.Router) {
+				r.Post("/send", smart.SendMsg(log, handler))
+			})
+			auth.Route("/key", func(r chi.Router) {
+				r.Post("/new", key.Generate(log, handler))
+			})
+			auth.Route("/qr", func(r chi.Router) {
+				r.Post("/follow", qr_stat.FollowQr(log, handler))
+				r.Post("/stat", qr_stat.GetStat(log, handler))
+			})
+			auth.Route("/school", func(r chi.Router) {
+				r.Post("/add", school.AddSchools(log, handler))
+				r.Get("/list", school.ListSchools(log, handler))
+				r.Post("/status", school.SetStatus(log, handler))
+			})
+			auth.Post("/mcp", mcp.Handler(log, handler))
+			auth.Route("/crm", func(r chi.Router) {
+				r.Get("/chats", crm.GetChats(log, handler))
+				r.Get("/chats/{platform}/{user_id}/messages", crm.GetMessages(log, handler))
+				r.Post("/chats/{platform}/{user_id}/send", crm.SendMessage(log, handler))
+			})
 		})
-		v1.Route("/response", func(r chi.Router) {
-			r.Post("/", response.ComposeResponse(log, handler))
-		})
-		v1.Route("/user", func(r chi.Router) {
-			r.Get("/", user.GetUser(log, handler))
-			r.Post("/create", user.CreateUser(log, handler))
-			r.Post("/block", user.BlockUser(log, handler))
-			r.Post("/promo", user.GetUserPromoAccess(log, handler))
-			r.Post("/activate", user.ActivateUserPromo(log, handler))
-			r.Post("/close", user.CloseUserPromo(log, handler))
-			r.Post("/phone", user.CheckPhone(log, handler))
-			r.Get("/reset_conv", user.ResetConversation(log, handler))
-		})
-		v1.Route("/assistant", func(r chi.Router) {
-			r.Get("/attach", assistant.AttachFile(log, handler))
-			r.Post("/update", assistant.Update(log, handler))
-			r.Get("/all", assistant.GetAllAssistants(log, handler))
-		})
-		v1.Route("/zoho", func(r chi.Router) {
-			r.Post("/order_products", zoho.GetOrderProducts(log, handler))
-		})
-		v1.Route("/promo", func(r chi.Router) {
-			r.Get("/get", promo.GetActivePromoCodes(log, handler))
-			r.Post("/generate", promo.GeneratePromoCodes(log, handler))
-		})
-		v1.Route("/smart", func(r chi.Router) {
-			r.Post("/send", smart.SendMsg(log, handler))
-		})
-		v1.Route("/key", func(r chi.Router) {
-			r.Post("/new", key.Generate(log, handler))
-		})
-		v1.Route("/qr", func(r chi.Router) {
-			r.Post("/follow", qr_stat.FollowQr(log, handler))
-			r.Post("/stat", qr_stat.GetStat(log, handler))
-		})
-		v1.Route("/school", func(r chi.Router) {
-			r.Post("/add", school.AddSchools(log, handler))
-			r.Get("/list", school.ListSchools(log, handler))
-			r.Post("/status", school.SetStatus(log, handler))
-		})
-		v1.Post("/mcp", mcp.Handler(log, handler))
 	})
 
 	httpLog := slog.NewLogLogger(log.Handler(), slog.LevelError)

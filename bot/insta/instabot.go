@@ -11,9 +11,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"DarkCS/bot/chat"
 	igmessenger "DarkCS/bot/chat/instagram"
+	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -147,6 +149,21 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 			if messaging.Message != nil && messaging.Message.Text != "" && !messaging.Message.IsEcho {
 				senderID := messaging.Sender.ID
 				text := messaging.Message.Text
+
+				// Save incoming message for CRM
+				if b.chatEngine != nil {
+					if listener := b.chatEngine.GetMessageListener(); listener != nil {
+						listener.SaveAndBroadcastChatMessage(entity.ChatMessage{
+							Platform:  "instagram",
+							UserID:    senderID,
+							ChatID:    senderID,
+							Direction: "incoming",
+							Sender:    "user",
+							Text:      text,
+							CreatedAt: time.Now(),
+						})
+					}
+				}
 
 				// Delegate to ChatEngine if available
 				if b.chatEngine != nil {

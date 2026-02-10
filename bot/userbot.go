@@ -10,6 +10,7 @@ import (
 
 	"DarkCS/bot/chat"
 	tgmessenger "DarkCS/bot/chat/telegram"
+	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 
 	tgbotapi "github.com/PaulSonOfLars/gotgbot/v2"
@@ -45,6 +46,11 @@ func NewUserBot(botName, apiKey string, log *slog.Logger) (*UserBot, error) {
 // SetChatEngine sets the unified chat engine for the bot.
 func (b *UserBot) SetChatEngine(engine *chat.ChatEngine) {
 	b.chatEngine = engine
+}
+
+// GetAPI returns the underlying Telegram bot API for creating messengers.
+func (b *UserBot) GetAPI() *tgbotapi.Bot {
+	return b.api
 }
 
 // Start begins polling for updates and handling them.
@@ -171,6 +177,19 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	chatID := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
 	text := ctx.EffectiveMessage.Text
 	messenger := b.newMessenger()
+
+	// Save incoming message for CRM
+	if listener := b.chatEngine.GetMessageListener(); listener != nil {
+		listener.SaveAndBroadcastChatMessage(entity.ChatMessage{
+			Platform:  "telegram",
+			UserID:    userID,
+			ChatID:    chatID,
+			Direction: "incoming",
+			Sender:    "user",
+			Text:      text,
+			CreatedAt: time.Now(),
+		})
+	}
 
 	err := b.chatEngine.HandleMessage(context.Background(), messenger, "telegram", userID, chatID, text)
 	if err != nil {
