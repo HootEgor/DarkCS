@@ -173,7 +173,7 @@ func (s *CurrentOrderStep) Enter(ctx context.Context, m chat.Messenger, state *c
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
-	msg := formatOrderMessage(activeOrder, user.Name)
+	msg := formatOrderMessage(activeOrder, user.Name, state.Platform)
 	_ = m.SendText(state.ChatID, msg)
 	return chat.StepResult{NextStep: StepMainMenu}
 }
@@ -225,7 +225,7 @@ func (s *CompletedOrdersStep) Enter(ctx context.Context, m chat.Messenger, state
 	}
 
 	for i, order := range completedOrders {
-		msg := formatOrderMessageNumbered(&order, user.Name, i+1)
+		msg := formatOrderMessageNumbered(&order, user.Name, i+1, state.Platform)
 		_ = m.SendText(state.ChatID, msg)
 	}
 
@@ -413,26 +413,34 @@ func (s *MakeOrderStep) HandleInput(ctx context.Context, m chat.Messenger, state
 	return chat.StepResult{}
 }
 
-// formatOrderMessage formats an order for text display.
-func formatOrderMessage(order *entity.OrderDetail, customerName string) string {
+// formatOrderMessage formats an order for display.
+// Telegram gets HTML links; other platforms get a plain URL on its own line.
+func formatOrderMessage(order *entity.OrderDetail, customerName, platform string) string {
 	msg := fmt.Sprintf("Замовник: %s\nСтатус: %s", customerName, order.Status)
 	if order.Subject != "" {
 		msg += fmt.Sprintf("\nНомер замовлення: %s", order.Subject)
 	}
 	if order.TTN != "" {
-		msg += fmt.Sprintf("\nТТН: %s (https://novaposhta.ua/tracking/%s)", order.TTN, order.TTN)
+		msg += formatTTN(order.TTN, platform)
 	}
 	return msg
 }
 
 // formatOrderMessageNumbered formats an order with a number prefix.
-func formatOrderMessageNumbered(order *entity.OrderDetail, customerName string, orderNum int) string {
+func formatOrderMessageNumbered(order *entity.OrderDetail, customerName string, orderNum int, platform string) string {
 	msg := fmt.Sprintf("Замовлення №%d\n\nЗамовник: %s\nСтатус: %s", orderNum, customerName, order.Status)
 	if order.Subject != "" {
 		msg += fmt.Sprintf("\nНомер замовлення: %s", order.Subject)
 	}
 	if order.TTN != "" {
-		msg += fmt.Sprintf("\nТТН: %s (https://novaposhta.ua/tracking/%s)", order.TTN, order.TTN)
+		msg += formatTTN(order.TTN, platform)
 	}
 	return msg
+}
+
+func formatTTN(ttn, platform string) string {
+	if platform == "telegram" {
+		return fmt.Sprintf("\nТТН: <a href=\"https://novaposhta.ua/tracking/%s\">%s</a>", ttn, ttn)
+	}
+	return fmt.Sprintf("\nТТН: %s\nhttps://novaposhta.ua/tracking/%s", ttn, ttn)
 }

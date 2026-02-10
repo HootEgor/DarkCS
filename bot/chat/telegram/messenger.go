@@ -30,7 +30,9 @@ func (m *Messenger) SendText(chatID, text string) error {
 	if err != nil {
 		return err
 	}
-	_, err = m.api.SendMessage(id, text, nil)
+	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
+		ParseMode: "HTML",
+	})
 	return err
 }
 
