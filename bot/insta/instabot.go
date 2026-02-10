@@ -2,6 +2,7 @@ package insta
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"DarkCS/bot/chat"
+	igmessenger "DarkCS/bot/chat/instagram"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -22,6 +25,7 @@ type InstaBot struct {
 	accessToken string
 	verifyToken string
 	appSecret   string
+	chatEngine  *chat.ChatEngine
 }
 
 // WebhookPayload represents the incoming webhook payload from Instagram
@@ -65,6 +69,11 @@ func NewInstaBot(accessToken, verifyToken, appSecret string, log *slog.Logger) *
 		verifyToken: verifyToken,
 		appSecret:   appSecret,
 	}
+}
+
+// SetChatEngine sets the unified chat engine for this bot.
+func (b *InstaBot) SetChatEngine(engine *chat.ChatEngine) {
+	b.chatEngine = engine
 }
 
 // HandleWebhookVerification handles the GET request for webhook verification
@@ -127,7 +136,7 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	go b.processPayload(payload)
 }
 
-// processPayload processes the webhook payload and sends echo responses
+// processPayload processes the webhook payload
 func (b *InstaBot) processPayload(payload WebhookPayload) {
 	if payload.Object != "instagram" {
 		return
@@ -139,12 +148,19 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 				senderID := messaging.Sender.ID
 				text := messaging.Message.Text
 
-				//b.log.Info("received message",
-				//	slog.String("sender_id", senderID),
-				//	slog.String("text", text),
-				//)
+				// Delegate to ChatEngine if available
+				if b.chatEngine != nil {
+					messenger := igmessenger.NewMessenger(b)
+					if err := b.chatEngine.HandleMessage(context.Background(), messenger, "instagram", senderID, senderID, text); err != nil {
+						b.log.Error("chat engine error",
+							slog.String("sender_id", senderID),
+							sl.Err(err),
+						)
+					}
+					continue
+				}
 
-				// Echo the message back
+				// Fallback: echo
 				echoText := fmt.Sprintf("Echo: %s", text)
 				if err := b.SendMessage(senderID, echoText); err != nil {
 					b.log.Error("failed to send echo message",

@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"DarkCS/bot/chat"
+	wamessenger "DarkCS/bot/chat/whatsapp"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -23,6 +26,7 @@ type WhatsAppBot struct {
 	verifyToken   string
 	appSecret     string
 	phoneNumberID string
+	chatEngine    *chat.ChatEngine
 }
 
 // WebhookPayload represents the incoming webhook payload from WhatsApp
@@ -81,6 +85,11 @@ func NewWhatsAppBot(accessToken, verifyToken, appSecret, phoneNumberID string, l
 	}
 }
 
+// SetChatEngine sets the unified chat engine for this bot.
+func (b *WhatsAppBot) SetChatEngine(engine *chat.ChatEngine) {
+	b.chatEngine = engine
+}
+
 // HandleWebhookVerification handles the GET request for webhook verification
 func (b *WhatsAppBot) HandleWebhookVerification(w http.ResponseWriter, r *http.Request) {
 	mode := r.URL.Query().Get("hub.mode")
@@ -137,7 +146,7 @@ func (b *WhatsAppBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	go b.processPayload(payload)
 }
 
-// processPayload processes the webhook payload and sends echo responses
+// processPayload processes the webhook payload
 func (b *WhatsAppBot) processPayload(payload WebhookPayload) {
 	if payload.Object != "whatsapp_business_account" {
 		return
@@ -154,12 +163,19 @@ func (b *WhatsAppBot) processPayload(payload WebhookPayload) {
 					senderPhone := message.From
 					text := message.Text.Body
 
-					b.log.Info("received message",
-						slog.String("sender_phone", senderPhone),
-						slog.String("text", text),
-					)
+					// Delegate to ChatEngine if available
+					if b.chatEngine != nil {
+						messenger := wamessenger.NewMessenger(b)
+						if err := b.chatEngine.HandleMessage(context.Background(), messenger, "whatsapp", senderPhone, senderPhone, text); err != nil {
+							b.log.Error("chat engine error",
+								slog.String("sender_phone", senderPhone),
+								sl.Err(err),
+							)
+						}
+						continue
+					}
 
-					// Echo the message back
+					// Fallback: echo
 					echoText := fmt.Sprintf("Echo: %s", text)
 					if err := b.SendMessage(senderPhone, echoText); err != nil {
 						b.log.Error("failed to send echo message",

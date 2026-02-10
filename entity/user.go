@@ -14,6 +14,7 @@ type User struct {
 	Phone         string          `json:"phone" bson:"phone" validate:"omitempty"`
 	Address       string          `json:"address" bson:"address" validate:"omitempty"`
 	TelegramId    int64           `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
+	InstagramId   string          `json:"instagram_id" bson:"instagram_id" validate:"omitempty"`
 	SmartSenderId string          `json:"smart_sender_id" bson:"smart_sender_id" validate:"omitempty"`
 	ZohoId        string          `json:"zoho_id" bson:"zoho_id" validate:"omitempty"`
 	Role          string          `json:"role" bson:"role" validate:"omitempty"`
@@ -88,6 +89,10 @@ func (u *User) SameUser(other *User) bool {
 
 	if u.TelegramId != 0 && other.TelegramId != 0 {
 		return u.TelegramId == other.TelegramId
+	}
+
+	if u.InstagramId != "" && other.InstagramId != "" {
+		return u.InstagramId == other.InstagramId
 	}
 
 	if u.Email != "" && other.Email != "" {

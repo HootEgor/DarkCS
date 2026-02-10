@@ -6,11 +6,11 @@ import (
 
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
+	"DarkCS/bot/chat"
+	chatmainmenu "DarkCS/bot/chat/mainmenu"
+	chatonboarding "DarkCS/bot/chat/onboarding"
 	"DarkCS/bot/insta"
 	"DarkCS/bot/whatsapp"
-	"DarkCS/bot/workflow"
-	"DarkCS/bot/workflows/mainmenu"
-	"DarkCS/bot/workflows/onboarding"
 	"DarkCS/impl/core"
 	"DarkCS/internal/config"
 	repository "DarkCS/internal/database"
@@ -71,9 +71,9 @@ func main() {
 			sl.Err(err),
 		).Error("mongo client")
 	}
-	// Variables to hold userBot and workflowEngine for later workflow registration
+
+	// Variable to hold userBot for later start
 	var userBot *bot.UserBot
-	var workflowEngine *workflow.WorkflowEngine
 
 	if db != nil {
 		authService.SetRepository(db)
@@ -86,19 +86,12 @@ func main() {
 			slog.String("database", conf.Mongo.Database),
 		).Info("mongo client initialized")
 
-		// Initialize user bot with workflow engine if enabled
+		// Initialize user bot if enabled (will be wired with ChatEngine later)
 		if conf.UserBot.Enabled {
 			var err error
 			userBot, err = bot.NewUserBot(conf.UserBot.BotName, conf.UserBot.ApiKey, lg)
 			if err != nil {
 				lg.Error("failed to initialize user bot", slog.String("error", err.Error()))
-			} else {
-				stateStorage := workflow.NewMongoStateStorage(db)
-				workflowEngine = workflow.NewWorkflowEngine(stateStorage, lg)
-
-				userBot.SetWorkflowEngine(workflowEngine)
-				userBot.SetAuthService(authService)
-				lg.Info("workflow engine initialized for user bot")
 			}
 		}
 	}
@@ -141,25 +134,33 @@ func main() {
 	handler.SetSmartService(smartService)
 	handler.SetZohoService(zohoService)
 
-	// Register workflows and start user bot after all services are initialized
-	if userBot != nil && workflowEngine != nil {
-		// Register onboarding workflow with zoho service for contact creation
-		onboardingWorkflow := onboarding.NewOnboardingWorkflow(authService, zohoService, db, lg)
-		workflowEngine.RegisterWorkflow(onboardingWorkflow)
+	handler.Init()
 
-		// Register mainmenu workflow with all required services
-		mainmenuWorkflow := mainmenu.NewMainMenuWorkflow(authService, zohoService, handler, lg)
-		workflowEngine.RegisterWorkflow(mainmenuWorkflow)
+	// Initialize unified ChatEngine shared by all platforms (Telegram, Instagram, WhatsApp)
+	var chatEngine *chat.ChatEngine
+	if db != nil {
+		chatStateStorage := chat.NewMongoChatStateStorage(db)
+		chatEngine = chat.NewChatEngine(chatStateStorage, lg)
 
-		// Start user bot in a goroutine
+		// Register chat workflows
+		chatOnboarding := chatonboarding.NewOnboardingWorkflow(authService, zohoService, lg)
+		chatEngine.RegisterWorkflow(chatOnboarding)
+
+		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, lg)
+		chatEngine.RegisterWorkflow(chatMainMenu)
+
+		lg.Info("chat engine initialized")
+	}
+
+	// Wire ChatEngine into user bot and start
+	if userBot != nil && chatEngine != nil {
+		userBot.SetChatEngine(chatEngine)
 		go func() {
 			if err := userBot.Start(); err != nil {
 				lg.Error("user bot error", slog.String("error", err.Error()))
 			}
 		}()
 	}
-
-	handler.Init()
 
 	// Initialize Instagram bot if enabled
 	var instaBot *insta.InstaBot
@@ -170,6 +171,9 @@ func main() {
 			conf.Instagram.AppSecret,
 			lg,
 		)
+		if chatEngine != nil {
+			instaBot.SetChatEngine(chatEngine)
+		}
 		lg.Info("instagram bot initialized")
 	}
 
@@ -183,6 +187,9 @@ func main() {
 			conf.WhatsApp.PhoneNumberID,
 			lg,
 		)
+		if chatEngine != nil {
+			whatsappBot.SetChatEngine(chatEngine)
+		}
 		lg.Info("whatsapp bot initialized")
 	}
 

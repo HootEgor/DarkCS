@@ -52,6 +52,7 @@ type AuthService interface {
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	GetUserByUUID(uuid string) (*entity.User, error)
+	GetUserByInstagramId(instagramId string) (*entity.User, error)
 	UserExists(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool, role string) error
 	UpdateUser(user *entity.User) error

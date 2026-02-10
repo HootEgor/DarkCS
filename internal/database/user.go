@@ -30,6 +30,9 @@ func (m *MongoDB) UpsertUser(user entity.User) error {
 	if user.Phone != "" {
 		orFilter = append(orFilter, bson.D{{"phone", user.Phone}})
 	}
+	if user.InstagramId != "" {
+		orFilter = append(orFilter, bson.D{{"instagram_id", user.InstagramId}})
+	}
 
 	if len(orFilter) == 0 {
 		return fmt.Errorf("no valid identifier fields to upsert")
@@ -43,6 +46,26 @@ func (m *MongoDB) UpsertUser(user entity.User) error {
 		return fmt.Errorf("mongodb upsert error: %w", err)
 	}
 	return nil
+}
+
+func (m *MongoDB) GetUserByInstagramId(instagramId string) (*entity.User, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(usersCollection)
+
+	filter := bson.D{{"instagram_id", instagramId}}
+
+	var user entity.User
+	err = collection.FindOne(m.ctx, filter).Decode(&user)
+	if err != nil {
+		return nil, m.findError(err)
+	}
+
+	return &user, nil
 }
 
 func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, error) {

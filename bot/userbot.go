@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"strconv"
 	"time"
 
-	"DarkCS/bot/workflow"
-	"DarkCS/bot/workflows/mainmenu"
-	"DarkCS/bot/workflows/onboarding"
-	"DarkCS/entity"
+	"DarkCS/bot/chat"
+	tgmessenger "DarkCS/bot/chat/telegram"
 	"DarkCS/internal/lib/sl"
 
 	tgbotapi "github.com/PaulSonOfLars/gotgbot/v2"
@@ -19,18 +18,12 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/message"
 )
 
-// AuthService defines the interface for user authentication operations.
-type AuthService interface {
-	GetUser(email, phone string, telegramId int64) (*entity.User, error)
-}
-
-// UserBot is the Telegram bot for general users with workflow support.
+// UserBot is the Telegram bot for general users using the unified ChatEngine.
 type UserBot struct {
-	log            *slog.Logger
-	api            *tgbotapi.Bot
-	botUsername    string
-	workflowEngine workflow.Engine
-	authService    AuthService
+	log         *slog.Logger
+	api         *tgbotapi.Bot
+	botUsername string
+	chatEngine  *chat.ChatEngine
 }
 
 // NewUserBot creates a new user bot instance.
@@ -49,14 +42,9 @@ func NewUserBot(botName, apiKey string, log *slog.Logger) (*UserBot, error) {
 	return bot, nil
 }
 
-// SetWorkflowEngine sets the workflow engine for the bot.
-func (b *UserBot) SetWorkflowEngine(engine workflow.Engine) {
-	b.workflowEngine = engine
-}
-
-// SetAuthService sets the auth service for the bot.
-func (b *UserBot) SetAuthService(authService AuthService) {
-	b.authService = authService
+// SetChatEngine sets the unified chat engine for the bot.
+func (b *UserBot) SetChatEngine(engine *chat.ChatEngine) {
+	b.chatEngine = engine
 }
 
 // Start begins polling for updates and handling them.
@@ -70,13 +58,11 @@ func (b *UserBot) Start() error {
 	})
 	updater := ext.NewUpdater(dispatcher, nil)
 
-	// Workflow handlers
 	dispatcher.AddHandler(handlers.NewCommand("start", b.handleStart))
-	dispatcher.AddHandler(handlers.NewCallback(b.workflowCallbackFilter, b.handleCallback))
+	dispatcher.AddHandler(handlers.NewCallback(func(cq *tgbotapi.CallbackQuery) bool { return true }, b.handleCallback))
 	dispatcher.AddHandler(handlers.NewMessage(message.Contact, b.handleContact))
 	dispatcher.AddHandler(handlers.NewMessage(message.Text, b.handleMessage))
 
-	// Start receiving updates
 	err := updater.StartPolling(b.api, &ext.PollingOpts{
 		DropPendingUpdates: true,
 		GetUpdatesOpts: &tgbotapi.GetUpdatesOpts{
@@ -92,44 +78,30 @@ func (b *UserBot) Start() error {
 
 	b.log.Info("user bot started", slog.String("username", b.botUsername))
 
-	// Idle, to keep updates coming in
 	updater.Idle()
 
 	return nil
 }
 
-// workflowCallbackFilter filters callbacks that belong to workflows.
-func (b *UserBot) workflowCallbackFilter(cq *tgbotapi.CallbackQuery) bool {
-	return workflow.IsWorkflowCallback(cq.Data)
+func (b *UserBot) newMessenger() *tgmessenger.Messenger {
+	return tgmessenger.NewMessenger(b.api)
 }
 
-// handleStart handles the /start command and initiates workflows.
+// handleStart handles the /start command — always starts onboarding.
 func (b *UserBot) handleStart(bot *tgbotapi.Bot, ctx *ext.Context) error {
-	if b.workflowEngine == nil {
-		b.log.Warn("workflow engine not initialized")
+	if b.chatEngine == nil {
+		b.log.Warn("chat engine not initialized")
 		return nil
 	}
 
-	userID := ctx.EffectiveUser.Id
-	chatID := ctx.EffectiveChat.Id
+	userID := strconv.FormatInt(ctx.EffectiveUser.Id, 10)
+	chatID := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
+	messenger := b.newMessenger()
 
-	// Parse deep link from start command
-	startParam := workflow.ExtractStartParam(ctx.EffectiveMessage.Text)
-	var deepLink *workflow.DeepLinkData
-	if startParam != "" {
-		deepLink = workflow.ParseDeepLink(startParam)
-		b.log.Debug("parsed deep link",
-			slog.Int64("user_id", userID),
-			slog.String("type", deepLink.Type),
-			slog.String("code", deepLink.Code),
-		)
-	}
-
-	// Start onboarding workflow
-	err := b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, deepLink)
+	err := b.chatEngine.StartWorkflow(context.Background(), messenger, "telegram", userID, chatID, "onboarding")
 	if err != nil {
-		b.log.Error("failed to start workflow",
-			slog.Int64("user_id", userID),
+		b.log.Error("failed to start onboarding",
+			slog.String("user_id", userID),
 			sl.Err(err),
 		)
 		return err
@@ -138,17 +110,24 @@ func (b *UserBot) handleStart(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	return nil
 }
 
-// handleCallback handles inline keyboard callbacks for workflows.
+// handleCallback handles inline keyboard callbacks.
 func (b *UserBot) handleCallback(bot *tgbotapi.Bot, ctx *ext.Context) error {
-	if b.workflowEngine == nil {
+	if b.chatEngine == nil {
 		return nil
 	}
 
+	userID := strconv.FormatInt(ctx.EffectiveUser.Id, 10)
+	chatID := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
 	data := ctx.CallbackQuery.Data
-	err := b.workflowEngine.HandleCallback(context.Background(), bot, ctx, data)
+	messenger := b.newMessenger()
+
+	// Answer callback to remove loading indicator
+	ctx.CallbackQuery.Answer(bot, nil)
+
+	err := b.chatEngine.HandleCallback(context.Background(), messenger, "telegram", userID, chatID, data)
 	if err != nil {
-		b.log.Error("workflow callback error",
-			slog.Int64("user_id", ctx.EffectiveUser.Id),
+		b.log.Error("callback error",
+			slog.String("user_id", userID),
 			slog.String("data", data),
 			sl.Err(err),
 		)
@@ -156,82 +135,49 @@ func (b *UserBot) handleCallback(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	return err
 }
 
-// handleContact handles contact sharing for workflows.
+// handleContact handles contact sharing.
 func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
-	if b.workflowEngine == nil {
+	if b.chatEngine == nil {
 		return nil
 	}
 
-	userID := ctx.EffectiveUser.Id
-	chatID := ctx.EffectiveChat.Id
+	userID := strconv.FormatInt(ctx.EffectiveUser.Id, 10)
+	chatID := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
+	messenger := b.newMessenger()
 
-	// Check if user has active workflow first
-	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
+	contact := ctx.EffectiveMessage.Contact
+	if contact == nil {
+		return nil
+	}
+
+	phone := contact.PhoneNumber
+	err := b.chatEngine.HandleContact(context.Background(), messenger, "telegram", userID, chatID, phone)
 	if err != nil {
-		b.log.Error("check active workflow error", sl.Err(err))
-		return err
+		b.log.Error("contact error",
+			slog.String("user_id", userID),
+			sl.Err(err),
+		)
 	}
-
-	if hasWorkflow {
-		// User has active workflow - handle contact through it
-		err = b.workflowEngine.HandleContact(context.Background(), bot, ctx)
-		if err != nil {
-			b.log.Error("workflow contact error",
-				slog.Int64("user_id", userID),
-				sl.Err(err),
-			)
-		}
-		return err
-	}
-
-	// No active workflow - check if user exists and has completed registration
-	user, err := b.authService.GetUser("", "", userID)
-	if err != nil || user == nil || user.Name == "" {
-		// User doesn't exist or incomplete - send update message and start onboarding
-		bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
-		return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
-	}
-
-	// User exists with complete profile - start main menu workflow
-	return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
+	return err
 }
 
-// handleMessage handles text messages for workflows.
+// handleMessage handles text messages.
 func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
-	if b.workflowEngine == nil {
+	if b.chatEngine == nil {
 		return nil
 	}
 
-	userID := ctx.EffectiveUser.Id
-	chatID := ctx.EffectiveChat.Id
+	userID := strconv.FormatInt(ctx.EffectiveUser.Id, 10)
+	chatID := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
+	text := ctx.EffectiveMessage.Text
+	messenger := b.newMessenger()
 
-	// Check if user has active workflow first
-	hasWorkflow, err := b.workflowEngine.HasActiveWorkflow(context.Background(), userID)
+	err := b.chatEngine.HandleMessage(context.Background(), messenger, "telegram", userID, chatID, text)
 	if err != nil {
-		b.log.Error("check active workflow error", sl.Err(err))
-		return err
+		b.log.Error("message error",
+			slog.String("user_id", userID),
+			sl.Err(err),
+		)
 	}
-
-	if hasWorkflow {
-		// User has active workflow - handle message through it
-		err = b.workflowEngine.HandleMessage(context.Background(), bot, ctx)
-		if err != nil {
-			b.log.Error("workflow message error",
-				slog.Int64("user_id", userID),
-				sl.Err(err),
-			)
-		}
-		return err
-	}
-
-	// No active workflow - check if user exists and has completed registration
-	user, err := b.authService.GetUser("", "", userID)
-	if err != nil || user == nil || user.Name == "" {
-		// User doesn't exist or incomplete - send update message and start onboarding
-		bot.SendMessage(chatID, "Ми оновили нашу систему. Будь ласка, пройдіть реєстрацію знову.", nil)
-		return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, onboarding.WorkflowID, nil)
-	}
-
-	// User exists with complete profile - start main menu workflow
-	return b.workflowEngine.StartWorkflow(context.Background(), bot, userID, chatID, mainmenu.WorkflowID, nil)
+	return err
 }
