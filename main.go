@@ -139,7 +139,8 @@ func main() {
 	handler.SetZohoService(zohoService)
 
 	// Create WebSocket hub for CRM
-	wsHub := ws.NewHub()
+	wsHub := ws.NewHub(lg)
+	wsHub.SetHandler(handler)
 	go wsHub.Run()
 	handler.SetWsHub(wsHub)
 

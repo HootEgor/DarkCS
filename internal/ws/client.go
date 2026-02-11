@@ -12,7 +12,7 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = 30 * time.Second
-	maxMessageSize = 512
+	maxMessageSize = 2048
 )
 
 var upgrader = websocket.Upgrader{
@@ -47,10 +47,11 @@ func (c *Client) readPump() {
 	})
 
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, msg, err := c.conn.ReadMessage()
 		if err != nil {
 			break
 		}
+		c.hub.HandleClientMessage(c.username, msg)
 	}
 }
 

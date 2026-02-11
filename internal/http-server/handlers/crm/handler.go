@@ -10,12 +10,13 @@ import (
 	"github.com/go-chi/render"
 
 	"DarkCS/entity"
+	"DarkCS/internal/lib/api/cont"
 	"DarkCS/internal/lib/api/response"
 )
 
 // Core defines the methods required by CRM handlers.
 type Core interface {
-	GetActiveChats() ([]entity.ChatSummary, error)
+	GetActiveChats(username string) ([]entity.ChatSummary, error)
 	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
 	SendCrmMessage(platform, userID, text string) error
 }
@@ -23,7 +24,8 @@ type Core interface {
 // GetChats returns the list of active chats with last message info.
 func GetChats(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		chats, err := handler.GetActiveChats()
+		username := cont.GetUser(r.Context()).Username
+		chats, err := handler.GetActiveChats(username)
 		if err != nil {
 			log.Error("failed to get active chats", slog.String("error", err.Error()))
 			render.Status(r, http.StatusInternalServerError)

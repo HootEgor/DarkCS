@@ -86,7 +86,7 @@ func (m *MongoDB) GetChatMessages(platform, userID string, limit, offset int) ([
 	return messages, nil
 }
 
-// GetActiveChats returns chat summaries with last message info.
+// GetActiveChats returns chat summaries with last message info (without unread counts).
 func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 	connection, err := m.connect()
 	if err != nil {
@@ -104,13 +104,6 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
 			{"last_message", bson.D{{"$first", "$text"}}},
 			{"last_time", bson.D{{"$first", "$created_at"}}},
-			{"unread", bson.D{{"$sum", bson.D{
-				{"$cond", bson.A{
-					bson.D{{"$eq", bson.A{"$direction", "incoming"}}},
-					1,
-					0,
-				}},
-			}}}},
 		}}},
 		// Sort by last_time descending
 		{{Key: "$sort", Value: bson.D{{"last_time", -1}}}},
@@ -121,7 +114,6 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 			{"user_id", "$_id.user_id"},
 			{"last_message", 1},
 			{"last_time", 1},
-			{"unread", 1},
 		}}},
 	}
 
@@ -137,6 +129,139 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 	}
 
 	return summaries, nil
+}
+
+// CountUnreadPerChat counts incoming messages after readAt for each chat in a single aggregation.
+func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(chatMessagesCollection)
+
+	// Build $or conditions: for each chat, count incoming messages after its readAt
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{"direction", "incoming"}}}},
+		{{Key: "$group", Value: bson.D{
+			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
+			{"messages", bson.D{{"$push", bson.D{{"created_at", "$created_at"}}}}},
+		}}},
+	}
+
+	cursor, err := collection.Aggregate(m.ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("mongodb aggregate unread counts: %w", err)
+	}
+	defer cursor.Close(m.ctx)
+
+	type chatGroup struct {
+		ID struct {
+			Platform string `bson:"platform"`
+			UserID   string `bson:"user_id"`
+		} `bson:"_id"`
+		Messages []struct {
+			CreatedAt time.Time `bson:"created_at"`
+		} `bson:"messages"`
+	}
+
+	result := make(map[string]int)
+	for cursor.Next(m.ctx) {
+		var group chatGroup
+		if err := cursor.Decode(&group); err != nil {
+			continue
+		}
+		key := group.ID.Platform + ":" + group.ID.UserID
+		readAt, ok := receipts[key]
+		count := 0
+		for _, msg := range group.Messages {
+			if !ok || msg.CreatedAt.After(readAt) {
+				count++
+			}
+		}
+		result[key] = count
+	}
+
+	return result, nil
+}
+
+// UpsertReadReceipt upserts a read receipt for a CRM user/chat combination.
+func (m *MongoDB) UpsertReadReceipt(username, platform, userID string, readAt time.Time) error {
+	connection, err := m.connect()
+	if err != nil {
+		return err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(readReceiptsCollection)
+
+	filter := bson.D{
+		{"username", username},
+		{"platform", platform},
+		{"user_id", userID},
+	}
+	update := bson.D{{"$set", bson.D{{"read_at", readAt}}}}
+	opts := options.Update().SetUpsert(true)
+
+	_, err = collection.UpdateOne(m.ctx, filter, update, opts)
+	if err != nil {
+		return fmt.Errorf("mongodb upsert read receipt: %w", err)
+	}
+
+	return nil
+}
+
+// GetReadReceipts returns all read receipts for a CRM username.
+func (m *MongoDB) GetReadReceipts(username string) ([]entity.ChatReadReceipt, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(readReceiptsCollection)
+
+	filter := bson.D{{"username", username}}
+	cursor, err := collection.Find(m.ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("mongodb find read receipts: %w", err)
+	}
+	defer cursor.Close(m.ctx)
+
+	var receipts []entity.ChatReadReceipt
+	if err = cursor.All(m.ctx, &receipts); err != nil {
+		return nil, fmt.Errorf("mongodb decode read receipts: %w", err)
+	}
+
+	return receipts, nil
+}
+
+// EnsureReadReceiptIndexes creates a unique compound index on the read receipts collection.
+func (m *MongoDB) EnsureReadReceiptIndexes() error {
+	connection, err := m.connect()
+	if err != nil {
+		return err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(readReceiptsCollection)
+
+	index := mongo.IndexModel{
+		Keys: bson.D{
+			{"username", 1},
+			{"platform", 1},
+			{"user_id", 1},
+		},
+		Options: options.Index().SetUnique(true),
+	}
+
+	_, err = collection.Indexes().CreateOne(m.ctx, index)
+	if err != nil {
+		return fmt.Errorf("mongodb create read receipt index: %w", err)
+	}
+
+	return nil
 }
 
 // CleanupChatMessages deletes messages older than 30 days, keeping at least 20 per user.

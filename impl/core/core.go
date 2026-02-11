@@ -19,8 +19,13 @@ type Repository interface {
 	SaveChatMessage(msg entity.ChatMessage) error
 	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
 	GetActiveChats() ([]entity.ChatSummary, error)
+	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
 	CleanupChatMessages() error
 	EnsureChatMessageIndexes() error
+
+	UpsertReadReceipt(username, platform, userID string, readAt time.Time) error
+	GetReadReceipts(username string) ([]entity.ChatReadReceipt, error)
+	EnsureReadReceiptIndexes() error
 
 	SaveChatState(ctx context.Context, state *chat.ChatState) error
 
@@ -212,6 +217,11 @@ func (c *Core) Init() {
 	// Ensure chat message indexes
 	if err := c.repo.EnsureChatMessageIndexes(); err != nil {
 		c.log.Error("failed to ensure chat message indexes", slog.String("error", err.Error()))
+	}
+
+	// Ensure read receipt indexes
+	if err := c.repo.EnsureReadReceiptIndexes(); err != nil {
+		c.log.Error("failed to ensure read receipt indexes", slog.String("error", err.Error()))
 	}
 }
 

@@ -42,6 +42,8 @@ func (e *ChatEngine) RegisterWorkflow(w Workflow) {
 
 // HandleMessage processes a text message from any platform.
 func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, userID, chatID, text string) error {
+	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+
 	state, err := e.storage.Load(ctx, platform, userID)
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)
@@ -69,6 +71,8 @@ func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, u
 
 // HandleCallback processes a callback/inline button press from any platform.
 func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, userID, chatID, data string) error {
+	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+
 	state, err := e.storage.Load(ctx, platform, userID)
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)
@@ -94,6 +98,8 @@ func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, 
 
 // HandleContact processes a contact share (phone number) from any platform.
 func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, userID, chatID, phone string) error {
+	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+
 	state, err := e.storage.Load(ctx, platform, userID)
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)
@@ -119,6 +125,8 @@ func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, u
 
 // StartWorkflow begins a new workflow for a user.
 func (e *ChatEngine) StartWorkflow(ctx context.Context, m Messenger, platform, userID, chatID string, workflowID WorkflowID) error {
+	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+
 	w, ok := e.workflows[workflowID]
 	if !ok {
 		return fmt.Errorf("workflow not found: %s", workflowID)

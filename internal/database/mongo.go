@@ -23,6 +23,7 @@ const (
 	assistantCollection    = "assistant"
 	qrStatCollection       = "qr-stat"
 	chatMessagesCollection = "chat-messages"
+	readReceiptsCollection = "chat-read-receipts"
 )
 
 type MongoDB struct {

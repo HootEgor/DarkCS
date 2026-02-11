@@ -8,14 +8,42 @@ import (
 	"time"
 )
 
-// GetActiveChats returns the list of active chats from MongoDB, enriched with user names.
-func (c *Core) GetActiveChats() ([]entity.ChatSummary, error) {
+// GetActiveChats returns the list of active chats from MongoDB, enriched with user names
+// and per-user unread counts based on read receipts.
+func (c *Core) GetActiveChats(username string) ([]entity.ChatSummary, error) {
 	summaries, err := c.repo.GetActiveChats()
 	if err != nil {
 		return nil, err
 	}
 
+	// Build read receipts map for this CRM user
+	receiptMap := make(map[string]time.Time)
+	if username != "" {
+		receipts, err := c.repo.GetReadReceipts(username)
+		if err != nil {
+			c.log.Error("failed to get read receipts",
+				slog.String("username", username),
+				slog.String("error", err.Error()),
+			)
+		} else {
+			for _, r := range receipts {
+				receiptMap[r.Platform+":"+r.UserID] = r.ReadAt
+			}
+		}
+	}
+
+	// Count unread messages per chat
+	unreadMap, err := c.repo.CountUnreadPerChat(receiptMap)
+	if err != nil {
+		c.log.Error("failed to count unread messages", slog.String("error", err.Error()))
+	}
+
 	for i := range summaries {
+		key := summaries[i].Platform + ":" + summaries[i].UserID
+		if unreadMap != nil {
+			summaries[i].Unread = unreadMap[key]
+		}
+
 		user := c.lookupUserByPlatform(summaries[i].Platform, summaries[i].UserID)
 		if user != nil {
 			summaries[i].UserName = user.Name
@@ -29,6 +57,19 @@ func (c *Core) GetActiveChats() ([]entity.ChatSummary, error) {
 	}
 
 	return summaries, nil
+}
+
+// HandleMarkRead persists a read receipt and broadcasts it via WebSocket.
+func (c *Core) HandleMarkRead(username, platform, userID string) error {
+	if err := c.repo.UpsertReadReceipt(username, platform, userID, time.Now()); err != nil {
+		return err
+	}
+
+	if c.wsHub != nil {
+		c.wsHub.BroadcastReadReceipt(username, platform, userID)
+	}
+
+	return nil
 }
 
 // lookupUserByPlatform finds a user by their platform-specific ID.

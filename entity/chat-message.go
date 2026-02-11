@@ -18,6 +18,14 @@ type ChatMessage struct {
 	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
 }
 
+// ChatReadReceipt tracks the last time a CRM user marked a chat as read.
+type ChatReadReceipt struct {
+	Username string    `json:"username" bson:"username"`
+	Platform string    `json:"platform" bson:"platform"`
+	UserID   string    `json:"user_id" bson:"user_id"`
+	ReadAt   time.Time `json:"read_at" bson:"read_at"`
+}
+
 // ChatSummary represents a chat summary for the CRM chat list.
 type ChatSummary struct {
 	Platform      string    `json:"platform" bson:"platform"`
