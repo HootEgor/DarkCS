@@ -104,6 +104,26 @@ func (m *MongoDB) GetUser(email, phone string, telegramId int64) (*entity.User, 
 	return &user, nil
 }
 
+func (m *MongoDB) GetUserBySmartSenderId(smartSenderId string) (*entity.User, error) {
+	connection, err := m.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(usersCollection)
+
+	filter := bson.D{{"smart_sender_id", smartSenderId}}
+
+	var user entity.User
+	err = collection.FindOne(m.ctx, filter).Decode(&user)
+	if err != nil {
+		return nil, m.findError(err)
+	}
+
+	return &user, nil
+}
+
 func (m *MongoDB) GetUserByUUID(uuid string) (*entity.User, error) {
 	connection, err := m.connect()
 	if err != nil {

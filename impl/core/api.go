@@ -1,11 +1,14 @@
 package core
 
 import (
+	"DarkCS/bot/chat"
+	"DarkCS/bot/chat/mainmenu"
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -409,4 +412,80 @@ func (c *Core) SetSchoolActive(name string, active bool) error {
 	}
 
 	return c.repo.SetSchoolActive(context.Background(), name, active)
+}
+
+func (c *Core) ImportTelegramUsers(items []entity.TelegramImportItem) (int, error) {
+	processed := 0
+
+	for _, item := range items {
+		if item.TelegramID <= 0 {
+			continue
+		}
+
+		// Normalize phone
+		phone := ""
+		if item.Phone != "" {
+			phoneDigits := ""
+			for _, ch := range item.Phone {
+				if ch >= '0' && ch <= '9' {
+					phoneDigits += string(ch)
+				}
+			}
+			if phoneDigits != "" {
+				phone = "+" + phoneDigits
+			}
+		}
+
+		// Try to find user by phone (priority)
+		var user *entity.User
+		if phone != "" {
+			u, err := c.authService.UserExists("", phone, 0)
+			if err == nil && u != nil {
+				user = u
+			}
+		}
+
+		// Fallback: find by SmartSender ID
+		if user == nil && item.SmartSenderID > 0 {
+			u, err := c.authService.GetUserBySmartSenderId(strconv.FormatInt(item.SmartSenderID, 10))
+			if err == nil && u != nil {
+				user = u
+			}
+		}
+
+		if user == nil {
+			continue
+		}
+
+		// Skip users without phone
+		if user.Phone == "" {
+			continue
+		}
+
+		// Update Telegram data
+		user.TelegramId = item.TelegramID
+		user.TelegramUsername = item.TelegramUsername
+		if err := c.authService.UpdateUser(user); err != nil {
+			c.log.Error("import telegram: update user", sl.Err(err))
+			continue
+		}
+
+		// Save chat state for pre-main menu
+		tgID := strconv.FormatInt(item.TelegramID, 10)
+		state := &chat.ChatState{
+			Platform:    "telegram",
+			UserID:      tgID,
+			ChatID:      tgID,
+			WorkflowID:  mainmenu.WorkflowID,
+			CurrentStep: mainmenu.StepPreMainMenu,
+		}
+		if err := c.repo.SaveChatState(context.Background(), state); err != nil {
+			c.log.Error("import telegram: save chat state", sl.Err(err))
+			continue
+		}
+
+		processed++
+	}
+
+	return processed, nil
 }

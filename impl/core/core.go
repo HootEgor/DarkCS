@@ -22,6 +22,8 @@ type Repository interface {
 	CleanupChatMessages() error
 	EnsureChatMessageIndexes() error
 
+	SaveChatState(ctx context.Context, state *chat.ChatState) error
+
 	UpsertAssistant(assistant *entity.Assistant) (*entity.Assistant, error)
 	GetAssistant(name string) (*entity.Assistant, error)
 	GetAllAssistants() ([]entity.Assistant, error)
@@ -61,6 +63,7 @@ type AuthService interface {
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	GetUserByUUID(uuid string) (*entity.User, error)
 	GetUserByInstagramId(instagramId string) (*entity.User, error)
+	GetUserBySmartSenderId(smartSenderId string) (*entity.User, error)
 	UserExists(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool, role string) error
 	UpdateUser(user *entity.User) error

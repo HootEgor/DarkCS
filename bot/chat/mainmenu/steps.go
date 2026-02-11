@@ -48,6 +48,19 @@ func getUser(state *chat.ChatState, authService AuthService) (*entity.User, erro
 	return nil, fmt.Errorf("user not found")
 }
 
+// PreMainMenuStep — Silent step; any input transitions to main menu.
+type PreMainMenuStep struct{}
+
+func (s *PreMainMenuStep) ID() chat.StepID { return StepPreMainMenu }
+
+func (s *PreMainMenuStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
+	return chat.StepResult{}
+}
+
+func (s *PreMainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	return chat.StepResult{NextStep: StepMainMenu}
+}
+
 // MainMenuStep — Show main menu as numbered text list.
 type MainMenuStep struct{}
 

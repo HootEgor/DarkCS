@@ -11,4 +11,5 @@ type Core interface {
 	ClosePromoForUser(phone string) error
 	CheckUserPhone(phone string) (string, error)
 	ResetConversation(phone string) error
+	ImportTelegramUsers(items []entity.TelegramImportItem) (int, error)
 }

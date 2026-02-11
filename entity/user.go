@@ -51,6 +51,13 @@ const (
 	AdminRole   = "admin"
 )
 
+type TelegramImportItem struct {
+	SmartSenderID    int64  `json:"smartsender_id"`
+	TelegramID       int64  `json:"telegram_id"`
+	Phone            string `json:"phone"`
+	TelegramUsername string `json:"telegram_username"`
+}
+
 func NewUser(email, phone string, telegramId int64) *User {
 
 	phoneDigits := ""

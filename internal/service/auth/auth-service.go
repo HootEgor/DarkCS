@@ -14,6 +14,7 @@ type Repository interface {
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	GetUserByUUID(uuid string) (*entity.User, error)
 	GetUserByInstagramId(instagramId string) (*entity.User, error)
+	GetUserBySmartSenderId(smartSenderId string) (*entity.User, error)
 
 	UpsertBasket(basket *entity.Basket) (*entity.Basket, error)
 	GetBasket(userUUID string) (*entity.Basket, error)
@@ -144,6 +145,23 @@ func (s *Service) GetUserByInstagramId(instagramId string) (*entity.User, error)
 		}
 	}
 	user, err := s.repository.GetUserByInstagramId(instagramId)
+	if err != nil {
+		return nil, err
+	}
+	if user != nil {
+		s.users = append(s.users, *user)
+		return user, nil
+	}
+	return nil, nil
+}
+
+func (s *Service) GetUserBySmartSenderId(smartSenderId string) (*entity.User, error) {
+	for _, user := range s.users {
+		if user.SmartSenderId == smartSenderId {
+			return &user, nil
+		}
+	}
+	user, err := s.repository.GetUserBySmartSenderId(smartSenderId)
 	if err != nil {
 		return nil, err
 	}

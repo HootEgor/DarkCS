@@ -12,6 +12,7 @@ const (
 
 // Step IDs
 const (
+	StepPreMainMenu     chat.StepID = "pre_main_menu"
 	StepMainMenu        chat.StepID = "main_menu"
 	StepMyOffice        chat.StepID = "my_office"
 	StepCurrentOrder    chat.StepID = "current_order"
@@ -63,6 +64,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 		steps: make(map[chat.StepID]chat.Step),
 	}
 
+	w.steps[StepPreMainMenu] = &PreMainMenuStep{}
 	w.steps[StepMainMenu] = &MainMenuStep{}
 	w.steps[StepMyOffice] = &MyOfficeStep{}
 	w.steps[StepCurrentOrder] = &CurrentOrderStep{authService: authService, zohoService: zohoService}
