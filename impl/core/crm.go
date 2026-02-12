@@ -189,6 +189,9 @@ func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
 	}
 
 	if c.wsHub != nil {
+		if user := c.lookupUserByPlatform(msg.Platform, msg.UserID); user != nil {
+			msg.UserName = user.Name
+		}
 		c.wsHub.BroadcastMessage(msg)
 	}
 }

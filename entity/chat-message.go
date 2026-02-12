@@ -16,6 +16,7 @@ type ChatMessage struct {
 	Sender    string             `json:"sender" bson:"sender"`       // "user" | "manager" | "bot"
 	Text      string             `json:"text" bson:"text"`
 	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
+	UserName  string             `json:"user_name,omitempty" bson:"-"`
 }
 
 // ChatReadReceipt tracks the last time a CRM user marked a chat as read.
