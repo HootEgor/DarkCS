@@ -196,9 +196,19 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 
 	codeMsg := fmt.Sprintf("Код авторизації:\n%s", code)
 
-	if user.SmartSenderId == "" {
-		return "", fmt.Errorf("user does not have a SmartSenderId set")
+	// Send via Telegram userbot if user has a Telegram ID
+	if user.TelegramId != 0 {
+		tgMessenger, ok := c.messengers["telegram"]
+		if !ok {
+			return "", fmt.Errorf("telegram messenger is not configured")
+		}
+		chatID := strconv.FormatInt(user.TelegramId, 10)
+		return code, tgMessenger.SendText(chatID, codeMsg)
+	}
 
+	// Fallback to SmartSender
+	if user.SmartSenderId == "" {
+		return "", fmt.Errorf("user has no Telegram ID or SmartSenderId")
 	}
 
 	return code, c.smartService.SendMessage(user.SmartSenderId, codeMsg)
