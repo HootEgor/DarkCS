@@ -62,7 +62,12 @@ func (s *ZohoFunctionsService) SendMessages(contactID string, messages []entity.
 		Messages:  messages,
 	}
 
-	body, err := json.Marshal(payload)
+	// Wrap in "body" for Zoho webhook
+	payloadWrapper := map[string]interface{}{
+		"body": payload,
+	}
+
+	body, err := json.Marshal(payloadWrapper)
 	if err != nil {
 		return fmt.Errorf("marshal message payload: %w", err)
 	}
