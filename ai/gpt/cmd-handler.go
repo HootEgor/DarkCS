@@ -379,7 +379,7 @@ func (o *Overseer) canUserOrder(user *entity.User) (bool, error) {
 	// Check if any orders are in an active state
 	activeOrders := 0
 	for _, order := range orders {
-		if order.Status == entity.OrderStatusNew || order.Status == entity.OrderStatusProcessing || order.Status == entity.OrderStatusInvoiced {
+		if order.Status != entity.OrderStatusReceived && order.Status != entity.OrderStatusCancelled {
 			activeOrders++
 		}
 

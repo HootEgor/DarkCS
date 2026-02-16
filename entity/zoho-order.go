@@ -85,15 +85,27 @@ type ServiceRating struct {
 	ServiceRating int    `json:"Servise_rating"`
 }
 
-// IsActive returns true if the order is in an active status.
+// IsActive returns true if the order is not in a terminal status.
+// Uses a blacklist approach: all statuses are active unless explicitly completed.
 func (o *OrderDetail) IsActive() bool {
-	return o.Status == OrderStatusNew ||
-		o.Status == OrderStatusProcessing ||
-		o.Status == OrderStatusInvoiced
+	return !o.IsCompleted()
+}
+
+// IsCompleted returns true if the order has reached a terminal status.
+func (o *OrderDetail) IsCompleted() bool {
+	//switch o.Status {
+	//case OrderStatusReceived, OrderStatusCancelled:
+	//	return true
+	//default:
+	//	return false
+	//}
+	return false
 }
 
 const (
 	OrderStatusNew        = "Нове"
 	OrderStatusProcessing = "Оброблення замовлення"
 	OrderStatusInvoiced   = "Рахунок виставлено"
+	OrderStatusReceived   = "Отримано"
+	OrderStatusCancelled  = "Скасовано"
 )
