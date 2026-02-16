@@ -93,13 +93,12 @@ func (o *OrderDetail) IsActive() bool {
 
 // IsCompleted returns true if the order has reached a terminal status.
 func (o *OrderDetail) IsCompleted() bool {
-	//switch o.Status {
-	//case OrderStatusReceived, OrderStatusCancelled:
-	//	return true
-	//default:
-	//	return false
-	//}
-	return false
+	switch o.Status {
+	case OrderStatusReceived, OrderStatusCancelled:
+		return true
+	default:
+		return false
+	}
 }
 
 const (
@@ -107,5 +106,5 @@ const (
 	OrderStatusProcessing = "Оброблення замовлення"
 	OrderStatusInvoiced   = "Рахунок виставлено"
 	OrderStatusReceived   = "Отримано"
-	OrderStatusCancelled  = "Скасовано"
+	OrderStatusCancelled  = "Відмінено"
 )
