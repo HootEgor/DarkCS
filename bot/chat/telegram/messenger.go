@@ -12,6 +12,7 @@ import (
 // This avoids importing the concrete bot type and prevents circular imports.
 type TelegramAPI interface {
 	SendMessage(chatId int64, text string, opts *tgbotapi.SendMessageOpts) (*tgbotapi.Message, error)
+	EditMessageText(text string, opts *tgbotapi.EditMessageTextOpts) (*tgbotapi.Message, bool, error)
 	SendChatAction(chatId int64, action string, opts *tgbotapi.SendChatActionOpts) (bool, error)
 }
 
@@ -99,6 +100,37 @@ func (m *Messenger) SendInlineGrid(chatID, text string, rows [][]chat.InlineButt
 	}
 
 	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
+		ReplyMarkup: tgbotapi.InlineKeyboardMarkup{
+			InlineKeyboard: keyboard,
+		},
+	})
+	return err
+}
+
+func (m *Messenger) EditInlineGrid(chatID, messageID, text string, rows [][]chat.InlineButton) error {
+	chatInt, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return err
+	}
+	msgInt, err := strconv.ParseInt(messageID, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	keyboard := make([][]tgbotapi.InlineKeyboardButton, len(rows))
+	for i, row := range rows {
+		keyboard[i] = make([]tgbotapi.InlineKeyboardButton, len(row))
+		for j, btn := range row {
+			keyboard[i][j] = tgbotapi.InlineKeyboardButton{
+				Text:         btn.Text,
+				CallbackData: btn.Data,
+			}
+		}
+	}
+
+	_, _, err = m.api.EditMessageText(text, &tgbotapi.EditMessageTextOpts{
+		ChatId:    chatInt,
+		MessageId: msgInt,
 		ReplyMarkup: tgbotapi.InlineKeyboardMarkup{
 			InlineKeyboard: keyboard,
 		},

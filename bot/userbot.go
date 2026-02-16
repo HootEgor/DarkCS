@@ -149,10 +149,16 @@ func (b *UserBot) handleCallback(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	data := ctx.CallbackQuery.Data
 	messenger := b.newMessenger()
 
+	// Extract message ID for inline message editing
+	var messageID string
+	if msg := ctx.CallbackQuery.Message; msg != nil {
+		messageID = strconv.FormatInt(msg.GetMessageId(), 10)
+	}
+
 	// Answer callback to remove loading indicator
 	ctx.CallbackQuery.Answer(bot, nil)
 
-	err := b.chatEngine.HandleCallback(context.Background(), messenger, "telegram", userID, chatID, data)
+	err := b.chatEngine.HandleCallback(context.Background(), messenger, "telegram", userID, chatID, data, messageID)
 	if err != nil {
 		b.log.Error("callback error",
 			slog.String("user_id", userID),

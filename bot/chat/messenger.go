@@ -13,6 +13,7 @@ type Messenger interface {
 	SendMenu(chatID, text string, rows [][]MenuButton) error
 	SendInlineOptions(chatID, text string, buttons []InlineButton) error
 	SendInlineGrid(chatID, text string, rows [][]InlineButton) error
+	EditInlineGrid(chatID, messageID, text string, rows [][]InlineButton) error
 	SendContactRequest(chatID, text, buttonText string) error
 	SendTyping(chatID string) error
 }
@@ -80,6 +81,10 @@ func (m *loggingMessenger) SendInlineGrid(chatID, text string, rows [][]InlineBu
 	return nil
 }
 
+func (m *loggingMessenger) EditInlineGrid(chatID, messageID, text string, rows [][]InlineButton) error {
+	return m.inner.EditInlineGrid(chatID, messageID, text, rows)
+}
+
 func (m *loggingMessenger) SendContactRequest(chatID, text, buttonText string) error {
 	if err := m.inner.SendContactRequest(chatID, text, buttonText); err != nil {
 		return err
@@ -108,4 +113,5 @@ type UserInput struct {
 	Text         string // Regular message text
 	CallbackData string // Inline button press or matched number
 	Phone        string // Contact share or typed phone
+	MessageID    string // ID of the message that triggered the callback (for editing)
 }

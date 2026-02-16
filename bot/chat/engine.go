@@ -70,7 +70,8 @@ func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, u
 }
 
 // HandleCallback processes a callback/inline button press from any platform.
-func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, userID, chatID, data string) error {
+// messageID is the ID of the message containing the inline keyboard (used for editing).
+func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, userID, chatID, data, messageID string) error {
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	state, err := e.storage.Load(ctx, platform, userID)
@@ -91,7 +92,7 @@ func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, 
 		return fmt.Errorf("step not found: %s", state.CurrentStep)
 	}
 
-	input := UserInput{CallbackData: data}
+	input := UserInput{CallbackData: data, MessageID: messageID}
 	result := step.HandleInput(ctx, m, state, input)
 	return e.processResult(ctx, m, state, w, result)
 }

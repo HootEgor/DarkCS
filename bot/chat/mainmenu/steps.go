@@ -31,7 +31,7 @@ func (s *SelectSchoolStep) Enter(ctx context.Context, m chat.Messenger, state *c
 	}
 
 	rows := s.buildPage(schools, 0)
-	_ = m.SendInlineGrid(state.ChatID, "Оберіть школу:", rows)
+	_ = m.SendInlineGrid(state.ChatID, "Розкажи, будь ласка, з якої школи ти дізнався/дізналася про нас 🖤\n\nОберіть школу:", rows)
 	return chat.StepResult{}
 }
 
@@ -53,9 +53,12 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 		return chat.StepResult{}
 	}
 
-	// Handle pagination
+	// Handle pagination — edit the existing message
 	if strings.HasPrefix(data, "school_pg:") {
 		pageStr := strings.TrimPrefix(data, "school_pg:")
+		if pageStr == "noop" {
+			return chat.StepResult{}
+		}
 		page, err := strconv.Atoi(pageStr)
 		if err != nil {
 			return chat.StepResult{}
@@ -66,9 +69,12 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 			return chat.StepResult{NextStep: StepMainMenu}
 		}
 
-		state.Set("school_page", page)
 		rows := s.buildPage(schools, page)
-		_ = m.SendInlineGrid(state.ChatID, "Оберіть школу:", rows)
+		if input.MessageID != "" {
+			_ = m.EditInlineGrid(state.ChatID, input.MessageID, "Оберіть школу:", rows)
+		} else {
+			_ = m.SendInlineGrid(state.ChatID, "Оберіть школу:", rows)
+		}
 		return chat.StepResult{
 			UpdateState: map[string]any{"school_page": page},
 		}
@@ -78,7 +84,7 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 	if strings.HasPrefix(data, "school_sel:") {
 		name := strings.TrimPrefix(data, "school_sel:")
 		_ = m.SendText(state.ChatID, fmt.Sprintf(
-			"Вітаємо, %s!\n\nОтримай -15%% на перше замовлення з промо-кодом *DARKSCHOOL* 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com",
+			"Вітаємо, %s!\n\nОтримай -15%% на перше замовлення з промо-кодом *DARKSCHOOL* 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nP.S. Твоя особиста знижка -7% вже активна, і з часом може стати ще більшою ✨",
 			name,
 		))
 		return chat.StepResult{NextStep: StepMainMenu}
@@ -106,22 +112,22 @@ func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat
 		})
 	}
 
-	// Navigation row
-	var navRow []chat.InlineButton
-	if page > 0 {
-		navRow = append(navRow, chat.InlineButton{
-			Text: "⬅️",
-			Data: fmt.Sprintf("school_pg:%d", page-1),
-		})
-	}
+	// Navigation row: always [⬅️] [page/total] [➡️]
 	totalPages := (len(schools) + schoolsPerPage - 1) / schoolsPerPage
-	if page < totalPages-1 {
-		navRow = append(navRow, chat.InlineButton{
-			Text: "➡️",
-			Data: fmt.Sprintf("school_pg:%d", page+1),
-		})
-	}
-	if len(navRow) > 0 {
+	if totalPages > 1 {
+		backData := "school_pg:noop"
+		if page > 0 {
+			backData = fmt.Sprintf("school_pg:%d", page-1)
+		}
+		fwdData := "school_pg:noop"
+		if page < totalPages-1 {
+			fwdData = fmt.Sprintf("school_pg:%d", page+1)
+		}
+		navRow := []chat.InlineButton{
+			{Text: "⬅️", Data: backData},
+			{Text: fmt.Sprintf("%d/%d", page+1, totalPages), Data: "school_pg:noop"},
+			{Text: "➡️", Data: fwdData},
+		}
 		rows = append(rows, navRow)
 	}
 

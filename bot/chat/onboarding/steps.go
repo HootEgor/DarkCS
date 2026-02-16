@@ -129,7 +129,7 @@ func (s *CheckUserStep) Enter(ctx context.Context, m chat.Messenger, state *chat
 		telegramId, _ = strconv.ParseInt(state.UserID, 10, 64)
 	}
 
-	user, _ := s.authService.UserExists("", phone, telegramId)
+	user, _ := s.authService.UserExists("", phone, 0)
 
 	if user != nil && user.Name != "" {
 		needsUpdate := false
@@ -141,7 +141,7 @@ func (s *CheckUserStep) Enter(ctx context.Context, m chat.Messenger, state *chat
 		}
 
 		// Link Telegram ID if missing
-		if state.Platform == "telegram" && user.TelegramId == 0 && telegramId != 0 {
+		if state.Platform == "telegram" && user.TelegramId == 0 && telegramId != 0 && telegramId != user.TelegramId {
 			user.TelegramId = telegramId
 			needsUpdate = true
 		}

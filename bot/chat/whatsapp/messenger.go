@@ -38,6 +38,10 @@ func (m *Messenger) SendInlineGrid(chatID, text string, rows [][]chat.InlineButt
 	return m.sender.SendMessage(chatID, formatted)
 }
 
+func (m *Messenger) EditInlineGrid(chatID, messageID, text string, rows [][]chat.InlineButton) error {
+	return m.SendInlineGrid(chatID, text, rows)
+}
+
 func (m *Messenger) SendContactRequest(chatID, text, buttonText string) error {
 	return m.sender.SendMessage(chatID, text)
 }
