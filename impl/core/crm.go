@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"strconv"
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // GetActiveChats returns the list of active chats from MongoDB, enriched with user names
@@ -183,12 +181,6 @@ func (c *Core) UpdateUserPlatformInfo(platform, userID, messengerName string) {
 // SaveAndBroadcastChatMessage saves a chat message and broadcasts it via WebSocket.
 // If the user has a Zoho contact ID, the message is also buffered for Zoho Functions.
 func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
-	// 1️⃣ Generate a new ObjectID if it's empty
-	if msg.ID == primitive.NilObjectID {
-		msg.ID = primitive.NewObjectID()
-	}
-
-	// 2️⃣ Save to repo / database
 	if err := c.repo.SaveChatMessage(msg); err != nil {
 		c.log.Error("failed to save chat message",
 			slog.String("platform", msg.Platform),
@@ -197,13 +189,11 @@ func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
 		)
 	}
 
-	// 3️⃣ Lookup user for broadcasting
 	var user *entity.User
 	if c.wsHub != nil || c.zohoFn != nil {
 		user = c.lookupUserByPlatform(msg.Platform, msg.UserID)
 	}
 
-	// 4️⃣ WebSocket broadcast
 	if c.wsHub != nil {
 		if user != nil {
 			msg.UserName = user.Name
@@ -211,10 +201,9 @@ func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
 		c.wsHub.BroadcastMessage(msg)
 	}
 
-	// 5️⃣ Buffer message for Zoho
 	if c.zohoFn != nil && user != nil && user.ZohoId != "" {
 		c.zohoFn.BufferMessage(user.ZohoId, entity.ZohoMessageItem{
-			MessageID: msg.ID.Hex(), // now unique!
+			MessageID: fmt.Sprintf("%d", time.Now().UnixMilli()), // now unique!
 			ChatID:    msg.ChatID,
 			Content:   msg.Text,
 			Sender:    msg.Sender,
