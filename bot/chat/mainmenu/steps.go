@@ -3,11 +3,13 @@ package mainmenu
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/sl"
 )
 
 const schoolsPerPage = 5
@@ -15,7 +17,9 @@ const schoolsPerPage = 5
 // SelectSchoolStep — Shows a paginated school selection when deep link type is "dl".
 // Auto-skips to main menu if no deep link is present.
 type SelectSchoolStep struct {
-	schoolRepo SchoolRepository
+	schoolRepo  SchoolRepository
+	authService AuthService
+	zohoService ZohoService
 }
 
 func (s *SelectSchoolStep) ID() chat.StepID { return StepSelectSchool }
@@ -87,6 +91,14 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 			"Вітаємо, %s!\n\nОтримай -15%% на перше замовлення з промо-кодом *DARKSCHOOL* 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nP.S. Твоя особиста знижка -7%% вже активна, і з часом може стати ще більшою ✨",
 			name,
 		))
+
+		// Sync school to Zoho CRM
+		if user, err := getUser(state, s.authService); err == nil && user != nil && user.ZohoId != "" {
+			if err := s.zohoService.UpdateContactSchool(user.ZohoId, name); err != nil {
+				slog.Warn("failed to update school in Zoho", slog.String("zoho_id", user.ZohoId), sl.Err(err))
+			}
+		}
+
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 

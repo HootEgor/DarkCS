@@ -50,6 +50,7 @@ type ZohoService interface {
 	GetOrderProducts(orderId string) (string, error)
 	CreateRating(rating entity.ServiceRating) error
 	CreateContact(user *entity.User) (string, error)
+	UpdateContactSchool(zohoID, schoolName string) error
 }
 
 // AIService defines the interface for AI assistant operations.
@@ -72,7 +73,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 		steps: make(map[chat.StepID]chat.Step),
 	}
 
-	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo}
+	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo, authService: authService, zohoService: zohoService}
 	w.steps[StepPreMainMenu] = &PreMainMenuStep{}
 	w.steps[StepMainMenu] = &MainMenuStep{}
 	w.steps[StepMyOffice] = &MyOfficeStep{}

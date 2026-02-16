@@ -238,7 +238,7 @@ func (s *ConfirmDataStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 
 	switch data {
 	case "confirm_no":
-		return chat.StepResult{NextStep: StepRequestName}
+		return chat.StepResult{NextStep: StepRequestPhone}
 
 	case "confirm_yes":
 		name := state.GetString(KeyName)
@@ -271,7 +271,7 @@ func (s *ConfirmDataStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		}
 
 		// Create or update Zoho contact
-		if user.ZohoId == "" && s.zohoService != nil {
+		if s.zohoService != nil {
 			zohoId, zohoErr := s.zohoService.CreateContact(user)
 			if zohoErr == nil && zohoId != "" {
 				user.ZohoId = zohoId

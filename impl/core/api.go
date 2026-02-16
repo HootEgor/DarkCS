@@ -206,12 +206,14 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 		return code, tgMessenger.SendText(chatID, codeMsg)
 	}
 
-	// Fallback to SmartSender
-	if user.SmartSenderId == "" {
-		return "", fmt.Errorf("user has no Telegram ID or SmartSenderId")
-	}
+	return "", fmt.Errorf("user has no Telegram ID")
 
-	return code, c.smartService.SendMessage(user.SmartSenderId, codeMsg)
+	//// Fallback to SmartSender
+	//if user.SmartSenderId == "" {
+	//	return "", fmt.Errorf("user has no Telegram ID or SmartSenderId")
+	//}
+	//
+	//return code, c.smartService.SendMessage(user.SmartSenderId, codeMsg)
 }
 
 func (c *Core) GenerateApiKey(username string) (string, error) {
