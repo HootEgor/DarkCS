@@ -147,7 +147,7 @@ func (s *CheckUserStep) Enter(ctx context.Context, m chat.Messenger, state *chat
 		}
 
 		// Ensure Zoho contact exists
-		if user.ZohoId == "" && s.zohoService != nil {
+		if s.zohoService != nil {
 			zohoId, err := s.zohoService.CreateContact(user)
 			if err == nil && zohoId != "" {
 				user.ZohoId = zohoId
