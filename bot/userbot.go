@@ -2,10 +2,12 @@ package bot
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"DarkCS/bot/chat"
@@ -94,6 +96,8 @@ func (b *UserBot) newMessenger() *tgmessenger.Messenger {
 }
 
 // handleStart handles the /start command — always starts onboarding.
+// If the message contains a deep link payload (e.g. /start ZGw6Mjg5MjM0),
+// it is decoded from base64 as "type:id" and passed into the workflow state.
 func (b *UserBot) handleStart(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	if b.chatEngine == nil {
 		b.log.Warn("chat engine not initialized")
@@ -104,7 +108,25 @@ func (b *UserBot) handleStart(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	chatID := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
 	messenger := b.newMessenger()
 
-	err := b.chatEngine.StartWorkflow(context.Background(), messenger, "telegram", userID, chatID, "onboarding")
+	var initialData map[string]any
+	if parts := strings.Fields(ctx.EffectiveMessage.Text); len(parts) > 1 {
+		decoded, err := base64.StdEncoding.DecodeString(parts[1])
+		if err == nil {
+			if kv := strings.SplitN(string(decoded), ":", 2); len(kv) == 2 {
+				initialData = map[string]any{
+					"deep_link_type": kv[0],
+					"deep_link_id":   kv[1],
+				}
+				b.log.Info("deep link parsed",
+					slog.String("user_id", userID),
+					slog.String("type", kv[0]),
+					slog.String("id", kv[1]),
+				)
+			}
+		}
+	}
+
+	err := b.chatEngine.StartWorkflowWithData(context.Background(), messenger, "telegram", userID, chatID, "onboarding", initialData)
 	if err != nil {
 		b.log.Error("failed to start onboarding",
 			slog.String("user_id", userID),

@@ -1,6 +1,8 @@
 package mainmenu
 
 import (
+	"context"
+
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
 	"log/slog"
@@ -12,6 +14,7 @@ const (
 
 // Step IDs
 const (
+	StepSelectSchool    chat.StepID = "select_school"
 	StepPreMainMenu     chat.StepID = "pre_main_menu"
 	StepMainMenu        chat.StepID = "main_menu"
 	StepMyOffice        chat.StepID = "my_office"
@@ -54,16 +57,22 @@ type AIService interface {
 	ProcessUserRequest(user *entity.User, message string) (*entity.AiAnswer, error)
 }
 
+// SchoolRepository defines the interface for school data access.
+type SchoolRepository interface {
+	GetAllActiveSchools(ctx context.Context) ([]entity.School, error)
+}
+
 // MainMenuWorkflow implements the main menu for chat platforms.
 type MainMenuWorkflow struct {
 	steps map[chat.StepID]chat.Step
 }
 
-func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, log *slog.Logger) *MainMenuWorkflow {
+func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, log *slog.Logger) *MainMenuWorkflow {
 	w := &MainMenuWorkflow{
 		steps: make(map[chat.StepID]chat.Step),
 	}
 
+	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo}
 	w.steps[StepPreMainMenu] = &PreMainMenuStep{}
 	w.steps[StepMainMenu] = &MainMenuStep{}
 	w.steps[StepMyOffice] = &MyOfficeStep{}
@@ -77,7 +86,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 }
 
 func (w *MainMenuWorkflow) ID() chat.WorkflowID      { return WorkflowID }
-func (w *MainMenuWorkflow) InitialStep() chat.StepID { return StepMainMenu }
+func (w *MainMenuWorkflow) InitialStep() chat.StepID { return StepSelectSchool }
 
 func (w *MainMenuWorkflow) GetStep(id chat.StepID) (chat.Step, bool) {
 	step, ok := w.steps[id]

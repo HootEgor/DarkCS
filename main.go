@@ -156,7 +156,7 @@ func main() {
 		chatOnboarding := chatonboarding.NewOnboardingWorkflow(authService, zohoService, lg)
 		chatEngine.RegisterWorkflow(chatOnboarding)
 
-		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, lg)
+		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, db, lg)
 		chatEngine.RegisterWorkflow(chatMainMenu)
 
 		// Wire message listener for CRM

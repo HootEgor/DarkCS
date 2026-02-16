@@ -12,6 +12,7 @@ type Messenger interface {
 	SendText(chatID, text string) error
 	SendMenu(chatID, text string, rows [][]MenuButton) error
 	SendInlineOptions(chatID, text string, buttons []InlineButton) error
+	SendInlineGrid(chatID, text string, rows [][]InlineButton) error
 	SendContactRequest(chatID, text, buttonText string) error
 	SendTyping(chatID string) error
 }
@@ -65,6 +66,14 @@ func (m *loggingMessenger) SendMenu(chatID, text string, rows [][]MenuButton) er
 
 func (m *loggingMessenger) SendInlineOptions(chatID, text string, buttons []InlineButton) error {
 	if err := m.inner.SendInlineOptions(chatID, text, buttons); err != nil {
+		return err
+	}
+	m.saveOutgoing(text)
+	return nil
+}
+
+func (m *loggingMessenger) SendInlineGrid(chatID, text string, rows [][]InlineButton) error {
+	if err := m.inner.SendInlineGrid(chatID, text, rows); err != nil {
 		return err
 	}
 	m.saveOutgoing(text)

@@ -125,6 +125,11 @@ func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, u
 
 // StartWorkflow begins a new workflow for a user.
 func (e *ChatEngine) StartWorkflow(ctx context.Context, m Messenger, platform, userID, chatID string, workflowID WorkflowID) error {
+	return e.StartWorkflowWithData(ctx, m, platform, userID, chatID, workflowID, nil)
+}
+
+// StartWorkflowWithData begins a new workflow for a user with initial state data.
+func (e *ChatEngine) StartWorkflowWithData(ctx context.Context, m Messenger, platform, userID, chatID string, workflowID WorkflowID, initialData map[string]any) error {
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	w, ok := e.workflows[workflowID]
@@ -133,6 +138,9 @@ func (e *ChatEngine) StartWorkflow(ctx context.Context, m Messenger, platform, u
 	}
 
 	state := NewChatState(platform, userID, chatID, workflowID, w.InitialStep())
+	if initialData != nil {
+		state.MergeData(initialData)
+	}
 
 	if err := e.storage.Save(ctx, state); err != nil {
 		return fmt.Errorf("saving initial state: %w", err)
@@ -185,7 +193,7 @@ func (e *ChatEngine) processResult(ctx context.Context, m Messenger, state *Chat
 			if err := e.storage.Delete(ctx, state.Platform, state.UserID); err != nil {
 				return err
 			}
-			return e.StartWorkflow(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID))
+			return e.StartWorkflowWithData(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), deepLinkData(state))
 		}
 
 		return e.storage.Delete(ctx, state.Platform, state.UserID)
@@ -233,7 +241,7 @@ func (e *ChatEngine) processResult(ctx context.Context, m Messenger, state *Chat
 				if err := e.storage.Delete(ctx, state.Platform, state.UserID); err != nil {
 					return err
 				}
-				return e.StartWorkflow(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID))
+				return e.StartWorkflowWithData(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), deepLinkData(state))
 			}
 
 			return e.storage.Delete(ctx, state.Platform, state.UserID)
@@ -241,4 +249,21 @@ func (e *ChatEngine) processResult(ctx context.Context, m Messenger, state *Chat
 	}
 
 	return e.storage.Save(ctx, state)
+}
+
+// deepLinkData extracts deep link keys from state to carry through workflow chaining.
+func deepLinkData(state *ChatState) map[string]any {
+	dlType := state.GetString("deep_link_type")
+	dlID := state.GetString("deep_link_id")
+	if dlType == "" && dlID == "" {
+		return nil
+	}
+	data := make(map[string]any)
+	if dlType != "" {
+		data["deep_link_type"] = dlType
+	}
+	if dlID != "" {
+		data["deep_link_id"] = dlID
+	}
+	return data
 }

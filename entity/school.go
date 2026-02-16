@@ -5,6 +5,7 @@ import "time"
 // School represents a school entity for the onboarding workflow.
 type School struct {
 	Name      string    `json:"name" bson:"_id"`
+	Code      string    `json:"code" bson:"code"`
 	Active    bool      `json:"active" bson:"active"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 }

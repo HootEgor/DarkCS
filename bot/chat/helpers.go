@@ -88,6 +88,45 @@ func FormatNumberedInline(text string, buttons []InlineButton) string {
 	return sb.String()
 }
 
+// FormatNumberedInlineGrid creates a numbered text list from a multi-row inline grid.
+// Rows are flattened into a single numbered list for text-only platforms.
+func FormatNumberedInlineGrid(text string, rows [][]InlineButton) string {
+	var sb strings.Builder
+	sb.WriteString(text)
+	sb.WriteString("\n\n")
+
+	idx := 1
+	for _, row := range rows {
+		for _, btn := range row {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", idx, btn.Text))
+			idx++
+		}
+	}
+	sb.WriteString("\nОберіть опцію:")
+	return sb.String()
+}
+
+// MatchNumberToInlineGrid converts a number string to the corresponding inline button data
+// from a multi-row grid.
+func MatchNumberToInlineGrid(text string, rows [][]InlineButton) string {
+	text = strings.TrimSpace(text)
+	num, err := strconv.Atoi(text)
+	if err != nil || num < 1 {
+		return ""
+	}
+
+	idx := 1
+	for _, row := range rows {
+		for _, btn := range row {
+			if idx == num {
+				return btn.Data
+			}
+			idx++
+		}
+	}
+	return ""
+}
+
 // MatchNumberToInline converts a number string to the corresponding inline button data.
 func MatchNumberToInline(text string, buttons []InlineButton) string {
 	text = strings.TrimSpace(text)

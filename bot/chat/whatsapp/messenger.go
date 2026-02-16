@@ -33,6 +33,11 @@ func (m *Messenger) SendInlineOptions(chatID, text string, buttons []chat.Inline
 	return m.sender.SendMessage(chatID, formatted)
 }
 
+func (m *Messenger) SendInlineGrid(chatID, text string, rows [][]chat.InlineButton) error {
+	formatted := chat.FormatNumberedInlineGrid(text, rows)
+	return m.sender.SendMessage(chatID, formatted)
+}
+
 func (m *Messenger) SendContactRequest(chatID, text, buttonText string) error {
 	return m.sender.SendMessage(chatID, text)
 }

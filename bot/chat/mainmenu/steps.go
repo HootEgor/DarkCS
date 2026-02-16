@@ -10,6 +10,124 @@ import (
 	"DarkCS/entity"
 )
 
+const schoolsPerPage = 5
+
+// SelectSchoolStep — Shows a paginated school selection when deep link type is "dl".
+// Auto-skips to main menu if no deep link is present.
+type SelectSchoolStep struct {
+	schoolRepo SchoolRepository
+}
+
+func (s *SelectSchoolStep) ID() chat.StepID { return StepSelectSchool }
+
+func (s *SelectSchoolStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
+	if state.GetString("deep_link_type") != "dl" {
+		return chat.StepResult{NextStep: StepMainMenu}
+	}
+
+	schools, err := s.schoolRepo.GetAllActiveSchools(ctx)
+	if err != nil || len(schools) == 0 {
+		return chat.StepResult{NextStep: StepMainMenu}
+	}
+
+	rows := s.buildPage(schools, 0)
+	_ = m.SendInlineGrid(state.ChatID, "Оберіть школу:", rows)
+	return chat.StepResult{}
+}
+
+func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	data := input.CallbackData
+
+	// For text-only platforms: try to match number input
+	if data == "" {
+		schools, err := s.schoolRepo.GetAllActiveSchools(ctx)
+		if err != nil || len(schools) == 0 {
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+		page := state.GetInt("school_page")
+		rows := s.buildPage(schools, page)
+		data = chat.MatchNumberToInlineGrid(input.Text, rows)
+	}
+
+	if data == "" {
+		return chat.StepResult{}
+	}
+
+	// Handle pagination
+	if strings.HasPrefix(data, "school_pg:") {
+		pageStr := strings.TrimPrefix(data, "school_pg:")
+		page, err := strconv.Atoi(pageStr)
+		if err != nil {
+			return chat.StepResult{}
+		}
+
+		schools, err := s.schoolRepo.GetAllActiveSchools(ctx)
+		if err != nil || len(schools) == 0 {
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+
+		state.Set("school_page", page)
+		rows := s.buildPage(schools, page)
+		_ = m.SendInlineGrid(state.ChatID, "Оберіть школу:", rows)
+		return chat.StepResult{
+			UpdateState: map[string]any{"school_page": page},
+		}
+	}
+
+	// Handle school selection
+	if strings.HasPrefix(data, "school_sel:") {
+		name := strings.TrimPrefix(data, "school_sel:")
+		_ = m.SendText(state.ChatID, fmt.Sprintf(
+			"Вітаємо, %s!\n\nОтримай -15%% на перше замовлення з промо-кодом *DARKSCHOOL* 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com",
+			name,
+		))
+		return chat.StepResult{NextStep: StepMainMenu}
+	}
+
+	return chat.StepResult{}
+}
+
+// buildPage builds a page of inline buttons for school selection.
+func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat.InlineButton {
+	start := page * schoolsPerPage
+	if start >= len(schools) {
+		start = 0
+		page = 0
+	}
+	end := start + schoolsPerPage
+	if end > len(schools) {
+		end = len(schools)
+	}
+
+	var rows [][]chat.InlineButton
+	for _, school := range schools[start:end] {
+		rows = append(rows, []chat.InlineButton{
+			{Text: school.Name, Data: "school_sel:" + school.Name},
+		})
+	}
+
+	// Navigation row
+	var navRow []chat.InlineButton
+	if page > 0 {
+		navRow = append(navRow, chat.InlineButton{
+			Text: "⬅️",
+			Data: fmt.Sprintf("school_pg:%d", page-1),
+		})
+	}
+	totalPages := (len(schools) + schoolsPerPage - 1) / schoolsPerPage
+	if page < totalPages-1 {
+		navRow = append(navRow, chat.InlineButton{
+			Text: "➡️",
+			Data: fmt.Sprintf("school_pg:%d", page+1),
+		})
+	}
+	if len(navRow) > 0 {
+		rows = append(rows, navRow)
+	}
+
+	return rows
+}
+
 // mainMenuButtons defines the main menu layout.
 var mainMenuButtons = [][]chat.MenuButton{
 	{{Text: BtnMyOffice}, {Text: BtnServiceRate}},

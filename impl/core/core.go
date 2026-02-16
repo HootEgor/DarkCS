@@ -43,6 +43,7 @@ type Repository interface {
 	GetAllActiveSchools(ctx context.Context) ([]entity.School, error)
 	GetInactiveSchools(ctx context.Context) ([]entity.School, error)
 	SetSchoolActive(ctx context.Context, name string, active bool) error
+	GetSchoolByCode(ctx context.Context, code string) (*entity.School, error)
 }
 
 type ProductService interface {
