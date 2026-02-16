@@ -12,8 +12,10 @@ import (
 // This avoids importing the concrete bot type and prevents circular imports.
 type TelegramAPI interface {
 	SendMessage(chatId int64, text string, opts *tgbotapi.SendMessageOpts) (*tgbotapi.Message, error)
+	SendDocument(chatId int64, document tgbotapi.InputFileOrString, opts *tgbotapi.SendDocumentOpts) (*tgbotapi.Message, error)
 	EditMessageText(text string, opts *tgbotapi.EditMessageTextOpts) (*tgbotapi.Message, bool, error)
 	SendChatAction(chatId int64, action string, opts *tgbotapi.SendChatActionOpts) (bool, error)
+	GetFile(fileId string, opts *tgbotapi.GetFileOpts) (*tgbotapi.File, error)
 }
 
 // Messenger implements chat.Messenger for Telegram using native keyboards.
@@ -24,6 +26,18 @@ type Messenger struct {
 // NewMessenger creates a new Telegram Messenger.
 func NewMessenger(api TelegramAPI) *Messenger {
 	return &Messenger{api: api}
+}
+
+func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
+	id, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return err
+	}
+	doc := tgbotapi.InputFileByReader(file.Filename, file.Reader)
+	_, err = m.api.SendDocument(id, doc, &tgbotapi.SendDocumentOpts{
+		Caption: file.Caption,
+	})
+	return err
 }
 
 func (m *Messenger) SendText(chatID, text string) error {

@@ -2,12 +2,14 @@ package crm
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"DarkCS/entity"
 	"DarkCS/internal/lib/api/cont"
@@ -19,6 +21,9 @@ type Core interface {
 	GetActiveChats(username string) ([]entity.ChatSummary, error)
 	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
 	SendCrmMessage(platform, userID, text string) error
+	DownloadFile(fileID primitive.ObjectID) (filename, mimeType string, reader io.ReadCloser, err error)
+	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
+	SendCrmFiles(platform, userID, caption string, attachments []entity.Attachment) error
 }
 
 // GetChats returns the list of active chats with last message info.

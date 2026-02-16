@@ -4,9 +4,10 @@ import (
 	"DarkCS/bot/chat"
 )
 
-// MessageSender can send a text message to a recipient.
+// MessageSender can send a text message or media to a recipient.
 type MessageSender interface {
 	SendMessage(recipientPhone, text string) error
+	SendMediaMessage(recipientPhone, mediaType, mediaURL, caption, filename string) error
 }
 
 // Messenger implements chat.Messenger for WhatsApp.
@@ -17,6 +18,18 @@ type Messenger struct {
 // NewMessenger creates a new WhatsApp Messenger.
 func NewMessenger(sender MessageSender) *Messenger {
 	return &Messenger{sender: sender}
+}
+
+func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
+	mediaType := "document"
+	if len(file.MIMEType) > 6 && file.MIMEType[:6] == "image/" {
+		mediaType = "image"
+	} else if len(file.MIMEType) > 6 && file.MIMEType[:6] == "video/" {
+		mediaType = "video"
+	} else if len(file.MIMEType) > 6 && file.MIMEType[:6] == "audio/" {
+		mediaType = "audio"
+	}
+	return m.sender.SendMediaMessage(chatID, mediaType, "", file.Caption, file.Filename)
 }
 
 func (m *Messenger) SendText(chatID, text string) error {

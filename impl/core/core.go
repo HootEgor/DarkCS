@@ -7,8 +7,11 @@ import (
 	"DarkCS/internal/ws"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Repository interface {
@@ -22,6 +25,9 @@ type Repository interface {
 	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
 	CleanupChatMessages() error
 	EnsureChatMessageIndexes() error
+
+	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
+	DownloadFile(fileID primitive.ObjectID) (string, entity.FileMetadata, io.ReadCloser, error)
 
 	UpsertReadReceipt(username, platform, userID string, readAt time.Time) error
 	GetReadReceipts(username string) ([]entity.ChatReadReceipt, error)

@@ -11,6 +11,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"path"
 	"time"
 
 	"DarkCS/bot/chat"
@@ -45,9 +47,15 @@ type WebhookPayload struct {
 			} `json:"recipient"`
 			Timestamp int64 `json:"timestamp"`
 			Message   *struct {
-				Mid    string `json:"mid"`
-				Text   string `json:"text"`
-				IsEcho bool   `json:"is_echo,omitempty"`
+				Mid         string `json:"mid"`
+				Text        string `json:"text"`
+				IsEcho      bool   `json:"is_echo,omitempty"`
+				Attachments []struct {
+					Type    string `json:"type"`
+					Payload struct {
+						URL string `json:"url"`
+					} `json:"payload"`
+				} `json:"attachments,omitempty"`
 			} `json:"message,omitempty"`
 		} `json:"messaging"`
 	} `json:"entry"`
@@ -146,50 +154,75 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 
 	for _, entry := range payload.Entry {
 		for _, messaging := range entry.Messaging {
-			if messaging.Message != nil && messaging.Message.Text != "" && !messaging.Message.IsEcho {
-				senderID := messaging.Sender.ID
-				text := messaging.Message.Text
+			if messaging.Message == nil || messaging.Message.IsEcho {
+				continue
+			}
 
-				// Save incoming message for CRM
-				if b.chatEngine != nil {
-					if listener := b.chatEngine.GetMessageListener(); listener != nil {
-						listener.SaveAndBroadcastChatMessage(entity.ChatMessage{
-							Platform:  "instagram",
-							UserID:    senderID,
-							ChatID:    senderID,
-							Direction: "incoming",
-							Sender:    "user",
-							Text:      text,
-							CreatedAt: time.Now(),
-						})
+			senderID := messaging.Sender.ID
+			text := messaging.Message.Text
 
-						// Fetch and save Instagram @username
-						if username, err := b.GetUserUsername(senderID); err == nil && username != "" {
-							listener.UpdateUserPlatformInfo("instagram", senderID, "@"+username)
+			// Handle attachments (photos, files, etc.)
+			if b.chatEngine != nil && len(messaging.Message.Attachments) > 0 {
+				if listener := b.chatEngine.GetMessageListener(); listener != nil {
+					for _, att := range messaging.Message.Attachments {
+						if att.Payload.URL == "" {
+							continue
 						}
+						b.downloadAndUploadAttachment(listener, senderID, att.Payload.URL, att.Type, text)
+						// Caption only with first attachment
+						text = ""
+					}
+
+					if username, err := b.GetUserUsername(senderID); err == nil && username != "" {
+						listener.UpdateUserPlatformInfo("instagram", senderID, "@"+username)
 					}
 				}
+				continue
+			}
 
-				// Delegate to ChatEngine if available
-				if b.chatEngine != nil {
-					messenger := igmessenger.NewMessenger(b)
-					if err := b.chatEngine.HandleMessage(context.Background(), messenger, "instagram", senderID, senderID, text); err != nil {
-						b.log.Error("chat engine error",
-							slog.String("sender_id", senderID),
-							sl.Err(err),
-						)
+			if text == "" {
+				continue
+			}
+
+			// Save incoming message for CRM
+			if b.chatEngine != nil {
+				if listener := b.chatEngine.GetMessageListener(); listener != nil {
+					listener.SaveAndBroadcastChatMessage(entity.ChatMessage{
+						Platform:  "instagram",
+						UserID:    senderID,
+						ChatID:    senderID,
+						Direction: "incoming",
+						Sender:    "user",
+						Text:      text,
+						CreatedAt: time.Now(),
+					})
+
+					// Fetch and save Instagram @username
+					if username, err := b.GetUserUsername(senderID); err == nil && username != "" {
+						listener.UpdateUserPlatformInfo("instagram", senderID, "@"+username)
 					}
-					continue
 				}
+			}
 
-				// Fallback: echo
-				echoText := fmt.Sprintf("Echo: %s", text)
-				if err := b.SendMessage(senderID, echoText); err != nil {
-					b.log.Error("failed to send echo message",
+			// Delegate to ChatEngine if available
+			if b.chatEngine != nil {
+				messenger := igmessenger.NewMessenger(b)
+				if err := b.chatEngine.HandleMessage(context.Background(), messenger, "instagram", senderID, senderID, text); err != nil {
+					b.log.Error("chat engine error",
 						slog.String("sender_id", senderID),
 						sl.Err(err),
 					)
 				}
+				continue
+			}
+
+			// Fallback: echo
+			echoText := fmt.Sprintf("Echo: %s", text)
+			if err := b.SendMessage(senderID, echoText); err != nil {
+				b.log.Error("failed to send echo message",
+					slog.String("sender_id", senderID),
+					sl.Err(err),
+				)
 			}
 		}
 	}
@@ -243,6 +276,75 @@ func (b *InstaBot) GetUserUsername(userID string) (string, error) {
 	}
 
 	return result.Username, nil
+}
+
+// downloadAndUploadAttachment downloads a file from a URL and uploads it to GridFS via the listener.
+func (b *InstaBot) downloadAndUploadAttachment(listener chat.MessageListener, senderID, fileURL, attType, caption string) {
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		b.log.Error("failed to download Instagram attachment",
+			slog.String("sender_id", senderID),
+			slog.String("url", fileURL),
+			sl.Err(err),
+		)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Determine filename and MIME type
+	mimeType := resp.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	filename := "attachment"
+	if parsed, err := url.Parse(fileURL); err == nil {
+		base := path.Base(parsed.Path)
+		if base != "" && base != "." && base != "/" {
+			filename = base
+		}
+	}
+
+	if err := listener.UploadAndSaveFile("instagram", senderID, resp.Body, filename, mimeType, resp.ContentLength, caption); err != nil {
+		b.log.Error("failed to upload Instagram attachment",
+			slog.String("sender_id", senderID),
+			sl.Err(err),
+		)
+	}
+}
+
+// SendMediaMessage sends a media attachment to a recipient via Instagram Graph API.
+func (b *InstaBot) SendMediaMessage(recipientID, mediaURL, mediaType string) error {
+	payload := map[string]interface{}{
+		"recipient": map[string]string{"id": recipientID},
+		"message": map[string]interface{}{
+			"attachment": map[string]interface{}{
+				"type": mediaType,
+				"payload": map[string]string{
+					"url": mediaURL,
+				},
+			},
+		},
+	}
+
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal media request: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.accessToken)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to send media message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
 // verifySignature verifies the X-Hub-Signature-256 header

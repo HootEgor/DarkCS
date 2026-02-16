@@ -4,9 +4,10 @@ import (
 	"DarkCS/bot/chat"
 )
 
-// MessageSender can send a text message to a recipient.
+// MessageSender can send a text message or media to a recipient.
 type MessageSender interface {
 	SendMessage(recipientID, text string) error
+	SendMediaMessage(recipientID, mediaURL, mediaType string) error
 }
 
 // Messenger implements chat.Messenger for Instagram.
@@ -17,6 +18,28 @@ type Messenger struct {
 // NewMessenger creates a new Instagram Messenger.
 func NewMessenger(sender MessageSender) *Messenger {
 	return &Messenger{sender: sender}
+}
+
+func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
+	// Instagram doesn't support file upload via reader — it requires a publicly accessible URL.
+	// The CRM file download endpoint URL is passed as the caption fallback.
+	if file.MIMEType != "" {
+		mediaType := "file"
+		if len(file.MIMEType) > 6 && file.MIMEType[:6] == "image/" {
+			mediaType = "image"
+		}
+		// Caption is sent as a separate text message if present
+		if file.Caption != "" {
+			_ = m.sender.SendMessage(chatID, file.Caption)
+		}
+		return m.sender.SendMediaMessage(chatID, file.Filename, mediaType)
+	}
+	// Fallback: send filename as text
+	text := "[File: " + file.Filename + "]"
+	if file.Caption != "" {
+		text = file.Caption + "\n" + text
+	}
+	return m.sender.SendMessage(chatID, text)
 }
 
 func (m *Messenger) SendText(chatID, text string) error {

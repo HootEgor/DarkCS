@@ -12,12 +12,12 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = 30 * time.Second
-	maxMessageSize = 2048
+	maxMessageSize = 16384
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},

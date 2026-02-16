@@ -1,15 +1,26 @@
 package chat
 
 import (
-	"DarkCS/entity"
+	"io"
 	"time"
+
+	"DarkCS/entity"
 )
+
+// FileMessage holds the data needed to send a file to a user.
+type FileMessage struct {
+	Reader   io.Reader
+	Filename string
+	MIMEType string
+	Caption  string
+}
 
 // Messenger is the platform UI adapter interface.
 // Each platform (Telegram, Instagram, WhatsApp) implements this to handle
 // platform-specific message delivery.
 type Messenger interface {
 	SendText(chatID, text string) error
+	SendFile(chatID string, file FileMessage) error
 	SendMenu(chatID, text string, rows [][]MenuButton) error
 	SendInlineOptions(chatID, text string, buttons []InlineButton) error
 	SendInlineGrid(chatID, text string, rows [][]InlineButton) error
@@ -52,6 +63,18 @@ func (m *loggingMessenger) saveOutgoing(text string) {
 func (m *loggingMessenger) SendText(chatID, text string) error {
 	if err := m.inner.SendText(chatID, text); err != nil {
 		return err
+	}
+	m.saveOutgoing(text)
+	return nil
+}
+
+func (m *loggingMessenger) SendFile(chatID string, file FileMessage) error {
+	if err := m.inner.SendFile(chatID, file); err != nil {
+		return err
+	}
+	text := file.Caption
+	if text == "" {
+		text = "[File: " + file.Filename + "]"
 	}
 	m.saveOutgoing(text)
 	return nil

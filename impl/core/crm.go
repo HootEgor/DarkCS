@@ -1,11 +1,16 @@
 package core
 
 import (
-	"DarkCS/entity"
 	"fmt"
+	"io"
 	"log/slog"
 	"strconv"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"DarkCS/bot/chat"
+	"DarkCS/entity"
 )
 
 // GetActiveChats returns the list of active chats from MongoDB, enriched with user names
@@ -100,8 +105,20 @@ func (c *Core) lookupUserByPlatform(platform, userID string) *entity.User {
 }
 
 // GetChatMessages returns paginated message history from MongoDB.
+// Attachment URLs are populated at read-time so clients can download files.
 func (c *Core) GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error) {
-	return c.repo.GetChatMessages(platform, userID, limit, offset)
+	messages, err := c.repo.GetChatMessages(platform, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range messages {
+		for j := range messages[i].Attachments {
+			messages[i].Attachments[j].URL = "/api/v1/crm/files/" + messages[i].Attachments[j].FileID.Hex()
+		}
+	}
+
+	return messages, nil
 }
 
 // SendCrmMessage sends a message from a manager to a user via their platform.
@@ -176,6 +193,135 @@ func (c *Core) UpdateUserPlatformInfo(platform, userID, messengerName string) {
 			slog.String("error", err.Error()),
 		)
 	}
+}
+
+// UploadAndSaveFile uploads a file to GridFS, saves a ChatMessage with the attachment, and broadcasts via WebSocket.
+// Called by platform bots when receiving media from users.
+func (c *Core) UploadAndSaveFile(platform, userID string, reader io.Reader, filename, mimeType string, size int64, caption string) error {
+	if size > entity.MaxFileSize {
+		return fmt.Errorf("file %q (%d bytes) exceeds the %d MB limit", filename, size, entity.MaxFileSize>>20)
+	}
+
+	// Wrap reader with a size-limited reader to enforce the limit even when size is unknown or incorrect
+	reader = io.LimitReader(reader, entity.MaxFileSize+1)
+
+	meta := entity.FileMetadata{
+		MIMEType: mimeType,
+		Platform: platform,
+		UserID:   userID,
+		Uploader: "user",
+	}
+
+	fileID, storedSize, err := c.repo.UploadFile(filename, reader, meta)
+	if err != nil {
+		return fmt.Errorf("upload file: %w", err)
+	}
+
+	if storedSize > entity.MaxFileSize {
+		return fmt.Errorf("file %q (%d bytes) exceeds the %d MB limit", filename, storedSize, entity.MaxFileSize>>20)
+	}
+
+	if size == 0 {
+		size = storedSize
+	}
+
+	att := entity.Attachment{
+		FileID:   fileID,
+		Filename: filename,
+		MIMEType: mimeType,
+		Size:     size,
+		URL:      "/api/v1/crm/files/" + fileID.Hex(),
+	}
+
+	msg := entity.ChatMessage{
+		Platform:    platform,
+		UserID:      userID,
+		ChatID:      userID,
+		Direction:   "incoming",
+		Sender:      "user",
+		Text:        caption,
+		Attachments: []entity.Attachment{att},
+		CreatedAt:   time.Now(),
+	}
+
+	c.SaveAndBroadcastChatMessage(msg)
+	return nil
+}
+
+// DownloadFile retrieves a file from GridFS by its ID.
+// Returns the filename, MIME type, and a ReadCloser the caller must close.
+func (c *Core) DownloadFile(fileID primitive.ObjectID) (string, string, io.ReadCloser, error) {
+	filename, meta, reader, err := c.repo.DownloadFile(fileID)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return filename, meta.MIMEType, reader, nil
+}
+
+// SendCrmFiles sends files from a manager to a user via their platform messenger.
+// It downloads each file from GridFS, sends it via the platform, then saves a single ChatMessage.
+func (c *Core) SendCrmFiles(platform, userID, caption string, attachments []entity.Attachment) error {
+	messenger, ok := c.messengers[platform]
+	if !ok {
+		return fmt.Errorf("no messenger for platform: %s", platform)
+	}
+
+	// Send caption only with the first file
+	fileCaption := caption
+	for _, att := range attachments {
+		_, meta, reader, err := c.repo.DownloadFile(att.FileID)
+		if err != nil {
+			return fmt.Errorf("download file %s: %w", att.FileID.Hex(), err)
+		}
+
+		sendErr := messenger.SendFile(userID, chat.FileMessage{
+			Reader:   reader,
+			Filename: att.Filename,
+			MIMEType: meta.MIMEType,
+			Caption:  fileCaption,
+		})
+		reader.Close()
+
+		if sendErr != nil {
+			return fmt.Errorf("send file to %s/%s: %w", platform, userID, sendErr)
+		}
+
+		fileCaption = ""
+	}
+
+	// Populate URLs for WebSocket broadcast
+	for i := range attachments {
+		attachments[i].URL = "/api/v1/crm/files/" + attachments[i].FileID.Hex()
+	}
+
+	msg := entity.ChatMessage{
+		Platform:    platform,
+		UserID:      userID,
+		ChatID:      userID,
+		Direction:   "outgoing",
+		Sender:      "manager",
+		Text:        caption,
+		Attachments: attachments,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := c.repo.SaveChatMessage(msg); err != nil {
+		c.log.Error("failed to save outgoing file message",
+			slog.String("platform", platform),
+			slog.String("user_id", userID),
+			slog.String("error", err.Error()),
+		)
+	}
+
+	if c.wsHub != nil {
+		user := c.lookupUserByPlatform(msg.Platform, msg.UserID)
+		if user != nil {
+			msg.UserName = user.Name
+		}
+		c.wsHub.BroadcastMessage(msg)
+	}
+
+	return nil
 }
 
 // SaveAndBroadcastChatMessage saves a chat message and broadcasts it via WebSocket.

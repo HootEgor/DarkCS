@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -69,6 +71,11 @@ func (b *UserBot) Start() error {
 	dispatcher.AddHandler(handlers.NewCommand("start", b.handleStart))
 	dispatcher.AddHandler(handlers.NewCallback(func(cq *tgbotapi.CallbackQuery) bool { return true }, b.handleCallback))
 	dispatcher.AddHandler(handlers.NewMessage(message.Contact, b.handleContact))
+	dispatcher.AddHandler(handlers.NewMessage(message.Photo, b.handleMedia))
+	dispatcher.AddHandler(handlers.NewMessage(message.Document, b.handleMedia))
+	dispatcher.AddHandler(handlers.NewMessage(message.Audio, b.handleMedia))
+	dispatcher.AddHandler(handlers.NewMessage(message.Video, b.handleMedia))
+	dispatcher.AddHandler(handlers.NewMessage(message.Voice, b.handleMedia))
 	dispatcher.AddHandler(handlers.NewMessage(message.Text, b.handleMessage))
 
 	err := updater.StartPolling(b.api, &ext.PollingOpts{
@@ -232,4 +239,124 @@ func (b *UserBot) handleMessage(bot *tgbotapi.Bot, ctx *ext.Context) error {
 		)
 	}
 	return err
+}
+
+// handleMedia handles photo, document, audio, video, and voice messages.
+func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
+	if b.chatEngine == nil {
+		return nil
+	}
+
+	listener := b.chatEngine.GetMessageListener()
+	if listener == nil {
+		return nil
+	}
+
+	userID := strconv.FormatInt(ctx.EffectiveUser.Id, 10)
+	msg := ctx.EffectiveMessage
+
+	// Determine the file ID, filename, and caption
+	var fileID, filename, caption string
+	switch {
+	case msg.Photo != nil && len(msg.Photo) > 0:
+		// Use largest photo size
+		photo := msg.Photo[len(msg.Photo)-1]
+		fileID = photo.FileId
+		filename = "photo.jpg"
+		caption = msg.Caption
+	case msg.Document != nil:
+		fileID = msg.Document.FileId
+		filename = msg.Document.FileName
+		caption = msg.Caption
+	case msg.Audio != nil:
+		fileID = msg.Audio.FileId
+		filename = msg.Audio.FileName
+		if filename == "" {
+			filename = "audio.mp3"
+		}
+		caption = msg.Caption
+	case msg.Video != nil:
+		fileID = msg.Video.FileId
+		filename = msg.Video.FileName
+		if filename == "" {
+			filename = "video.mp4"
+		}
+		caption = msg.Caption
+	case msg.Voice != nil:
+		fileID = msg.Voice.FileId
+		filename = "voice.ogg"
+		caption = msg.Caption
+	default:
+		return nil
+	}
+
+	// Get file path from Telegram
+	file, err := b.api.GetFile(fileID, nil)
+	if err != nil {
+		b.log.Error("failed to get file from Telegram",
+			slog.String("user_id", userID),
+			slog.String("file_id", fileID),
+			sl.Err(err),
+		)
+		return err
+	}
+
+	// Download file from Telegram servers
+	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", b.api.Token, file.FilePath)
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		b.log.Error("failed to download file from Telegram",
+			slog.String("user_id", userID),
+			sl.Err(err),
+		)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Detect MIME type from file extension
+	mimeType := "application/octet-stream"
+	fileExt := strings.ToLower(path.Ext(file.FilePath))
+	switch fileExt {
+	case ".jpg", ".jpeg":
+		mimeType = "image/jpeg"
+	case ".png":
+		mimeType = "image/png"
+	case ".gif":
+		mimeType = "image/gif"
+	case ".webp":
+		mimeType = "image/webp"
+	case ".mp4":
+		mimeType = "video/mp4"
+	case ".mp3":
+		mimeType = "audio/mpeg"
+	case ".ogg", ".oga":
+		mimeType = "audio/ogg"
+	case ".pdf":
+		mimeType = "application/pdf"
+	case ".webm":
+		mimeType = "video/webm"
+	}
+
+	// Upload to GridFS and save message
+	if err := listener.UploadAndSaveFile("telegram", userID, resp.Body, filename, mimeType, file.FileSize, caption); err != nil {
+		b.log.Error("failed to upload and save file",
+			slog.String("user_id", userID),
+			sl.Err(err),
+		)
+		return err
+	}
+
+	// Save Telegram @username
+	if username := ctx.EffectiveUser.Username; username != "" {
+		listener.UpdateUserPlatformInfo("telegram", userID, "@"+username)
+	}
+
+	// Route caption text to ChatEngine if present
+	if caption != "" {
+		chatIDStr := strconv.FormatInt(ctx.EffectiveChat.Id, 10)
+		messenger := b.newMessenger()
+		_ = b.chatEngine.HandleMessage(context.Background(), messenger, "telegram", userID, chatIDStr, caption)
+	}
+
+	return nil
 }

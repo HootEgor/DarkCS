@@ -129,6 +129,9 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 			})
 		}
 
+		// File download endpoint — accepts both Bearer header and ?token= query param
+		v1.Get("/crm/files/{file_id}", crm.DownloadFile(log, handler, handler))
+
 		// Authenticated routes
 		v1.Group(func(auth chi.Router) {
 			auth.Use(authenticate.New(log, handler))
@@ -181,6 +184,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 				r.Get("/chats", crm.GetChats(log, handler))
 				r.Get("/chats/{platform}/{user_id}/messages", crm.GetMessages(log, handler))
 				r.Post("/chats/{platform}/{user_id}/send", crm.SendMessage(log, handler))
+				r.Post("/chats/{platform}/{user_id}/send-file", crm.SendFile(log, handler))
 			})
 		})
 	})
