@@ -256,12 +256,18 @@ func (s *ConfirmDataStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 			return chat.StepResult{Error: err}
 		}
 
-		// Link platform ID
+		// Sync fields from onboarding state
+		if user.Phone != phone {
+			user.Phone = phone
+		}
 		if state.Platform == "instagram" {
 			user.InstagramId = state.UserID
 		}
 		if state.Platform == "telegram" && user.TelegramId == 0 && telegramId != 0 {
 			user.TelegramId = telegramId
+		}
+		if user.Name != name {
+			user.Name = name
 		}
 
 		// Create or update Zoho contact
@@ -270,11 +276,6 @@ func (s *ConfirmDataStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 			if zohoErr == nil && zohoId != "" {
 				user.ZohoId = zohoId
 			}
-		}
-
-		// Update name if needed
-		if user.Name != name {
-			user.Name = name
 		}
 
 		_ = s.authService.UpdateUser(user)
