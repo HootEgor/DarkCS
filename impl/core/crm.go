@@ -179,6 +179,7 @@ func (c *Core) UpdateUserPlatformInfo(platform, userID, messengerName string) {
 }
 
 // SaveAndBroadcastChatMessage saves a chat message and broadcasts it via WebSocket.
+// If the user has a Zoho contact ID, the message is also buffered for Zoho Functions.
 func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
 	if err := c.repo.SaveChatMessage(msg); err != nil {
 		c.log.Error("failed to save chat message",
@@ -188,10 +189,24 @@ func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
 		)
 	}
 
+	var user *entity.User
+	if c.wsHub != nil || c.zohoFn != nil {
+		user = c.lookupUserByPlatform(msg.Platform, msg.UserID)
+	}
+
 	if c.wsHub != nil {
-		if user := c.lookupUserByPlatform(msg.Platform, msg.UserID); user != nil {
+		if user != nil {
 			msg.UserName = user.Name
 		}
 		c.wsHub.BroadcastMessage(msg)
+	}
+
+	if c.zohoFn != nil && user != nil && user.ZohoId != "" {
+		c.zohoFn.BufferMessage(user.ZohoId, entity.ZohoMessageItem{
+			MessageID: msg.ID.Hex(),
+			ChatID:    msg.ChatID,
+			Content:   msg.Text,
+			Sender:    msg.Sender,
+		})
 	}
 }

@@ -77,6 +77,10 @@ type Config struct {
 		AppSecret     string `yaml:"app_secret" env-default:""`
 		PhoneNumberID string `yaml:"phone_number_id" env-default:""`
 	} `yaml:"whatsapp"`
+	ZohoFunctions struct {
+		MsgUrl string `yaml:"msg_url" env-default:""`
+		ApiKey string `yaml:"api_key" env-default:""`
+	} `yaml:"zoho-functions"`
 }
 
 var instance *Config

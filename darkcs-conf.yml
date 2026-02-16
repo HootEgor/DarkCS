@@ -49,6 +49,9 @@ zoho:
   crm_url: ${ZOHO_CRM_URL}
   scope: crm
   api_version: v6
+zoho-functions:
+  api_key: ${ZOHO_API_KEY}
+  msg_url: https://www.zohoapis.eu/crm/v7/functions/getmessagefromsmartsender/actions/execute
 instagram:
   enabled: true
   access_token: ${INSTAGRAM_ACCESS_TOKEN}

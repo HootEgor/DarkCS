@@ -113,6 +113,11 @@ type ZohoService interface {
 	CreateRating(rating entity.ServiceRating) error
 }
 
+// ZohoFunctionsService buffers and sends chat messages to Zoho Functions.
+type ZohoFunctionsService interface {
+	BufferMessage(contactID string, item entity.ZohoMessageItem)
+}
+
 type Core struct {
 	repo         Repository
 	ms           MessageService
@@ -121,6 +126,7 @@ type Core struct {
 	authService  AuthService
 	smartService SmartService
 	zoho         ZohoService
+	zohoFn       ZohoFunctionsService
 	authKey      string
 	keys         map[string]string
 	log          *slog.Logger
@@ -166,6 +172,10 @@ func (c *Core) SetSmartService(smart SmartService) {
 
 func (c *Core) SetZohoService(zoho ZohoService) {
 	c.zoho = zoho
+}
+
+func (c *Core) SetZohoFunctionsService(zf ZohoFunctionsService) {
+	c.zohoFn = zf
 }
 
 func (c *Core) SetWsHub(hub *ws.Hub) {

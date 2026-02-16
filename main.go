@@ -24,6 +24,7 @@ import (
 	"DarkCS/internal/service/product"
 	"DarkCS/internal/service/smart-sender"
 	services "DarkCS/internal/service/zoho"
+	zoho_functions "DarkCS/internal/service/zoho-functions"
 	"DarkCS/internal/ws"
 )
 
@@ -137,6 +138,16 @@ func main() {
 	smartService := smart_sender.NewSmartSenderService(conf, lg)
 	handler.SetSmartService(smartService)
 	handler.SetZohoService(zohoService)
+
+	if conf.ZohoFunctions.MsgUrl != "" && conf.ZohoFunctions.ApiKey != "" {
+		zohoFnService := zoho_functions.NewZohoFunctionsService(
+			conf.ZohoFunctions.MsgUrl,
+			conf.ZohoFunctions.ApiKey,
+			lg,
+		)
+		handler.SetZohoFunctionsService(zohoFnService)
+		lg.Info("zoho functions service initialized")
+	}
 
 	// Create WebSocket hub for CRM
 	wsHub := ws.NewHub(lg)
