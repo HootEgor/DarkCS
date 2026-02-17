@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -343,6 +344,12 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 			slog.String("user_id", userID),
 			sl.Err(err),
 		)
+		if errors.Is(err, entity.ErrFileTooLarge) {
+			chatID := ctx.EffectiveChat.Id
+			limitMB := entity.MaxFileSize >> 20
+			text := fmt.Sprintf("The file is too large. Maximum allowed size is %d MB.", limitMB)
+			_, _ = bot.SendMessage(chatID, text, nil)
+		}
 		return err
 	}
 

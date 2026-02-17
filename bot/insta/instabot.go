@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -310,6 +311,11 @@ func (b *InstaBot) downloadAndUploadAttachment(listener chat.MessageListener, se
 			slog.String("sender_id", senderID),
 			sl.Err(err),
 		)
+		if errors.Is(err, entity.ErrFileTooLarge) {
+			limitMB := entity.MaxFileSize >> 20
+			text := fmt.Sprintf("The file is too large. Maximum allowed size is %d MB.", limitMB)
+			_ = b.SendMessage(senderID, text)
+		}
 	}
 }
 

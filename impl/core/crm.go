@@ -200,7 +200,7 @@ func (c *Core) UpdateUserPlatformInfo(platform, userID, messengerName string) {
 // Called by platform bots when receiving media from users.
 func (c *Core) UploadAndSaveFile(platform, userID string, reader io.Reader, filename, mimeType string, size int64, caption string) error {
 	if size > entity.MaxFileSize {
-		return fmt.Errorf("file %q (%d bytes) exceeds the %d MB limit", filename, size, entity.MaxFileSize>>20)
+		return entity.FileTooLargeError(filename, size)
 	}
 
 	// Wrap reader with a size-limited reader to enforce the limit even when size is unknown or incorrect
@@ -219,7 +219,7 @@ func (c *Core) UploadAndSaveFile(platform, userID string, reader io.Reader, file
 	}
 
 	if storedSize > entity.MaxFileSize {
-		return fmt.Errorf("file %q (%d bytes) exceeds the %d MB limit", filename, storedSize, entity.MaxFileSize>>20)
+		return entity.FileTooLargeError(filename, storedSize)
 	}
 
 	if size == 0 {

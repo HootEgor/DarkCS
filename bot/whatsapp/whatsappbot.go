@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -381,6 +382,11 @@ func (b *WhatsAppBot) downloadAndUploadMedia(listener chat.MessageListener, send
 			slog.String("sender_phone", senderPhone),
 			sl.Err(err),
 		)
+		if errors.Is(err, entity.ErrFileTooLarge) {
+			limitMB := entity.MaxFileSize >> 20
+			text := fmt.Sprintf("The file is too large. Maximum allowed size is %d MB.", limitMB)
+			_ = b.SendMessage(senderPhone, text)
+		}
 	}
 }
 
