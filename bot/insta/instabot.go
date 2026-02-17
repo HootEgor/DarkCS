@@ -313,7 +313,7 @@ func (b *InstaBot) downloadAndUploadAttachment(listener chat.MessageListener, se
 		)
 		if errors.Is(err, entity.ErrFileTooLarge) {
 			limitMB := entity.MaxFileSize >> 20
-			text := fmt.Sprintf("The file is too large. Maximum allowed size is %d MB.", limitMB)
+			text := fmt.Sprintf("Файл занадто великий. Максимально дозволений розмір - %d MB.", limitMB)
 			_ = b.SendMessage(senderID, text)
 		}
 	}

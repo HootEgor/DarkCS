@@ -347,7 +347,7 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 		if errors.Is(err, entity.ErrFileTooLarge) {
 			chatID := ctx.EffectiveChat.Id
 			limitMB := entity.MaxFileSize >> 20
-			text := fmt.Sprintf("The file is too large. Maximum allowed size is %d MB.", limitMB)
+			text := fmt.Sprintf("Файл занадто великий. Максимально дозволений розмір - %d MB.", limitMB)
 			_, _ = bot.SendMessage(chatID, text, nil)
 		}
 		return err
