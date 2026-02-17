@@ -132,7 +132,6 @@ func main() {
 		handler.SetAssistant(overseer)
 		lg.With(
 			sl.Secret("openai_key", conf.OpenAI.ApiKey),
-			sl.Secret("overseer_id", conf.OpenAI.OverseerID),
 		).Info("overseer initialized")
 	}
 

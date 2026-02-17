@@ -21,10 +21,10 @@ jobs:
           sed -i 's|${LISTEN_PORT}|'"$LISTEN_PORT"'|g' darkcs-conf.yml
           sed -i 's|${API_KEY}|'"$API_KEY"'|g' darkcs-conf.yml
           sed -i 's|${OPENAI_API_KEY}|'"$OPENAI_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${OVERSEER_ID}|'"$OVERSEER_ID"'|g' darkcs-conf.yml
-          sed -i 's|${CONSULTANT_ID}|'"$CONSULTANT_ID"'|g' darkcs-conf.yml
-          sed -i 's|${CALCULATOR_ID}|'"$CALCULATOR_ID"'|g' darkcs-conf.yml
-          sed -i 's|${ORDER_MANAGER_ID}|'"$ORDER_MANAGER_ID"'|g' darkcs-conf.yml
+#          sed -i 's|${OVERSEER_ID}|'"$OVERSEER_ID"'|g' darkcs-conf.yml
+#          sed -i 's|${CONSULTANT_ID}|'"$CONSULTANT_ID"'|g' darkcs-conf.yml
+#          sed -i 's|${CALCULATOR_ID}|'"$CALCULATOR_ID"'|g' darkcs-conf.yml
+#          sed -i 's|${ORDER_MANAGER_ID}|'"$ORDER_MANAGER_ID"'|g' darkcs-conf.yml
           sed -i 's|${MONGO_HOST}|'"$MONGO_HOST"'|g' darkcs-conf.yml
           sed -i 's|${MONGO_PORT}|'"$MONGO_PORT"'|g' darkcs-conf.yml
           sed -i 's|${MONGO_USER}|'"$MONGO_USER"'|g' darkcs-conf.yml
@@ -53,10 +53,10 @@ jobs:
           LISTEN_PORT: ${{ vars.LISTEN_PORT }}
           API_KEY: ${{ secrets.API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OVERSEER_ID: ${{ secrets.OVERSEER_ID }}
-          CONSULTANT_ID: ${{ secrets.CONSULTANT_ID }}
-          CALCULATOR_ID: ${{ secrets.CALCULATOR_ID }}
-          ORDER_MANAGER_ID: ${{ secrets.ORDER_MANAGER_ID }}
+#          OVERSEER_ID: ${{ secrets.OVERSEER_ID }}
+#          CONSULTANT_ID: ${{ secrets.CONSULTANT_ID }}
+#          CALCULATOR_ID: ${{ secrets.CALCULATOR_ID }}
+#          ORDER_MANAGER_ID: ${{ secrets.ORDER_MANAGER_ID }}
           MONGO_HOST: ${{ secrets.MONGO_HOST }}
           MONGO_PORT: ${{ secrets.MONGO_PORT }}
           MONGO_USER: ${{ secrets.MONGO_USER }}

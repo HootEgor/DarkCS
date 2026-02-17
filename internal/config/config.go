@@ -2,9 +2,10 @@ package config
 
 import (
 	"fmt"
-	"github.com/ilyakaznacheev/cleanenv"
 	"log"
 	"sync"
+
+	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
@@ -22,12 +23,8 @@ type Config struct {
 		Enabled bool   `yaml:"enabled" env-default:"false"`
 	} `yaml:"userbot"`
 	OpenAI struct {
-		ApiKey         string `yaml:"api_key" env-default:""`
-		OverseerID     string `yaml:"overseer_id" env-default:""`
-		ConsultantID   string `yaml:"consultant_id" env-default:""`
-		CalculatorID   string `yaml:"calculator_id" env-default:""`
-		OrderManagerID string `yaml:"order_manager_id" env-default:""`
-		DevPrefix      string `yaml:"dev_prefix" env-default:""`
+		ApiKey    string `yaml:"api_key" env-default:""`
+		DevPrefix string `yaml:"dev_prefix" env-default:""`
 	} `yaml:"openai"`
 	Username string `yaml:"username" env-default:""`
 	SavePath string `yaml:"save_path" env-default:""`

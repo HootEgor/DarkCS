@@ -81,7 +81,6 @@ type ZohoService interface {
 // It handles OpenAI API communication, thread management, and service integration.
 type Overseer struct {
 	client         *openai.Client        // OpenAI API client
-	assistants     map[string]string     // Map of assistant names to their IDs
 	apiKey         string                // OpenAI API key
 	mcpKey         string                // MCP API key
 	threads        map[string]ThreadMeta // Map of user IDs to their thread metadata
@@ -123,20 +122,14 @@ type OverseerResponse struct {
 //   - *Overseer: A new Overseer instance ready for use
 func NewOverseer(conf *config.Config, logger *slog.Logger, mcpApiKey string) *Overseer {
 	client := openai.NewClient(conf.OpenAI.ApiKey)
-	assistants := make(map[string]string)
-	assistants[entity.OverseerAss] = conf.OpenAI.OverseerID
-	assistants[entity.ConsultantAss] = conf.OpenAI.ConsultantID
-	assistants[entity.CalculatorAss] = conf.OpenAI.CalculatorID
-	assistants[entity.OrderManagerAss] = conf.OpenAI.OrderManagerID
 	return &Overseer{
-		client:     client,
-		assistants: assistants,
-		apiKey:     conf.OpenAI.ApiKey,
-		mcpKey:     mcpApiKey,
-		threads:    make(map[string]ThreadMeta),
-		savePath:   conf.SavePath,
-		locker:     &LockThreads{threads: make(map[string]*sync.Mutex)},
-		log:        logger.With(sl.Module("overseer")),
+		client:   client,
+		apiKey:   conf.OpenAI.ApiKey,
+		mcpKey:   mcpApiKey,
+		threads:  make(map[string]ThreadMeta),
+		savePath: conf.SavePath,
+		locker:   &LockThreads{threads: make(map[string]*sync.Mutex)},
+		log:      logger.With(sl.Module("overseer")),
 	}
 }
 
