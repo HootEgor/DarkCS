@@ -105,6 +105,24 @@ func (c *Core) lookupUserByPlatform(platform, userID string) *entity.User {
 	return user
 }
 
+// enrichMessageUser populates transient UserName and MessengerName fields
+// on a ChatMessage from the user record for WebSocket broadcasts.
+func (c *Core) enrichMessageUser(msg *entity.ChatMessage) {
+	user := c.lookupUserByPlatform(msg.Platform, msg.UserID)
+	if user == nil {
+		return
+	}
+	msg.UserName = user.Name
+	switch msg.Platform {
+	case "telegram":
+		msg.MessengerName = user.TelegramUsername
+	case "instagram":
+		msg.MessengerName = user.InstagramUsername
+	case "whatsapp":
+		msg.MessengerName = user.Phone
+	}
+}
+
 // GetChatMessages returns paginated message history from MongoDB.
 // Attachment URLs are populated at read-time so clients can download files.
 func (c *Core) GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error) {
@@ -327,10 +345,7 @@ func (c *Core) SendCrmFiles(platform, userID, caption string, attachments []enti
 	}
 
 	if c.wsHub != nil {
-		user := c.lookupUserByPlatform(msg.Platform, msg.UserID)
-		if user != nil {
-			msg.UserName = user.Name
-		}
+		c.enrichMessageUser(&msg)
 		c.wsHub.BroadcastMessage(msg)
 	}
 
@@ -356,13 +371,21 @@ func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
 	if c.wsHub != nil {
 		if user != nil {
 			msg.UserName = user.Name
+			switch msg.Platform {
+			case "telegram":
+				msg.MessengerName = user.TelegramUsername
+			case "instagram":
+				msg.MessengerName = user.InstagramUsername
+			case "whatsapp":
+				msg.MessengerName = user.Phone
+			}
 		}
 		c.wsHub.BroadcastMessage(msg)
 	}
 
 	if c.zohoFn != nil && user != nil && user.ZohoId != "" {
 		c.zohoFn.BufferMessage(user.ZohoId, entity.ZohoMessageItem{
-			MessageID: fmt.Sprintf("%d", time.Now().UnixMilli()), // now unique!
+			MessageID: fmt.Sprintf("%d", time.Now().UnixMilli()),
 			ChatID:    msg.ChatID,
 			Content:   msg.Text,
 			Sender:    msg.Sender,

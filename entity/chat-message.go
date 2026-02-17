@@ -8,16 +8,17 @@ import (
 
 // ChatMessage represents a single message in a CRM chat conversation.
 type ChatMessage struct {
-	ID          primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Platform    string             `json:"platform" bson:"platform"`
-	UserID      string             `json:"user_id" bson:"user_id"`
-	ChatID      string             `json:"chat_id" bson:"chat_id"`
-	Direction   string             `json:"direction" bson:"direction"` // "incoming" | "outgoing"
-	Sender      string             `json:"sender" bson:"sender"`       // "user" | "manager" | "bot"
-	Text        string             `json:"text" bson:"text"`
-	Attachments []Attachment       `json:"attachments,omitempty" bson:"attachments,omitempty"`
-	CreatedAt   time.Time          `json:"created_at" bson:"created_at"`
-	UserName    string             `json:"user_name,omitempty" bson:"-"`
+	ID            primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Platform      string             `json:"platform" bson:"platform"`
+	UserID        string             `json:"user_id" bson:"user_id"`
+	ChatID        string             `json:"chat_id" bson:"chat_id"`
+	Direction     string             `json:"direction" bson:"direction"` // "incoming" | "outgoing"
+	Sender        string             `json:"sender" bson:"sender"`       // "user" | "manager" | "bot"
+	Text          string             `json:"text" bson:"text"`
+	Attachments   []Attachment       `json:"attachments,omitempty" bson:"attachments,omitempty"`
+	CreatedAt     time.Time          `json:"created_at" bson:"created_at"`
+	UserName      string             `json:"user_name,omitempty" bson:"-"`
+	MessengerName string             `json:"messenger_name,omitempty" bson:"-"`
 }
 
 // ChatReadReceipt tracks the last time a CRM user marked a chat as read.
