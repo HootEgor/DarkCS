@@ -280,11 +280,18 @@ func (c *Core) SendCrmFiles(platform, userID, caption string, attachments []enti
 			return fmt.Errorf("download file %s: %w", att.FileID.Hex(), err)
 		}
 
+		// Build a public file URL for platforms that send links instead of streaming bytes.
+		fileURL := ""
+		if c.publicURL != "" {
+			fileURL = c.publicURL + "/api/v1" + fileurl.SignURL(att.FileID.Hex(), c.signingSecret, 15*time.Minute)
+		}
+
 		sendErr := messenger.SendFile(userID, chat.FileMessage{
 			Reader:   reader,
 			Filename: att.Filename,
 			MIMEType: meta.MIMEType,
 			Caption:  fileCaption,
+			URL:      fileURL,
 		})
 		reader.Close()
 

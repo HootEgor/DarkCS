@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -85,6 +86,7 @@ type Handler interface {
 	mcp.Core
 	school.Core
 	crm.Core
+	SetPublicURL(url string)
 }
 
 func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option) error {
@@ -104,6 +106,7 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	router.Use(middleware.Recoverer)
 	router.Use(corsMiddleware)
 	router.Use(render.SetContentType(render.ContentTypeJSON))
+	router.Use(detectPublicURL(handler, log))
 
 	router.NotFound(errors.NotFound(log))
 	router.MethodNotAllowed(errors.NotAllowed(log))
@@ -204,6 +207,33 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	server.log.Info("starting api server", slog.String("address", serverAddress))
 
 	return server.httpServer.Serve(listener)
+}
+
+// detectPublicURL captures the server's public base URL from the first incoming
+// request (using X-Forwarded-Proto / X-Forwarded-Host or the Host header) and
+// stores it on the handler so file URLs can be built for external platforms.
+func detectPublicURL(handler Handler, log *slog.Logger) func(http.Handler) http.Handler {
+	var once sync.Once
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			once.Do(func() {
+				scheme := "https"
+				if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+					scheme = proto
+				} else if r.TLS == nil {
+					scheme = "http"
+				}
+				host := r.Header.Get("X-Forwarded-Host")
+				if host == "" {
+					host = r.Host
+				}
+				publicURL := scheme + "://" + host
+				handler.SetPublicURL(publicURL)
+				log.Info("public URL detected", slog.String("url", publicURL))
+			})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

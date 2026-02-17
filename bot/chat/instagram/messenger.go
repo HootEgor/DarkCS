@@ -21,20 +21,18 @@ func NewMessenger(sender MessageSender) *Messenger {
 }
 
 func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
-	// Instagram doesn't support file upload via reader — it requires a publicly accessible URL.
-	// The CRM file download endpoint URL is passed as the caption fallback.
-	if file.MIMEType != "" {
+	// Instagram requires a publicly accessible URL — streaming bytes is not supported.
+	if file.URL != "" && file.MIMEType != "" {
 		mediaType := "file"
 		if len(file.MIMEType) > 6 && file.MIMEType[:6] == "image/" {
 			mediaType = "image"
 		}
-		// Caption is sent as a separate text message if present
 		if file.Caption != "" {
 			_ = m.sender.SendMessage(chatID, file.Caption)
 		}
-		return m.sender.SendMediaMessage(chatID, file.Filename, mediaType)
+		return m.sender.SendMediaMessage(chatID, file.URL, mediaType)
 	}
-	// Fallback: send filename as text
+	// Fallback: send filename as text when no public URL is available.
 	text := "[File: " + file.Filename + "]"
 	if file.Caption != "" {
 		text = file.Caption + "\n" + text

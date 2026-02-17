@@ -21,6 +21,14 @@ func NewMessenger(sender MessageSender) *Messenger {
 }
 
 func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
+	// WhatsApp requires a publicly accessible URL — streaming bytes is not supported.
+	if file.URL == "" {
+		text := "[File: " + file.Filename + "]"
+		if file.Caption != "" {
+			text = file.Caption + "\n" + text
+		}
+		return m.sender.SendMessage(chatID, text)
+	}
 	mediaType := "document"
 	if len(file.MIMEType) > 6 && file.MIMEType[:6] == "image/" {
 		mediaType = "image"
@@ -29,7 +37,7 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 	} else if len(file.MIMEType) > 6 && file.MIMEType[:6] == "audio/" {
 		mediaType = "audio"
 	}
-	return m.sender.SendMediaMessage(chatID, mediaType, "", file.Caption, file.Filename)
+	return m.sender.SendMediaMessage(chatID, mediaType, file.URL, file.Caption, file.Filename)
 }
 
 func (m *Messenger) SendText(chatID, text string) error {

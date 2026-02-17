@@ -13,6 +13,7 @@ type FileMessage struct {
 	Filename string
 	MIMEType string
 	Caption  string
+	URL      string // Public download URL for platforms that require a link (Instagram, WhatsApp).
 }
 
 // Messenger is the platform UI adapter interface.

@@ -135,6 +135,7 @@ type Core struct {
 	zohoFn        ZohoFunctionsService
 	authKey       string
 	signingSecret string
+	publicURL     string
 	keys          map[string]string
 	log           *slog.Logger
 	wsHub         *ws.Hub
@@ -192,6 +193,11 @@ func (c *Core) SetWsHub(hub *ws.Hub) {
 // SetSigningSecret sets the HMAC secret used to sign file download URLs.
 func (c *Core) SetSigningSecret(secret string) {
 	c.signingSecret = secret
+}
+
+// SetPublicURL sets the public base URL used for file download links sent to external platforms.
+func (c *Core) SetPublicURL(url string) {
+	c.publicURL = url
 }
 
 // FileSigningSecret returns the HMAC secret used to sign file download URLs.
