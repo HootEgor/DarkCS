@@ -248,6 +248,11 @@ func (c *Core) UploadAndSaveFile(platform, userID string, reader io.Reader, file
 	return nil
 }
 
+// UploadFile stores a file in GridFS and returns the resulting object ID and stored size.
+func (c *Core) UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error) {
+	return c.repo.UploadFile(filename, reader, meta)
+}
+
 // DownloadFile retrieves a file from GridFS by its ID.
 // Returns the filename, MIME type, and a ReadCloser the caller must close.
 func (c *Core) DownloadFile(fileID primitive.ObjectID) (string, string, io.ReadCloser, error) {
