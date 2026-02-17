@@ -125,19 +125,20 @@ type ZohoFunctionsService interface {
 }
 
 type Core struct {
-	repo         Repository
-	ms           MessageService
-	ps           ProductService
-	ass          Assistant
-	authService  AuthService
-	smartService SmartService
-	zoho         ZohoService
-	zohoFn       ZohoFunctionsService
-	authKey      string
-	keys         map[string]string
-	log          *slog.Logger
-	wsHub        *ws.Hub
-	messengers   map[string]chat.Messenger
+	repo          Repository
+	ms            MessageService
+	ps            ProductService
+	ass           Assistant
+	authService   AuthService
+	smartService  SmartService
+	zoho          ZohoService
+	zohoFn        ZohoFunctionsService
+	authKey       string
+	signingSecret string
+	keys          map[string]string
+	log           *slog.Logger
+	wsHub         *ws.Hub
+	messengers    map[string]chat.Messenger
 }
 
 func New(log *slog.Logger) *Core {
@@ -186,6 +187,16 @@ func (c *Core) SetZohoFunctionsService(zf ZohoFunctionsService) {
 
 func (c *Core) SetWsHub(hub *ws.Hub) {
 	c.wsHub = hub
+}
+
+// SetSigningSecret sets the HMAC secret used to sign file download URLs.
+func (c *Core) SetSigningSecret(secret string) {
+	c.signingSecret = secret
+}
+
+// FileSigningSecret returns the HMAC secret used to sign file download URLs.
+func (c *Core) FileSigningSecret() string {
+	return c.signingSecret
 }
 
 func (c *Core) SetPlatformMessenger(platform string, m chat.Messenger) {

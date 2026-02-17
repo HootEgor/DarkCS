@@ -5,37 +5,31 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"DarkCS/internal/http-server/middleware/authenticate"
+	"DarkCS/internal/lib/fileurl"
 )
 
 // DownloadFile streams a file from GridFS to the HTTP response.
 // Endpoint: GET /api/v1/crm/files/{file_id}
-// Accepts auth via Authorization header OR ?token= query param (for <img src> / <a href>).
-func DownloadFile(log *slog.Logger, handler Core, auth authenticate.Authenticate) http.HandlerFunc {
+// Auth is via HMAC-signed URL: ?expires={unix}&sig={hmac_hex}.
+func DownloadFile(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Authenticate via Bearer header or query param
-		token := ""
-		if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
-			token = header[7:]
-		}
-		if token == "" {
-			token = r.URL.Query().Get("token")
-		}
-		if token == "" {
+		fileIDStr := chi.URLParam(r, "file_id")
+		expires := r.URL.Query().Get("expires")
+		sig := r.URL.Query().Get("sig")
+
+		if expires == "" || sig == "" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if _, err := auth.AuthenticateByToken(token); err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if !fileurl.Verify(fileIDStr, expires, sig, handler.FileSigningSecret()) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 
-		fileIDStr := chi.URLParam(r, "file_id")
 		if fileIDStr == "" {
 			http.Error(w, "file_id is required", http.StatusBadRequest)
 			return

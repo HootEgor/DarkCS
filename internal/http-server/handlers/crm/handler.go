@@ -24,6 +24,7 @@ type Core interface {
 	DownloadFile(fileID primitive.ObjectID) (filename, mimeType string, reader io.ReadCloser, err error)
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
 	SendCrmFiles(platform, userID, caption string, attachments []entity.Attachment) error
+	FileSigningSecret() string
 }
 
 // GetChats returns the list of active chats with last message info.

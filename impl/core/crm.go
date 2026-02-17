@@ -11,6 +11,7 @@ import (
 
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/fileurl"
 )
 
 // GetActiveChats returns the list of active chats from MongoDB, enriched with user names
@@ -114,7 +115,7 @@ func (c *Core) GetChatMessages(platform, userID string, limit, offset int) ([]en
 
 	for i := range messages {
 		for j := range messages[i].Attachments {
-			messages[i].Attachments[j].URL = "/crm/files/" + messages[i].Attachments[j].FileID.Hex()
+			messages[i].Attachments[j].URL = fileurl.SignURL(messages[i].Attachments[j].FileID.Hex(), c.signingSecret, 15*time.Minute)
 		}
 	}
 
@@ -230,7 +231,7 @@ func (c *Core) UploadAndSaveFile(platform, userID string, reader io.Reader, file
 		Filename: filename,
 		MIMEType: mimeType,
 		Size:     size,
-		URL:      "/crm/files/" + fileID.Hex(),
+		URL:      fileurl.SignURL(fileID.Hex(), c.signingSecret, 15*time.Minute),
 	}
 
 	msg := entity.ChatMessage{
@@ -296,7 +297,7 @@ func (c *Core) SendCrmFiles(platform, userID, caption string, attachments []enti
 
 	// Populate URLs for WebSocket broadcast
 	for i := range attachments {
-		attachments[i].URL = "/crm/files/" + attachments[i].FileID.Hex()
+		attachments[i].URL = fileurl.SignURL(attachments[i].FileID.Hex(), c.signingSecret, 15*time.Minute)
 	}
 
 	msg := entity.ChatMessage{

@@ -67,6 +67,7 @@ func main() {
 
 	handler := core.New(lg)
 	handler.SetAuthKey(conf.Listen.ApiKey)
+	handler.SetSigningSecret(conf.Listen.ApiKey)
 
 	authService := auth.NewAuthService(lg)
 

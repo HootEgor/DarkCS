@@ -129,8 +129,8 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 			})
 		}
 
-		// File download endpoint — accepts both Bearer header and ?token= query param
-		v1.Get("/crm/files/{file_id}", crm.DownloadFile(log, handler, handler))
+		// File download endpoint — authenticated via HMAC-signed URL
+		v1.Get("/crm/files/{file_id}", crm.DownloadFile(log, handler))
 
 		// Authenticated routes
 		v1.Group(func(auth chi.Router) {
