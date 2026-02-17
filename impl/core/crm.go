@@ -114,7 +114,7 @@ func (c *Core) GetChatMessages(platform, userID string, limit, offset int) ([]en
 
 	for i := range messages {
 		for j := range messages[i].Attachments {
-			messages[i].Attachments[j].URL = "/api/v1/crm/files/" + messages[i].Attachments[j].FileID.Hex()
+			messages[i].Attachments[j].URL = "/crm/files/" + messages[i].Attachments[j].FileID.Hex()
 		}
 	}
 
@@ -230,7 +230,7 @@ func (c *Core) UploadAndSaveFile(platform, userID string, reader io.Reader, file
 		Filename: filename,
 		MIMEType: mimeType,
 		Size:     size,
-		URL:      "/api/v1/crm/files/" + fileID.Hex(),
+		URL:      "/crm/files/" + fileID.Hex(),
 	}
 
 	msg := entity.ChatMessage{
@@ -296,7 +296,7 @@ func (c *Core) SendCrmFiles(platform, userID, caption string, attachments []enti
 
 	// Populate URLs for WebSocket broadcast
 	for i := range attachments {
-		attachments[i].URL = "/api/v1/crm/files/" + attachments[i].FileID.Hex()
+		attachments[i].URL = "/crm/files/" + attachments[i].FileID.Hex()
 	}
 
 	msg := entity.ChatMessage{
