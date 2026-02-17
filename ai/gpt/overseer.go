@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sashabaranov/go-openai"
 	_ "image/jpeg"
 	"log/slog"
 	"os"
@@ -18,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sashabaranov/go-openai"
 )
 
 type Repository interface {
@@ -648,19 +649,19 @@ func (o *Overseer) AttachNewFile() error {
 	}
 
 	// 7. Attach new vector store to assistant
-	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.ConsultantAss], openai.AssistantRequest{
-		ToolResources: &openai.AssistantToolResource{
-			FileSearch: &openai.AssistantToolFileSearch{
-				VectorStoreIDs: []string{consultantStore.ID},
-			},
-		},
-	})
-	if err != nil {
-		o.log.With(
-			sl.Err(err),
-		).Error("attach consultant vector store")
-		return err
-	}
+	//_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.ConsultantAss], openai.AssistantRequest{
+	//	ToolResources: &openai.AssistantToolResource{
+	//		FileSearch: &openai.AssistantToolFileSearch{
+	//			VectorStoreIDs: []string{consultantStore.ID},
+	//		},
+	//	},
+	//})
+	//if err != nil {
+	//	o.log.With(
+	//		sl.Err(err),
+	//	).Error("attach consultant vector store")
+	//	return err
+	//}
 	err = o.repo.SetVectorStore(entity.ConsultantAss, consultantStore.ID)
 	if err != nil {
 		o.log.With(
@@ -669,19 +670,19 @@ func (o *Overseer) AttachNewFile() error {
 	}
 
 	// Attach calculator store to calculator assistant
-	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.CalculatorAss], openai.AssistantRequest{
-		ToolResources: &openai.AssistantToolResource{
-			FileSearch: &openai.AssistantToolFileSearch{
-				VectorStoreIDs: []string{calculatorStore.ID},
-			},
-		},
-	})
-	if err != nil {
-		o.log.With(
-			sl.Err(err),
-		).Error("attach calculator vector store")
-		return err
-	}
+	//_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.CalculatorAss], openai.AssistantRequest{
+	//	ToolResources: &openai.AssistantToolResource{
+	//		FileSearch: &openai.AssistantToolFileSearch{
+	//			VectorStoreIDs: []string{calculatorStore.ID},
+	//		},
+	//	},
+	//})
+	//if err != nil {
+	//	o.log.With(
+	//		sl.Err(err),
+	//	).Error("attach calculator vector store")
+	//	return err
+	//}
 	err = o.repo.SetVectorStore(entity.CalculatorAss, calculatorStore.ID)
 	if err != nil {
 		o.log.With(
@@ -690,19 +691,19 @@ func (o *Overseer) AttachNewFile() error {
 	}
 
 	// Attach calculator store to order manager assistant
-	_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.OrderManagerAss], openai.AssistantRequest{
-		ToolResources: &openai.AssistantToolResource{
-			FileSearch: &openai.AssistantToolFileSearch{
-				VectorStoreIDs: []string{calculatorStore.ID},
-			},
-		},
-	})
-	if err != nil {
-		o.log.With(
-			sl.Err(err),
-		).Error("attach order manager vector store")
-		return err
-	}
+	//_, err = o.client.ModifyAssistant(ctx, o.assistants[entity.OrderManagerAss], openai.AssistantRequest{
+	//	ToolResources: &openai.AssistantToolResource{
+	//		FileSearch: &openai.AssistantToolFileSearch{
+	//			VectorStoreIDs: []string{calculatorStore.ID},
+	//		},
+	//	},
+	//})
+	//if err != nil {
+	//	o.log.With(
+	//		sl.Err(err),
+	//	).Error("attach order manager vector store")
+	//	return err
+	//}
 	err = o.repo.SetVectorStore(entity.OrderManagerAss, calculatorStore.ID)
 	if err != nil {
 		o.log.With(
