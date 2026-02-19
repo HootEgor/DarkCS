@@ -203,7 +203,23 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 			return "", fmt.Errorf("telegram messenger is not configured")
 		}
 		chatID := strconv.FormatInt(user.TelegramId, 10)
-		return code, tgMessenger.SendText(chatID, codeMsg)
+
+		err = tgMessenger.SendText(chatID, codeMsg)
+		if err != nil {
+			return "", fmt.Errorf("failed to send message: %w", err)
+		}
+
+		c.SaveAndBroadcastChatMessage(
+			entity.ChatMessage{
+				Platform:  "telegram",
+				UserID:    chatID,
+				ChatID:    chatID,
+				Direction: "outgoing",
+				Sender:    "bot",
+				Text:      codeMsg,
+				CreatedAt: time.Now(),
+			})
+		return code, nil
 	}
 
 	return "", fmt.Errorf("user has no Telegram ID")
