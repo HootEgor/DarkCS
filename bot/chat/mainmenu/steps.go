@@ -699,9 +699,8 @@ func formatTTN(ttn, platform string) string {
 	return fmt.Sprintf("\nТТН: %s\nhttps://novaposhta.ua/tracking/%s", ttn, ttn)
 }
 
-// SchoolStatStep displays aggregated QR-funnel and per-school statistics.
-// Accessible only to manager-role users (enforced by MainMenuStep).
-// After showing the stats it auto-transitions back to the main menu.
+// SchoolStatStep displays aggregated QR-funnel statistics and, on button press,
+// the per-school user breakdown. Accessible only to manager-role users.
 type SchoolStatStep struct {
 	qrStatRepo QrStatRepository
 }
@@ -716,7 +715,6 @@ func (s *SchoolStatStep) Enter(ctx context.Context, m chat.Messenger, state *cha
 	}
 
 	var followNum, regNum, schoolNum int
-	schoolCounts := make(map[string]int)
 	for _, qr := range stats {
 		if qr.FollowQr {
 			followNum++
@@ -726,7 +724,6 @@ func (s *SchoolStatStep) Enter(ctx context.Context, m chat.Messenger, state *cha
 		}
 		if qr.SchoolName != "" {
 			schoolNum++
-			schoolCounts[qr.SchoolName]++
 		}
 	}
 
@@ -735,7 +732,38 @@ func (s *SchoolStatStep) Enter(ctx context.Context, m chat.Messenger, state *cha
 		followNum, regNum, schoolNum,
 	)
 
-	if len(schoolCounts) > 0 {
+	buttons := []chat.InlineButton{
+		{Text: "📚 По школах", Data: "stat:schools"},
+	}
+	_ = m.SendInlineOptions(state.ChatID, msg, buttons)
+	return chat.StepResult{}
+}
+
+func (s *SchoolStatStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	data := input.CallbackData
+	if data == "" {
+		data = chat.MatchNumberToInline(input.Text, []chat.InlineButton{{Text: "📚 По школах", Data: "stat:schools"}})
+	}
+
+	if data == "stat:schools" {
+		stats, err := s.qrStatRepo.GetAllQrStat()
+		if err != nil {
+			_ = m.SendText(state.ChatID, "Не вдалося отримати статистику.")
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+
+		schoolCounts := make(map[string]int)
+		for _, qr := range stats {
+			if qr.SchoolName != "" {
+				schoolCounts[qr.SchoolName]++
+			}
+		}
+
+		if len(schoolCounts) == 0 {
+			_ = m.SendText(state.ChatID, "Немає даних по школах.")
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+
 		type entry struct {
 			name  string
 			count int
@@ -752,16 +780,13 @@ func (s *SchoolStatStep) Enter(ctx context.Context, m chat.Messenger, state *cha
 			return entries[i].name < entries[j].name
 		})
 
-		msg += "\n\n📚 По школах:"
+		msg := "📚 По школах:\n"
 		for _, e := range entries {
-			msg += fmt.Sprintf("\n• %s — %d", e.name, e.count)
+			msg += fmt.Sprintf("\n%s — %d", e.name, e.count)
 		}
+
+		_ = m.SendText(state.ChatID, msg)
 	}
 
-	_ = m.SendText(state.ChatID, msg)
-	return chat.StepResult{NextStep: StepMainMenu}
-}
-
-func (s *SchoolStatStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
 	return chat.StepResult{NextStep: StepMainMenu}
 }
