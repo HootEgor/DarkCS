@@ -53,6 +53,36 @@ func (m *MongoDB) RegisterQr(smartSenderId string) error {
 	return nil
 }
 
+// SaveSchoolStat records or updates the school selected by a user after onboarding.
+// Keyed by platform + user_id since SmartSender is deprecated.
+func (m *MongoDB) SaveSchoolStat(platform, userID, schoolName string) error {
+	connection, err := m.connect()
+	if err != nil {
+		return err
+	}
+	defer m.disconnect(connection)
+
+	collection := connection.Database(m.database).Collection(qrStatCollection)
+
+	filter := bson.D{{"platform", platform}, {"user_id", userID}}
+	update := bson.M{
+		"$set": bson.M{
+			"platform":    platform,
+			"user_id":     userID,
+			"school_name": schoolName,
+			"date":        time.Now(),
+			"follow_qr":   true,
+			"registered":  true,
+		},
+	}
+
+	_, err = collection.UpdateOne(m.ctx, filter, update, options.Update().SetUpsert(true))
+	if err != nil {
+		return fmt.Errorf("mongodb upsert school stat: %w", err)
+	}
+	return nil
+}
+
 func (m *MongoDB) GetAllQrStat() ([]entity.QrStat, error) {
 	connection, err := m.connect()
 	if err != nil {

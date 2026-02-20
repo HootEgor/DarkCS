@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,10 +17,12 @@ const schoolsPerPage = 5
 
 // SelectSchoolStep — Shows a paginated school selection when deep link type is "dl".
 // Auto-skips to main menu if no deep link is present.
+// On selection, the chosen school is saved to qr-stat for analytics.
 type SelectSchoolStep struct {
 	schoolRepo  SchoolRepository
 	authService AuthService
 	zohoService ZohoService
+	qrStatRepo  QrStatRepository
 }
 
 func (s *SelectSchoolStep) ID() chat.StepID { return StepSelectSchool }
@@ -99,6 +102,11 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 			}
 		}
 
+		// Persist school choice to qr-stat analytics
+		if err := s.qrStatRepo.SaveSchoolStat(state.Platform, state.UserID, name); err != nil {
+			slog.Warn("failed to save school stat", slog.String("platform", state.Platform), slog.String("user_id", state.UserID), sl.Err(err))
+		}
+
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
@@ -146,11 +154,18 @@ func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat
 	return rows
 }
 
-// mainMenuButtons defines the main menu layout.
-var mainMenuButtons = [][]chat.MenuButton{
-	{{Text: BtnMyOffice}, {Text: BtnServiceRate}},
-	{{Text: BtnOrderStatus}},
-	{{Text: BtnAIConsultant}, {Text: BtnMakeOrder}},
+// mainMenuButtonsForRole builds the main menu layout, appending the manager-only
+// "School statistic" button when the caller has manager privileges.
+func mainMenuButtonsForRole(isManager bool) [][]chat.MenuButton {
+	buttons := [][]chat.MenuButton{
+		{{Text: BtnMyOffice}, {Text: BtnServiceRate}},
+		{{Text: BtnOrderStatus}},
+		{{Text: BtnAIConsultant}, {Text: BtnMakeOrder}},
+	}
+	if isManager {
+		buttons = append(buttons, []chat.MenuButton{{Text: BtnSchoolStat}})
+	}
+	return buttons
 }
 
 // myOfficeButtons defines the "my office" sub-menu layout.
@@ -197,14 +212,23 @@ func (s *PreMainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 	return chat.StepResult{NextStep: StepMainMenu}
 }
 
-// MainMenuStep — Show main menu as numbered text list.
-type MainMenuStep struct{}
+// MainMenuStep — Show main menu. Manager-role users additionally see the
+// "School statistic" button. Non-managers cannot navigate to that step even
+// if they somehow send the correct button text.
+type MainMenuStep struct {
+	authService AuthService
+}
 
 func (s *MainMenuStep) ID() chat.StepID { return StepMainMenu }
 
 func (s *MainMenuStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
-	err := m.SendMenu(state.ChatID, "Натисніть на потрібний варіант, щоб перейти у бажаний розділ 👇", mainMenuButtons)
-	if err != nil {
+	var isManager bool
+	if user, err := getUser(state, s.authService); err == nil && user != nil {
+		isManager = user.IsManager()
+	}
+
+	buttons := mainMenuButtonsForRole(isManager)
+	if err := m.SendMenu(state.ChatID, "Натисніть на потрібний варіант, щоб перейти у бажаний розділ 👇", buttons); err != nil {
 		return chat.StepResult{Error: err}
 	}
 	return chat.StepResult{}
@@ -213,7 +237,13 @@ func (s *MainMenuStep) Enter(ctx context.Context, m chat.Messenger, state *chat.
 func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
 	text := strings.TrimSpace(input.Text)
 
-	// Try to match by exact button text first
+	// Resolve role once for both exact-match and number-match paths.
+	var isManager bool
+	if user, err := getUser(state, s.authService); err == nil && user != nil {
+		isManager = user.IsManager()
+	}
+
+	// Exact button text match.
 	switch text {
 	case BtnMyOffice:
 		return chat.StepResult{NextStep: StepMyOffice}
@@ -225,11 +255,17 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 		return chat.StepResult{NextStep: StepAIConsultant}
 	case BtnMakeOrder:
 		return chat.StepResult{NextStep: StepMakeOrder}
+	case BtnSchoolStat:
+		if isManager {
+			return chat.StepResult{NextStep: StepSchoolStat}
+		}
+		return chat.StepResult{}
 	}
 
-	// Try matching by number
-	matched := chat.MatchNumberToOption(text, mainMenuButtons)
-	switch matched {
+	// Number-based match (for text-only platforms like Instagram/WhatsApp).
+	// Use the role-appropriate button set so numbers line up correctly.
+	buttons := mainMenuButtonsForRole(isManager)
+	switch chat.MatchNumberToOption(text, buttons) {
 	case BtnMyOffice:
 		return chat.StepResult{NextStep: StepMyOffice}
 	case BtnServiceRate:
@@ -240,6 +276,9 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 		return chat.StepResult{NextStep: StepAIConsultant}
 	case BtnMakeOrder:
 		return chat.StepResult{NextStep: StepMakeOrder}
+	case BtnSchoolStat:
+		// Button only appears in the list for managers, so no extra check needed.
+		return chat.StepResult{NextStep: StepSchoolStat}
 	}
 
 	return chat.StepResult{}
@@ -658,4 +697,71 @@ func formatTTN(ttn, platform string) string {
 		return fmt.Sprintf("\nТТН: <a href=\"https://novaposhta.ua/tracking/%s\">%s</a>", ttn, ttn)
 	}
 	return fmt.Sprintf("\nТТН: %s\nhttps://novaposhta.ua/tracking/%s", ttn, ttn)
+}
+
+// SchoolStatStep displays aggregated QR-funnel and per-school statistics.
+// Accessible only to manager-role users (enforced by MainMenuStep).
+// After showing the stats it auto-transitions back to the main menu.
+type SchoolStatStep struct {
+	qrStatRepo QrStatRepository
+}
+
+func (s *SchoolStatStep) ID() chat.StepID { return StepSchoolStat }
+
+func (s *SchoolStatStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
+	stats, err := s.qrStatRepo.GetAllQrStat()
+	if err != nil {
+		_ = m.SendText(state.ChatID, "Не вдалося отримати статистику.")
+		return chat.StepResult{NextStep: StepMainMenu}
+	}
+
+	var followNum, regNum, schoolNum int
+	schoolCounts := make(map[string]int)
+	for _, qr := range stats {
+		if qr.FollowQr {
+			followNum++
+		}
+		if qr.Registered {
+			regNum++
+		}
+		if qr.SchoolName != "" {
+			schoolNum++
+			schoolCounts[qr.SchoolName]++
+		}
+	}
+
+	msg := fmt.Sprintf(
+		"📊 Статистика шкіл\n\n🔗 Підписалися через QR: %d\n📝 Зареєстровані: %d\n🏫 Обрали школу: %d",
+		followNum, regNum, schoolNum,
+	)
+
+	if len(schoolCounts) > 0 {
+		type entry struct {
+			name  string
+			count int
+		}
+		entries := make([]entry, 0, len(schoolCounts))
+		for name, count := range schoolCounts {
+			entries = append(entries, entry{name, count})
+		}
+		// Sort by count descending, then alphabetically for stable order.
+		sort.Slice(entries, func(i, j int) bool {
+			if entries[i].count != entries[j].count {
+				return entries[i].count > entries[j].count
+			}
+			return entries[i].name < entries[j].name
+		})
+
+		msg += "\n\n📚 По школах:"
+		for _, e := range entries {
+			msg += fmt.Sprintf("\n• %s — %d", e.name, e.count)
+		}
+	}
+
+	_ = m.SendText(state.ChatID, msg)
+	return chat.StepResult{NextStep: StepMainMenu}
+}
+
+func (s *SchoolStatStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	return chat.StepResult{NextStep: StepMainMenu}
 }

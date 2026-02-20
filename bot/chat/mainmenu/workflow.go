@@ -23,6 +23,7 @@ const (
 	StepServiceRate     chat.StepID = "service_rate"
 	StepAIConsultant    chat.StepID = "ai_consultant"
 	StepMakeOrder       chat.StepID = "make_order"
+	StepSchoolStat      chat.StepID = "school_stat"
 )
 
 // Menu button texts (same as Telegram)
@@ -35,6 +36,7 @@ const (
 	BtnCurrentOrder    = "🛍️Поточні замовлення"
 	BtnCompletedOrders = "✅Виконані замовлення"
 	BtnBack            = "↩️Назад"
+	BtnSchoolStat      = "📊Статистика шкіл"
 )
 
 // AuthService defines the interface for user operations.
@@ -63,25 +65,32 @@ type SchoolRepository interface {
 	GetAllActiveSchools(ctx context.Context) ([]entity.School, error)
 }
 
+// QrStatRepository defines data access for QR scan statistics.
+type QrStatRepository interface {
+	GetAllQrStat() ([]entity.QrStat, error)
+	SaveSchoolStat(platform, userID, schoolName string) error
+}
+
 // MainMenuWorkflow implements the main menu for chat platforms.
 type MainMenuWorkflow struct {
 	steps map[chat.StepID]chat.Step
 }
 
-func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, log *slog.Logger) *MainMenuWorkflow {
+func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, qrStatRepo QrStatRepository, log *slog.Logger) *MainMenuWorkflow {
 	w := &MainMenuWorkflow{
 		steps: make(map[chat.StepID]chat.Step),
 	}
 
-	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo, authService: authService, zohoService: zohoService}
+	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo, authService: authService, zohoService: zohoService, qrStatRepo: qrStatRepo}
 	w.steps[StepPreMainMenu] = &PreMainMenuStep{}
-	w.steps[StepMainMenu] = &MainMenuStep{}
+	w.steps[StepMainMenu] = &MainMenuStep{authService: authService}
 	w.steps[StepMyOffice] = &MyOfficeStep{}
 	w.steps[StepCurrentOrder] = &CurrentOrderStep{authService: authService, zohoService: zohoService}
 	w.steps[StepCompletedOrders] = &CompletedOrdersStep{authService: authService, zohoService: zohoService}
 	w.steps[StepServiceRate] = &ServiceRateStep{authService: authService, zohoService: zohoService}
 	w.steps[StepAIConsultant] = &AIConsultantStep{authService: authService, aiService: aiService}
 	w.steps[StepMakeOrder] = &MakeOrderStep{authService: authService, aiService: aiService}
+	w.steps[StepSchoolStat] = &SchoolStatStep{qrStatRepo: qrStatRepo}
 
 	return w
 }
