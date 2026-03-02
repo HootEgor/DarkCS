@@ -252,6 +252,30 @@ func (e *ChatEngine) processResult(ctx context.Context, m Messenger, state *Chat
 	return e.storage.Save(ctx, state)
 }
 
+// ResetUsersAtSteps moves all users currently at any of the given steps to targetStep.
+// Returns the count of affected states. Intended for admin use only.
+func (e *ChatEngine) ResetUsersAtSteps(ctx context.Context, workflowID WorkflowID, steps []StepID, targetStep StepID) (int, error) {
+	states, err := e.storage.FindBySteps(ctx, workflowID, steps)
+	if err != nil {
+		return 0, fmt.Errorf("finding states by steps: %w", err)
+	}
+
+	for _, state := range states {
+		state.CurrentStep = targetStep
+		if err := e.storage.Save(ctx, state); err != nil {
+			return 0, fmt.Errorf("saving reset state for %s/%s: %w", state.Platform, state.UserID, err)
+		}
+	}
+
+	e.log.Info("chat engine: reset users at steps",
+		slog.String("workflow_id", string(workflowID)),
+		slog.String("target_step", string(targetStep)),
+		slog.Int("count", len(states)),
+	)
+
+	return len(states), nil
+}
+
 // deepLinkData extracts deep link keys from state to carry through workflow chaining.
 func deepLinkData(state *ChatState) map[string]any {
 	dlType := state.GetString("deep_link_type")

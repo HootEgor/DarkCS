@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"DarkCS/bot/chat"
+	chatmainmenu "DarkCS/bot/chat/mainmenu"
 	tgmessenger "DarkCS/bot/chat/telegram"
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
@@ -24,12 +25,18 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/message"
 )
 
+// userBotAuthService is the minimal auth interface used by the user bot for admin checks.
+type userBotAuthService interface {
+	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+}
+
 // UserBot is the Telegram bot for general users using the unified ChatEngine.
 type UserBot struct {
 	log         *slog.Logger
 	api         *tgbotapi.Bot
 	botUsername string
 	chatEngine  *chat.ChatEngine
+	authService userBotAuthService
 }
 
 // NewUserBot creates a new user bot instance.
@@ -53,6 +60,11 @@ func (b *UserBot) SetChatEngine(engine *chat.ChatEngine) {
 	b.chatEngine = engine
 }
 
+// SetAuthService sets the auth service used to verify admin status in commands.
+func (b *UserBot) SetAuthService(svc userBotAuthService) {
+	b.authService = svc
+}
+
 // GetAPI returns the underlying Telegram bot API for creating messengers.
 func (b *UserBot) GetAPI() *tgbotapi.Bot {
 	return b.api
@@ -70,6 +82,7 @@ func (b *UserBot) Start() error {
 	updater := ext.NewUpdater(dispatcher, nil)
 
 	dispatcher.AddHandler(handlers.NewCommand("start", b.handleStart))
+	dispatcher.AddHandler(handlers.NewCommand("reset", b.handleReset))
 	dispatcher.AddHandler(handlers.NewCallback(func(cq *tgbotapi.CallbackQuery) bool { return true }, b.handleCallback))
 	dispatcher.AddHandler(handlers.NewMessage(message.Contact, b.handleContact))
 	dispatcher.AddHandler(handlers.NewMessage(message.Photo, b.handleMedia))
@@ -101,6 +114,31 @@ func (b *UserBot) Start() error {
 
 func (b *UserBot) newMessenger() *tgmessenger.Messenger {
 	return tgmessenger.NewMessenger(b.api)
+}
+
+// handleReset is an admin-only command that resets all users currently in the
+// ai_consultant or make_order steps back to the main_menu step.
+func (b *UserBot) handleReset(bot *tgbotapi.Bot, ctx *ext.Context) error {
+	if b.authService == nil || b.chatEngine == nil {
+		return nil
+	}
+
+	user, err := b.authService.GetUser("", "", ctx.EffectiveUser.Id)
+	if err != nil || user == nil || !user.IsAdmin() {
+		return nil
+	}
+
+	steps := []chat.StepID{chatmainmenu.StepAIConsultant, chatmainmenu.StepMakeOrder}
+	count, err := b.chatEngine.ResetUsersAtSteps(context.Background(), chatmainmenu.WorkflowID, steps, chatmainmenu.StepMainMenu)
+	if err != nil {
+		b.log.Error("handleReset: failed to reset users", sl.Err(err))
+		_, _ = ctx.EffectiveMessage.Reply(bot, "Помилка при скиданні кроків.", nil)
+		return err
+	}
+
+	reply := fmt.Sprintf("Скинуто %d користувачів на головне меню.", count)
+	_, _ = ctx.EffectiveMessage.Reply(bot, reply, nil)
+	return nil
 }
 
 // handleStart handles the /start command — always starts onboarding.

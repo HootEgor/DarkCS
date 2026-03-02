@@ -179,6 +179,7 @@ func main() {
 	// Wire ChatEngine into user bot and start
 	if userBot != nil && chatEngine != nil {
 		userBot.SetChatEngine(chatEngine)
+		userBot.SetAuthService(authService)
 		handler.SetPlatformMessenger("telegram", tgmessenger.NewMessenger(userBot.GetAPI()))
 		go func() {
 			if err := userBot.Start(); err != nil {

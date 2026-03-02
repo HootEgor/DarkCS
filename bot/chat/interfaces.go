@@ -47,4 +47,6 @@ type ChatStateStorage interface {
 	Save(ctx context.Context, state *ChatState) error
 	Load(ctx context.Context, platform, userID string) (*ChatState, error)
 	Delete(ctx context.Context, platform, userID string) error
+	// FindBySteps returns all states in the given workflow whose current step matches any of the provided step IDs.
+	FindBySteps(ctx context.Context, workflowID WorkflowID, steps []StepID) ([]*ChatState, error)
 }
