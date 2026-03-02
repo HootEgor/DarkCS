@@ -600,7 +600,8 @@ type AIConsultantStep struct {
 func (s *AIConsultantStep) ID() chat.StepID { return StepAIConsultant }
 
 func (s *AIConsultantStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
-	_ = m.SendText(state.ChatID, "Привіт! Я — консультант бренду DARK 🖤\nДопоможу з вибором товарів, проконсультую щодо продукції та оформлення замовлення.\n\nНапишіть \"назад\" щоб повернутися в меню.")
+	backMenu := [][]chat.MenuButton{{{Text: BtnBack}}}
+	_ = m.SendMenu(state.ChatID, "Привіт! Я — консультант бренду DARK 🖤\nДопоможу з вибором товарів, проконсультую щодо продукції та оформлення замовлення.", backMenu)
 	return chat.StepResult{}
 }
 
@@ -638,7 +639,8 @@ type MakeOrderStep struct {
 func (s *MakeOrderStep) ID() chat.StepID { return StepMakeOrder }
 
 func (s *MakeOrderStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
-	_ = m.SendText(state.ChatID, "Готові оформити замовлення!\n\nНапишіть \"назад\" щоб повернутися в меню.")
+	backMenu := [][]chat.MenuButton{{{Text: BtnBack}}}
+	_ = m.SendMenu(state.ChatID, "Готові оформити замовлення!", backMenu)
 	return chat.StepResult{}
 }
 
