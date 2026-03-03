@@ -835,19 +835,19 @@ func (s *SchoolStatStep) HandleInput(ctx context.Context, m chat.Messenger, stat
 		for k := range monthly {
 			keys = append(keys, k)
 		}
-		// Sort newest first.
+		// Sort oldest first.
 		sort.Slice(keys, func(i, j int) bool {
 			if keys[i].year != keys[j].year {
-				return keys[i].year > keys[j].year
+				return keys[i].year < keys[j].year
 			}
-			return keys[i].month > keys[j].month
+			return keys[i].month < keys[j].month
 		})
 
-		msg := "📅 По місяцях:\n"
+		msg := "📊 Статистика по місяцях:\n"
 		for _, k := range keys {
 			st := monthly[k]
 			label := entity.GetMonthName(time.Date(k.year, k.month, 1, 0, 0, 0, 0, time.UTC))
-			msg += fmt.Sprintf("\n%s %d — підписалися: %d, зареєстровані: %d", label, k.year, st.subscribed, st.registered)
+			msg += fmt.Sprintf("\n%s %d: 🔗 %d | 📝 %d", label, k.year, st.subscribed, st.registered)
 		}
 		_ = m.SendText(state.ChatID, msg)
 	}
