@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
@@ -736,18 +737,25 @@ func (s *SchoolStatStep) Enter(ctx context.Context, m chat.Messenger, state *cha
 
 	buttons := []chat.InlineButton{
 		{Text: "📚 По школах", Data: "stat:schools"},
+		{Text: "📅 По місяцях", Data: "stat:months"},
 	}
 	_ = m.SendInlineOptions(state.ChatID, msg, buttons)
 	return chat.StepResult{}
 }
 
 func (s *SchoolStatStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
-	data := input.CallbackData
-	if data == "" {
-		data = chat.MatchNumberToInline(input.Text, []chat.InlineButton{{Text: "📚 По школах", Data: "stat:schools"}})
+	allButtons := []chat.InlineButton{
+		{Text: "📚 По школах", Data: "stat:schools"},
+		{Text: "📅 По місяцях", Data: "stat:months"},
 	}
 
-	if data == "stat:schools" {
+	data := input.CallbackData
+	if data == "" {
+		data = chat.MatchNumberToInline(input.Text, allButtons)
+	}
+
+	switch data {
+	case "stat:schools":
 		stats, err := s.qrStatRepo.GetAllQrStat()
 		if err != nil {
 			_ = m.SendText(state.ChatID, "Не вдалося отримати статистику.")
@@ -786,7 +794,61 @@ func (s *SchoolStatStep) HandleInput(ctx context.Context, m chat.Messenger, stat
 		for _, e := range entries {
 			msg += fmt.Sprintf("\n%s — %d", e.name, e.count)
 		}
+		_ = m.SendText(state.ChatID, msg)
 
+	case "stat:months":
+		stats, err := s.qrStatRepo.GetAllQrStat()
+		if err != nil {
+			_ = m.SendText(state.ChatID, "Не вдалося отримати статистику.")
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+
+		type monthKey struct {
+			year  int
+			month time.Month
+		}
+		type monthStat struct {
+			subscribed int
+			registered int
+		}
+
+		monthly := make(map[monthKey]*monthStat)
+		for _, qr := range stats {
+			key := monthKey{year: qr.Date.Year(), month: qr.Date.Month()}
+			if monthly[key] == nil {
+				monthly[key] = &monthStat{}
+			}
+			if qr.FollowQr {
+				monthly[key].subscribed++
+			}
+			if qr.Registered {
+				monthly[key].registered++
+			}
+		}
+
+		if len(monthly) == 0 {
+			_ = m.SendText(state.ChatID, "Немає даних по місяцях.")
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+
+		keys := make([]monthKey, 0, len(monthly))
+		for k := range monthly {
+			keys = append(keys, k)
+		}
+		// Sort newest first.
+		sort.Slice(keys, func(i, j int) bool {
+			if keys[i].year != keys[j].year {
+				return keys[i].year > keys[j].year
+			}
+			return keys[i].month > keys[j].month
+		})
+
+		msg := "📅 По місяцях:\n"
+		for _, k := range keys {
+			st := monthly[k]
+			label := entity.GetMonthName(time.Date(k.year, k.month, 1, 0, 0, 0, 0, time.UTC))
+			msg += fmt.Sprintf("\n%s %d — підписалися: %d, зареєстровані: %d", label, k.year, st.subscribed, st.registered)
+		}
 		_ = m.SendText(state.ChatID, msg)
 	}
 
