@@ -90,7 +90,16 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 
 	// Handle school selection
 	if strings.HasPrefix(data, "school_sel:") {
-		name := strings.TrimPrefix(data, "school_sel:")
+		idxStr := strings.TrimPrefix(data, "school_sel:")
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
+			return chat.StepResult{}
+		}
+		schools, err := s.schoolRepo.GetAllActiveSchools(ctx)
+		if err != nil || idx < 0 || idx >= len(schools) {
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+		name := schools[idx].Name
 		_ = m.SendText(state.ChatID, fmt.Sprintf(
 			"Вітаємо, %s!\n\nОтримай -15%% на перше замовлення з промо-кодом *DARKSCHOOL* 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nP.S. Твоя особиста знижка -7%% вже активна, і з часом може стати ще більшою ✨",
 			name,
@@ -127,9 +136,10 @@ func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat
 	}
 
 	var rows [][]chat.InlineButton
-	for _, school := range schools[start:end] {
+	for i, school := range schools[start:end] {
 		rows = append(rows, []chat.InlineButton{
-			{Text: school.Name, Data: "school_sel:" + school.Name},
+			// Use index as callback data to stay within Telegram's 64-byte limit.
+			{Text: school.Name, Data: fmt.Sprintf("school_sel:%d", start+i)},
 		})
 	}
 
