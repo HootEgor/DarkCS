@@ -81,11 +81,15 @@ func (d *driveService) ListVideos() ([]VideoItem, error) {
 	}
 	d.mu.RUnlock()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	q := fmt.Sprintf("'%s' in parents and mimeType contains 'video/' and trashed = false", d.folderID)
 	result, err := d.svc.Files.List().
 		Q(q).
 		Fields("files(id,name,webContentLink)").
 		OrderBy("name").
+		Context(ctx).
 		Do()
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: list videos: %w", err)
