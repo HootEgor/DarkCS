@@ -80,8 +80,13 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
+	// Show a persistent bottom-menu button so users have an obvious way back.
+	_ = m.SendMenu(state.ChatID, "📚 Навчальні відео", [][]chat.MenuButton{
+		{{Text: BtnBack + " до меню"}},
+	})
+
 	rows := s.buildPage(videos, 0)
-	if err := m.SendInlineGrid(state.ChatID, "📚 Навчальні відео\n\nОберіть відео для перегляду:", rows); err != nil {
+	if err := m.SendInlineGrid(state.ChatID, "Оберіть відео для перегляду:", rows); err != nil {
 		log.Error("select_video: send inline grid failed", sl.Err(err))
 		return chat.StepResult{Error: err}
 	}
@@ -98,6 +103,11 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 
 	data := input.CallbackData
 
+	// Bottom-menu back button (reply keyboard).
+	if input.Text == BtnBack+" до меню" {
+		return chat.StepResult{NextStep: StepMainMenu}
+	}
+
 	// For text-only platforms: match number input to the current page.
 	if data == "" {
 		videos, err := s.driveService.ListVideos()
@@ -113,7 +123,7 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		return chat.StepResult{}
 	}
 
-	// Back to main menu.
+	// Inline back button.
 	if data == "vid_back" {
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
