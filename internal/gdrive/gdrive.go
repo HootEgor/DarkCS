@@ -192,7 +192,10 @@ func (d *driveService) ListVideos() ([]VideoItem, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	q := fmt.Sprintf("'%s' in parents and mimeType contains 'video/' and trashed = false", d.folderID)
+	// List all non-trashed files in the folder. We intentionally omit a
+	// mimeType filter because manually-uploaded .MP4 files are often stored
+	// as application/octet-stream rather than video/mp4 in Drive.
+	q := fmt.Sprintf("'%s' in parents and trashed = false", d.folderID)
 	d.log.Debug("gdrive: calling Files.List", slog.String("folder_id", d.folderID))
 	result, err := d.svc.Files.List().
 		Q(q).
