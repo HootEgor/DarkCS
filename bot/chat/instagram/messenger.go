@@ -1,6 +1,8 @@
 package instagram
 
 import (
+	"io"
+
 	"DarkCS/bot/chat"
 )
 
@@ -38,6 +40,16 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 		text = file.Caption + "\n" + text
 	}
 	return m.sender.SendMessage(chatID, text)
+}
+
+// SendVideo sends a training video via Instagram.
+// r and cachedFileID are Telegram-specific and ignored here.
+// publicURL is used when available; otherwise falls back to sending the filename as text.
+func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicURL, filename string, protected bool) (string, error) {
+	if publicURL != "" {
+		return "", m.sender.SendMediaMessage(chatID, publicURL, "video")
+	}
+	return "", m.sender.SendMessage(chatID, "[Відео: "+filename+"]")
 }
 
 func (m *Messenger) SendText(chatID, text string) error {

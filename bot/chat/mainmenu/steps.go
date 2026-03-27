@@ -172,6 +172,7 @@ func mainMenuButtonsForRole(isManager bool) [][]chat.MenuButton {
 		{{Text: BtnMyOffice}, {Text: BtnServiceRate}},
 		{{Text: BtnOrderStatus}},
 		{{Text: BtnAIConsultant}, {Text: BtnMakeOrder}},
+		{{Text: BtnLearning}},
 	}
 	if isManager {
 		buttons = append(buttons, []chat.MenuButton{{Text: BtnSchoolStat}})
@@ -266,6 +267,8 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 		return chat.StepResult{NextStep: StepAIConsultant}
 	case BtnMakeOrder:
 		return chat.StepResult{NextStep: StepMakeOrder}
+	case BtnLearning:
+		return chat.StepResult{NextStep: StepSelectVideo}
 	case BtnSchoolStat:
 		if isManager {
 			return chat.StepResult{NextStep: StepSchoolStat}
@@ -287,6 +290,8 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 		return chat.StepResult{NextStep: StepAIConsultant}
 	case BtnMakeOrder:
 		return chat.StepResult{NextStep: StepMakeOrder}
+	case BtnLearning:
+		return chat.StepResult{NextStep: StepSelectVideo}
 	case BtnSchoolStat:
 		// Button only appears in the list for managers, so no extra check needed.
 		return chat.StepResult{NextStep: StepSchoolStat}

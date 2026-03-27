@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"io"
 	"strconv"
 
 	"DarkCS/bot/chat"
@@ -13,6 +14,7 @@ import (
 type TelegramAPI interface {
 	SendMessage(chatId int64, text string, opts *tgbotapi.SendMessageOpts) (*tgbotapi.Message, error)
 	SendDocument(chatId int64, document tgbotapi.InputFileOrString, opts *tgbotapi.SendDocumentOpts) (*tgbotapi.Message, error)
+	SendVideo(chatId int64, video tgbotapi.InputFileOrString, opts *tgbotapi.SendVideoOpts) (*tgbotapi.Message, error)
 	EditMessageText(text string, opts *tgbotapi.EditMessageTextOpts) (*tgbotapi.Message, bool, error)
 	SendChatAction(chatId int64, action string, opts *tgbotapi.SendChatActionOpts) (bool, error)
 	GetFile(fileId string, opts *tgbotapi.GetFileOpts) (*tgbotapi.File, error)
@@ -26,6 +28,34 @@ type Messenger struct {
 // NewMessenger creates a new Telegram Messenger.
 func NewMessenger(api TelegramAPI) *Messenger {
 	return &Messenger{api: api}
+}
+
+// SendVideo uploads a video to Telegram and optionally protects it from forwarding.
+// If cachedFileID is non-empty, the previously uploaded file is resent without re-uploading.
+// publicURL is ignored on Telegram; the stream r or the cached file_id is used instead.
+func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicURL, filename string, protected bool) (string, error) {
+	id, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return "", err
+	}
+
+	var inputFile tgbotapi.InputFileOrString
+	if cachedFileID != "" && r == nil {
+		inputFile = tgbotapi.InputFileByID(cachedFileID)
+	} else {
+		inputFile = tgbotapi.InputFileByReader(filename, r)
+	}
+
+	msg, err := m.api.SendVideo(id, inputFile, &tgbotapi.SendVideoOpts{
+		ProtectContent: protected,
+	})
+	if err != nil {
+		return "", err
+	}
+	if msg.Video != nil {
+		return msg.Video.FileId, nil
+	}
+	return "", nil
 }
 
 func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {

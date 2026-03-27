@@ -1,6 +1,8 @@
 package whatsapp
 
 import (
+	"io"
+
 	"DarkCS/bot/chat"
 )
 
@@ -38,6 +40,16 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 		mediaType = "audio"
 	}
 	return m.sender.SendMediaMessage(chatID, mediaType, file.URL, file.Caption, file.Filename)
+}
+
+// SendVideo sends a training video via WhatsApp.
+// r and cachedFileID are Telegram-specific and ignored here.
+// publicURL is used when available; otherwise falls back to sending the filename as text.
+func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicURL, filename string, protected bool) (string, error) {
+	if publicURL != "" {
+		return "", m.sender.SendMediaMessage(chatID, "video", publicURL, "", filename)
+	}
+	return "", m.sender.SendMessage(chatID, "[Відео: "+filename+"]")
 }
 
 func (m *Messenger) SendText(chatID, text string) error {

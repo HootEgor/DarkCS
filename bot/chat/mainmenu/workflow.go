@@ -2,10 +2,11 @@ package mainmenu
 
 import (
 	"context"
+	"log/slog"
 
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
-	"log/slog"
+	"DarkCS/internal/gdrive"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 	StepAIConsultant    chat.StepID = "ai_consultant"
 	StepMakeOrder       chat.StepID = "make_order"
 	StepSchoolStat      chat.StepID = "school_stat"
+	StepSelectVideo     chat.StepID = "select_video"
 )
 
 // Menu button texts (same as Telegram)
@@ -37,6 +39,7 @@ const (
 	BtnCompletedOrders = "✅Виконані замовлення"
 	BtnBack            = "↩️Назад"
 	BtnSchoolStat      = "📊Статистика шкіл"
+	BtnLearning        = "📚Навчання"
 )
 
 // AuthService defines the interface for user operations.
@@ -76,7 +79,9 @@ type MainMenuWorkflow struct {
 	steps map[chat.StepID]chat.Step
 }
 
-func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, qrStatRepo QrStatRepository, log *slog.Logger) *MainMenuWorkflow {
+// NewMainMenuWorkflow constructs the main menu workflow.
+// driveService may be nil; when nil the "Навчання" step shows an unavailable message.
+func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, qrStatRepo QrStatRepository, driveService gdrive.DriveService, log *slog.Logger) *MainMenuWorkflow {
 	w := &MainMenuWorkflow{
 		steps: make(map[chat.StepID]chat.Step),
 	}
@@ -91,6 +96,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 	w.steps[StepAIConsultant] = &AIConsultantStep{authService: authService, aiService: aiService}
 	w.steps[StepMakeOrder] = &MakeOrderStep{authService: authService, aiService: aiService}
 	w.steps[StepSchoolStat] = &SchoolStatStep{qrStatRepo: qrStatRepo}
+	w.steps[StepSelectVideo] = &SelectVideoStep{driveService: driveService, fileIDCache: make(map[string]string)}
 
 	return w
 }

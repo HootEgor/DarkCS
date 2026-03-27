@@ -78,6 +78,12 @@ type Config struct {
 		MsgUrl string `yaml:"msg_url" env-default:""`
 		ApiKey string `yaml:"api_key" env-default:""`
 	} `yaml:"zoho-functions"`
+	GoogleDrive struct {
+		Enabled         bool   `yaml:"enabled" env-default:"false"`
+		CredentialsFile string `yaml:"credentials_file" env-default:""`
+		FolderID        string `yaml:"folder_id" env-default:""`
+		CacheTTLMinutes int    `yaml:"cache_ttl_minutes" env-default:"60"`
+	} `yaml:"google-drive"`
 }
 
 var instance *Config

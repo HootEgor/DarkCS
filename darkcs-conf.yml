@@ -59,3 +59,8 @@ whatsapp:
   verify_token: ${WHATSAPP_VERIFY_TOKEN}
   app_secret: ${WHATSAPP_APP_SECRET}
   phone_number_id: ${WHATSAPP_PHONE_NUMBER_ID}
+google-drive:
+  enabled: true
+  credentials_file: /etc/conf/gdrive-credentials.json
+  folder_id: ${GOOGLE_DRIVE_FOLDER_ID}
+  cache_ttl_minutes: 60

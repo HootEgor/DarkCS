@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"time"
 
 	"DarkCS/ai/gpt"
 	"DarkCS/bot"
@@ -17,6 +18,7 @@ import (
 	"DarkCS/impl/core"
 	"DarkCS/internal/config"
 	repository "DarkCS/internal/database"
+	"DarkCS/internal/gdrive"
 	"DarkCS/internal/http-server/api"
 	"DarkCS/internal/lib/logger"
 	"DarkCS/internal/lib/sl"
@@ -157,6 +159,17 @@ func main() {
 
 	handler.Init()
 
+	// Initialize Google Drive service for training videos (optional).
+	var driveService gdrive.DriveService
+	if conf.GoogleDrive.Enabled && conf.GoogleDrive.CredentialsFile != "" {
+		ttl := time.Duration(conf.GoogleDrive.CacheTTLMinutes) * time.Minute
+		var driveErr error
+		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.FolderID, ttl)
+		if driveErr != nil {
+			lg.Error("google drive init failed — training videos unavailable", sl.Err(driveErr))
+		}
+	}
+
 	// Initialize unified ChatEngine shared by all platforms (Telegram, Instagram, WhatsApp)
 	var chatEngine *chat.ChatEngine
 	if db != nil {
@@ -167,7 +180,7 @@ func main() {
 		chatOnboarding := chatonboarding.NewOnboardingWorkflow(authService, zohoService, lg)
 		chatEngine.RegisterWorkflow(chatOnboarding)
 
-		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, db, db, lg)
+		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, db, db, driveService, lg)
 		chatEngine.RegisterWorkflow(chatMainMenu)
 
 		// Wire message listener for CRM

@@ -22,6 +22,13 @@ type FileMessage struct {
 type Messenger interface {
 	SendText(chatID, text string) error
 	SendFile(chatID string, file FileMessage) error
+	// SendVideo sends a training video.
+	// r is the Drive download stream; pass nil when cachedFileID is set (Telegram fast-path).
+	// cachedFileID is a Telegram file_id from a previous upload; ignored on other platforms.
+	// publicURL is used by Instagram/WhatsApp, which require a public URL instead of a stream.
+	// protected enables Telegram's protect_content flag (no forwarding/saving); ignored elsewhere.
+	// Returns the Telegram file_id after an upload so the caller can cache it; empty on other platforms.
+	SendVideo(chatID string, r io.Reader, cachedFileID, publicURL, filename string, protected bool) (returnedFileID string, err error)
 	SendMenu(chatID, text string, rows [][]MenuButton) error
 	SendInlineOptions(chatID, text string, buttons []InlineButton) error
 	SendInlineGrid(chatID, text string, rows [][]InlineButton) error
@@ -79,6 +86,15 @@ func (m *loggingMessenger) SendFile(chatID string, file FileMessage) error {
 	}
 	m.saveOutgoing(text)
 	return nil
+}
+
+func (m *loggingMessenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicURL, filename string, protected bool) (string, error) {
+	returnedID, err := m.inner.SendVideo(chatID, r, cachedFileID, publicURL, filename, protected)
+	if err != nil {
+		return "", err
+	}
+	m.saveOutgoing("[Video: " + filename + "]")
+	return returnedID, nil
 }
 
 func (m *loggingMessenger) SendMenu(chatID, text string, rows [][]MenuButton) error {
