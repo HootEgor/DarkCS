@@ -7,10 +7,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sync"
 	"time"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
@@ -51,18 +53,31 @@ type driveService struct {
 // NewDriveService creates a DriveService authenticated via a service-account
 // JSON credentials file. The video list is refreshed at most once per ttl.
 // Share the Drive folder with the service account e-mail to grant access.
+// httpTimeout is applied to every outbound request, including OAuth2 token
+// exchanges. Without this, a blocked network path to googleapis.com causes
+// the bot goroutine to hang indefinitely.
+const httpTimeout = 20 * time.Second
+
+// NewDriveService creates a DriveService authenticated via a service-account
+// JSON credentials file. The video list is refreshed at most once per ttl.
+// Share the Drive folder with the service account e-mail to grant access.
 func NewDriveService(credentialsFile, folderID string, ttl time.Duration) (DriveService, error) {
 	data, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: read credentials: %w", err)
 	}
 
-	creds, err := google.CredentialsFromJSON(context.Background(), data, drive.DriveReadonlyScope)
+	// Pass a base HTTP client with a hard timeout so OAuth2 token fetches
+	// respect the deadline too (context on Do() only covers the Drive call).
+	baseHTTP := &http.Client{Timeout: httpTimeout}
+	authCtx := context.WithValue(context.Background(), oauth2.HTTPClient, baseHTTP)
+
+	creds, err := google.CredentialsFromJSON(authCtx, data, drive.DriveReadonlyScope)
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: parse credentials: %w", err)
 	}
 
-	svc, err := drive.NewService(context.Background(), option.WithCredentials(creds))
+	svc, err := drive.NewService(authCtx, option.WithCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: create service: %w", err)
 	}
