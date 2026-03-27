@@ -167,7 +167,14 @@ func main() {
 		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.FolderID, ttl)
 		if driveErr != nil {
 			lg.Error("google drive init failed — training videos unavailable", sl.Err(driveErr))
+		} else {
+			lg.Info("google drive initialized", slog.String("folder_id", conf.GoogleDrive.FolderID))
 		}
+	} else {
+		lg.Warn("google drive disabled or credentials not set — training videos unavailable",
+			slog.Bool("enabled", conf.GoogleDrive.Enabled),
+			slog.String("credentials_file", conf.GoogleDrive.CredentialsFile),
+		)
 	}
 
 	// Initialize unified ChatEngine shared by all platforms (Telegram, Instagram, WhatsApp)

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 
 	"DarkCS/bot/chat"
 	"DarkCS/internal/gdrive"
+	"DarkCS/internal/lib/sl"
 )
 
 const videosPerPage = 5
@@ -29,19 +31,32 @@ type SelectVideoStep struct {
 func (s *SelectVideoStep) ID() chat.StepID { return StepSelectVideo }
 
 func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
+	log := slog.With(slog.String("platform", state.Platform), slog.String("user_id", state.UserID))
+
 	if s.driveService == nil {
+		log.Warn("select_video: drive service not configured")
 		_ = m.SendText(state.ChatID, "Навчальні матеріали тимчасово недоступні.")
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
 	videos, err := s.driveService.ListVideos()
-	if err != nil || len(videos) == 0 {
-		_ = m.SendText(state.ChatID, "Наразі відео-матеріали відсутні. Спробуйте пізніше.")
+	if err != nil {
+		log.Error("select_video: list videos failed", sl.Err(err))
+		_ = m.SendText(state.ChatID, "Помилка завантаження списку відео. Спробуйте пізніше.")
+		return chat.StepResult{Error: err}
+	}
+	log.Info("select_video: videos loaded", slog.Int("count", len(videos)))
+
+	if len(videos) == 0 {
+		_ = m.SendText(state.ChatID, "Наразі відео-матеріали відсутні.")
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
 	rows := s.buildPage(videos, 0)
-	_ = m.SendInlineGrid(state.ChatID, "📚 Навчальні відео\n\nОберіть відео для перегляду:", rows)
+	if err := m.SendInlineGrid(state.ChatID, "📚 Навчальні відео\n\nОберіть відео для перегляду:", rows); err != nil {
+		log.Error("select_video: send inline grid failed", sl.Err(err))
+		return chat.StepResult{Error: err}
+	}
 	return chat.StepResult{}
 }
 
