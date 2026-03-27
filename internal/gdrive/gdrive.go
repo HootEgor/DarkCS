@@ -136,17 +136,18 @@ func NewDriveService(credentialsFile, tokenFile, folderID string, ttl time.Durat
 
 	case "installed", "web":
 		// OAuth2 installed/web-app flow: requires a pre-saved token file.
-		// Generate it once with cmd/gdrive-auth, then copy to the server.
-		if tokenFile == "" {
-			return nil, fmt.Errorf("gdrive: token_file is required for OAuth2 installed-app credentials")
-		}
+		// Use /gdrive_auth in the admin Telegram bot to generate it on first run.
 		cfg, err := google.ConfigFromJSON(data, drive.DriveReadonlyScope)
 		if err != nil {
 			return nil, fmt.Errorf("gdrive: parse OAuth2 config: %w", err)
 		}
+		if tokenFile == "" {
+			return nil, fmt.Errorf("gdrive: no token file path — run /gdrive_auth in the admin bot first")
+		}
 		tokData, err := os.ReadFile(tokenFile)
 		if err != nil {
-			return nil, fmt.Errorf("gdrive: read token file: %w", err)
+			// Token file doesn't exist yet — auth hasn't been completed.
+			return nil, fmt.Errorf("gdrive: token file not found (%s) — run /gdrive_auth in the admin bot", tokenFile)
 		}
 		var tok oauth2.Token
 		if err := json.Unmarshal(tokData, &tok); err != nil {

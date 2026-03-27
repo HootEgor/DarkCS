@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"DarkCS/ai/gpt"
@@ -159,12 +160,20 @@ func main() {
 
 	handler.Init()
 
+	// Resolve the token file path. If not set in config, default to
+	// gdrive_token.json in the same directory as the credentials file so the
+	// token persists across restarts without requiring any config change.
+	driveTokenFile := conf.GoogleDrive.TokenFile
+	if driveTokenFile == "" && conf.GoogleDrive.CredentialsFile != "" {
+		driveTokenFile = filepath.Join(filepath.Dir(conf.GoogleDrive.CredentialsFile), "gdrive_token.json")
+	}
+
 	// Initialize Google Drive service for training videos (optional).
 	var driveService gdrive.DriveService
 	if conf.GoogleDrive.Enabled && conf.GoogleDrive.CredentialsFile != "" {
 		ttl := time.Duration(conf.GoogleDrive.CacheTTLMinutes) * time.Minute
 		var driveErr error
-		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.TokenFile, conf.GoogleDrive.FolderID, ttl, lg)
+		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, driveTokenFile, conf.GoogleDrive.FolderID, ttl, lg)
 		if driveErr != nil {
 			lg.Error("google drive init failed — training videos unavailable", sl.Err(driveErr))
 		} else {
@@ -178,11 +187,11 @@ func main() {
 	}
 
 	// Wire Drive auth flow into the admin bot so /gdrive_auth can be used to
-	// obtain and save token.json without shell access to the server.
+	// obtain and save the token without shell access to the server.
 	if tgBot != nil && conf.GoogleDrive.CredentialsFile != "" {
 		tgBot.SetDriveAuth(bot.DriveAuthConfig{
 			CredFile:  conf.GoogleDrive.CredentialsFile,
-			TokenFile: conf.GoogleDrive.TokenFile,
+			TokenFile: driveTokenFile,
 		})
 	}
 
