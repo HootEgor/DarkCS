@@ -81,6 +81,9 @@ type Config struct {
 	GoogleDrive struct {
 		Enabled         bool   `yaml:"enabled" env-default:"false"`
 		CredentialsFile string `yaml:"credentials_file" env-default:""`
+		// TokenFile is only needed for OAuth2 installed-app credentials.
+		// Leave empty when using a service account JSON.
+		TokenFile       string `yaml:"token_file" env-default:""`
 		FolderID        string `yaml:"folder_id" env-default:""`
 		CacheTTLMinutes int    `yaml:"cache_ttl_minutes" env-default:"60"`
 	} `yaml:"google-drive"`

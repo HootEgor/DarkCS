@@ -6,9 +6,11 @@ import (
 	tgbotapi "github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/message"
 	"log"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +21,9 @@ type TgBot struct {
 	adminIds    []int64
 	minLogLevel slog.Level
 	adminLevels map[int64]slog.Level
+
+	driveAuthCfg     *DriveAuthConfig
+	pendingDriveAuth sync.Map // int64 admin ID → *oauth2.Config
 }
 
 func NewTgBot(botName, apiKey string, adminIds []int64, log *slog.Logger) (*TgBot, error) {
@@ -65,6 +70,15 @@ func (t *TgBot) Start() error {
 	updater := ext.NewUpdater(dispatcher, nil)
 
 	dispatcher.AddHandler(handlers.NewCommand("level", t.level))
+	dispatcher.AddHandler(handlers.NewCommand("gdrive_auth", t.handleGDriveAuth))
+
+	// Intercept text messages from admins who are waiting to paste an auth code.
+	dispatcher.AddHandler(handlers.NewMessage(message.Text, func(b *tgbotapi.Bot, ctx *ext.Context) error {
+		if _, pending := t.pendingDriveAuth.Load(ctx.EffectiveUser.Id); pending {
+			return t.handleDriveAuthCode(b, ctx)
+		}
+		return nil
+	}))
 
 	// Start receiving updates.
 	err := updater.StartPolling(t.api, &ext.PollingOpts{

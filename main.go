@@ -164,7 +164,7 @@ func main() {
 	if conf.GoogleDrive.Enabled && conf.GoogleDrive.CredentialsFile != "" {
 		ttl := time.Duration(conf.GoogleDrive.CacheTTLMinutes) * time.Minute
 		var driveErr error
-		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.FolderID, ttl, lg)
+		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.TokenFile, conf.GoogleDrive.FolderID, ttl, lg)
 		if driveErr != nil {
 			lg.Error("google drive init failed — training videos unavailable", sl.Err(driveErr))
 		} else {
@@ -175,6 +175,15 @@ func main() {
 			slog.Bool("enabled", conf.GoogleDrive.Enabled),
 			slog.String("credentials_file", conf.GoogleDrive.CredentialsFile),
 		)
+	}
+
+	// Wire Drive auth flow into the admin bot so /gdrive_auth can be used to
+	// obtain and save token.json without shell access to the server.
+	if tgBot != nil && conf.GoogleDrive.CredentialsFile != "" {
+		tgBot.SetDriveAuth(bot.DriveAuthConfig{
+			CredFile:  conf.GoogleDrive.CredentialsFile,
+			TokenFile: conf.GoogleDrive.TokenFile,
+		})
 	}
 
 	// Initialize unified ChatEngine shared by all platforms (Telegram, Instagram, WhatsApp)
