@@ -82,3 +82,7 @@ func (m *Messenger) SendContactRequest(chatID, text, buttonText string) error {
 func (m *Messenger) SendTyping(chatID string) error {
 	return nil
 }
+
+func (m *Messenger) SendUploadAction(chatID string) error {
+	return nil
+}

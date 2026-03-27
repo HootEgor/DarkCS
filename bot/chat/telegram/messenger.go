@@ -208,3 +208,12 @@ func (m *Messenger) SendTyping(chatID string) error {
 	_, err = m.api.SendChatAction(id, "typing", nil)
 	return err
 }
+
+func (m *Messenger) SendUploadAction(chatID string) error {
+	id, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return err
+	}
+	_, err = m.api.SendChatAction(id, "upload_video", nil)
+	return err
+}

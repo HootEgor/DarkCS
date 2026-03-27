@@ -35,6 +35,10 @@ type Messenger interface {
 	EditInlineGrid(chatID, messageID, text string, rows [][]InlineButton) error
 	SendContactRequest(chatID, text, buttonText string) error
 	SendTyping(chatID string) error
+	// SendUploadAction signals to the platform that the bot is uploading a file.
+	// On Telegram this sends the "upload_video" chat action; other platforms ignore it.
+	// It must be called repeatedly (every ~4 s) to keep the indicator alive.
+	SendUploadAction(chatID string) error
 }
 
 // loggingMessenger wraps a Messenger and saves outgoing bot messages to CRM.
@@ -135,6 +139,10 @@ func (m *loggingMessenger) SendContactRequest(chatID, text, buttonText string) e
 
 func (m *loggingMessenger) SendTyping(chatID string) error {
 	return m.inner.SendTyping(chatID)
+}
+
+func (m *loggingMessenger) SendUploadAction(chatID string) error {
+	return m.inner.SendUploadAction(chatID)
 }
 
 // MenuButton represents a button in a reply/menu keyboard.

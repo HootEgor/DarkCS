@@ -161,12 +161,31 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		cached := s.fileIDCache[video.ID]
 		s.mu.RUnlock()
 
+		// Show "uploading video" indicator while the file is being fetched from
+		// Drive and uploaded to Telegram. The action expires after 5 s so we
+		// refresh it every 4 s until the send completes.
+		_ = m.SendUploadAction(state.ChatID)
+		uploadDone := make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(4 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-uploadDone:
+					return
+				case <-ticker.C:
+					_ = m.SendUploadAction(state.ChatID)
+				}
+			}
+		}()
+
 		// Download from Drive only when there is no cached Telegram file_id.
 		var reader io.Reader
 		if cached == "" {
 			log.Info("select_video: downloading from Drive", slog.String("file_id", video.ID), slog.String("name", video.Name))
 			rc, dlErr := s.driveService.DownloadVideo(video.ID)
 			if dlErr != nil {
+				close(uploadDone)
 				log.Error("select_video: download failed", slog.String("file_id", video.ID), sl.Err(dlErr))
 				_ = m.SendText(state.ChatID, "Помилка завантаження відео. Спробуйте пізніше.")
 				return chat.StepResult{}
@@ -184,6 +203,7 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 			video.Name,
 			true, // protect_content on Telegram
 		)
+		close(uploadDone) // stop the upload-action keepalive regardless of outcome
 		if sendErr != nil {
 			if isTooLarge(sendErr) {
 				// File exceeds Telegram's 50 MB bot upload limit.
