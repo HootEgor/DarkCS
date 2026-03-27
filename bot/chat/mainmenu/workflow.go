@@ -96,7 +96,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 	w.steps[StepAIConsultant] = &AIConsultantStep{authService: authService, aiService: aiService}
 	w.steps[StepMakeOrder] = &MakeOrderStep{authService: authService, aiService: aiService}
 	w.steps[StepSchoolStat] = &SchoolStatStep{qrStatRepo: qrStatRepo}
-	w.steps[StepSelectVideo] = &SelectVideoStep{driveService: driveService, fileIDCache: make(map[string]string)}
+	w.steps[StepSelectVideo] = &SelectVideoStep{driveService: driveService, log: log, fileIDCache: make(map[string]string)}
 
 	return w
 }

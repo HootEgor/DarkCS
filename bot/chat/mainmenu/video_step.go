@@ -23,6 +23,7 @@ const videosPerPage = 5
 // Telegram file_ids so the same file is not re-uploaded on every request.
 type SelectVideoStep struct {
 	driveService gdrive.DriveService
+	log          *slog.Logger
 
 	mu          sync.RWMutex
 	fileIDCache map[string]string // Drive file ID → Telegram file_id
@@ -31,7 +32,9 @@ type SelectVideoStep struct {
 func (s *SelectVideoStep) ID() chat.StepID { return StepSelectVideo }
 
 func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *chat.ChatState) chat.StepResult {
-	log := slog.With(slog.String("platform", state.Platform), slog.String("user_id", state.UserID))
+	log := s.log.With(slog.String("platform", state.Platform), slog.String("user_id", state.UserID), slog.String("chat_id", state.ChatID))
+
+	log.Debug("select_video: enter called")
 
 	if s.driveService == nil {
 		log.Warn("select_video: drive service not configured")
@@ -39,6 +42,7 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
+	log.Debug("select_video: calling ListVideos")
 	videos, err := s.driveService.ListVideos()
 	if err != nil {
 		log.Error("select_video: list videos failed", sl.Err(err))
@@ -57,6 +61,7 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 		log.Error("select_video: send inline grid failed", sl.Err(err))
 		return chat.StepResult{Error: err}
 	}
+	log.Info("select_video: inline grid sent")
 	return chat.StepResult{}
 }
 
