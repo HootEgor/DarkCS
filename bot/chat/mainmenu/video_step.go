@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"DarkCS/bot/chat"
 	"DarkCS/internal/gdrive"
@@ -43,12 +44,35 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 	}
 
 	log.Debug("select_video: calling ListVideos")
-	videos, err := s.driveService.ListVideos()
-	if err != nil {
-		log.Error("select_video: list videos failed", sl.Err(err))
-		_ = m.SendText(state.ChatID, "Помилка завантаження списку відео. Спробуйте пізніше.")
-		return chat.StepResult{Error: err}
+
+	// ListVideos can block indefinitely if the Drive HTTP transport stalls at
+	// the OS/network level. Run it in a goroutine and enforce a hard deadline
+	// so this goroutine never freezes the bot.
+	type videoResult struct {
+		videos []gdrive.VideoItem
+		err    error
 	}
+	ch := make(chan videoResult, 1)
+	go func() {
+		v, e := s.driveService.ListVideos()
+		ch <- videoResult{v, e}
+	}()
+
+	var videos []gdrive.VideoItem
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			log.Error("select_video: list videos failed", sl.Err(r.err))
+			_ = m.SendText(state.ChatID, "Помилка завантаження списку відео. Спробуйте пізніше.")
+			return chat.StepResult{Error: r.err}
+		}
+		videos = r.videos
+	case <-time.After(25 * time.Second):
+		log.Error("select_video: list videos timed out — Drive unreachable or credentials invalid")
+		_ = m.SendText(state.ChatID, "Помилка завантаження списку відео. Спробуйте пізніше.")
+		return chat.StepResult{}
+	}
+
 	log.Info("select_video: videos loaded", slog.Int("count", len(videos)))
 
 	if len(videos) == 0 {

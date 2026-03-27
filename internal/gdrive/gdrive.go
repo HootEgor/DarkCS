@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -45,6 +46,7 @@ type driveService struct {
 	svc      *drive.Service
 	folderID string
 	ttl      time.Duration
+	log      *slog.Logger
 
 	mu          sync.RWMutex
 	cache       []VideoItem
@@ -59,7 +61,7 @@ const httpTimeout = 20 * time.Second
 // NewDriveService creates a DriveService authenticated via a service-account
 // JSON credentials file. The video list is refreshed at most once per ttl.
 // Share the Drive folder with the service account e-mail to grant access.
-func NewDriveService(credentialsFile, folderID string, ttl time.Duration) (DriveService, error) {
+func NewDriveService(credentialsFile, folderID string, ttl time.Duration, log *slog.Logger) (DriveService, error) {
 	data, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: read credentials: %w", err)
@@ -98,7 +100,7 @@ func NewDriveService(credentialsFile, folderID string, ttl time.Duration) (Drive
 		return nil, fmt.Errorf("gdrive: create service: %w", err)
 	}
 
-	return &driveService{svc: svc, folderID: folderID, ttl: ttl}, nil
+	return &driveService{svc: svc, folderID: folderID, ttl: ttl, log: log}, nil
 }
 
 // ListVideos returns the cached video list, refreshing it from Drive if the
@@ -112,16 +114,20 @@ func (d *driveService) ListVideos() ([]VideoItem, error) {
 	}
 	d.mu.RUnlock()
 
+	d.log.Debug("gdrive: starting Drive API call")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	q := fmt.Sprintf("'%s' in parents and mimeType contains 'video/' and trashed = false", d.folderID)
+	d.log.Debug("gdrive: calling Files.List", slog.String("folder_id", d.folderID))
 	result, err := d.svc.Files.List().
 		Q(q).
 		Fields("files(id,name,webContentLink)").
 		OrderBy("name").
 		Context(ctx).
 		Do()
+	d.log.Debug("gdrive: Files.List returned", slog.Bool("error", err != nil))
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: list videos: %w", err)
 	}

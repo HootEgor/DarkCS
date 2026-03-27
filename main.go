@@ -164,7 +164,7 @@ func main() {
 	if conf.GoogleDrive.Enabled && conf.GoogleDrive.CredentialsFile != "" {
 		ttl := time.Duration(conf.GoogleDrive.CacheTTLMinutes) * time.Minute
 		var driveErr error
-		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.FolderID, ttl)
+		driveService, driveErr = gdrive.NewDriveService(conf.GoogleDrive.CredentialsFile, conf.GoogleDrive.FolderID, ttl, lg)
 		if driveErr != nil {
 			lg.Error("google drive init failed — training videos unavailable", sl.Err(driveErr))
 		} else {
