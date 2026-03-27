@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -50,12 +51,9 @@ type driveService struct {
 	lastUpdated time.Time
 }
 
-// NewDriveService creates a DriveService authenticated via a service-account
-// JSON credentials file. The video list is refreshed at most once per ttl.
-// Share the Drive folder with the service account e-mail to grant access.
-// httpTimeout is applied to every outbound request, including OAuth2 token
-// exchanges. Without this, a blocked network path to googleapis.com causes
-// the bot goroutine to hang indefinitely.
+// httpTimeout caps every outbound HTTP request to googleapis.com, including
+// OAuth2 token exchanges and Drive API calls. Without an explicit dial/read
+// timeout the bot goroutine can hang indefinitely on a stalled connection.
 const httpTimeout = 20 * time.Second
 
 // NewDriveService creates a DriveService authenticated via a service-account
@@ -67,9 +65,22 @@ func NewDriveService(credentialsFile, folderID string, ttl time.Duration) (Drive
 		return nil, fmt.Errorf("gdrive: read credentials: %w", err)
 	}
 
-	// Pass a base HTTP client with a hard timeout so OAuth2 token fetches
-	// respect the deadline too (context on Do() only covers the Drive call).
-	baseHTTP := &http.Client{Timeout: httpTimeout}
+	// timedTransport enforces dial and TLS handshake timeouts on top of the
+	// http.Client.Timeout. This prevents indefinite hangs when the TCP
+	// connection to googleapis.com stalls before sending any bytes.
+	timedTransport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Second,
+	}
+	baseHTTP := &http.Client{Transport: timedTransport, Timeout: httpTimeout}
+
+	// oauth2.HTTPClient in the context makes the oauth2 library use baseHTTP
+	// for token fetches. We then build the Drive client from the same token
+	// source so that API calls also travel through the timed transport.
 	authCtx := context.WithValue(context.Background(), oauth2.HTTPClient, baseHTTP)
 
 	creds, err := google.CredentialsFromJSON(authCtx, data, drive.DriveReadonlyScope)
@@ -77,7 +88,12 @@ func NewDriveService(credentialsFile, folderID string, ttl time.Duration) (Drive
 		return nil, fmt.Errorf("gdrive: parse credentials: %w", err)
 	}
 
-	svc, err := drive.NewService(authCtx, option.WithCredentials(creds))
+	// Build the OAuth2 HTTP client explicitly and pass it via WithHTTPClient
+	// so Drive API calls (not just token fetches) use the timed transport.
+	oauthClient := oauth2.NewClient(authCtx, creds.TokenSource)
+	oauthClient.Timeout = httpTimeout
+
+	svc, err := drive.NewService(context.Background(), option.WithHTTPClient(oauthClient))
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: create service: %w", err)
 	}
