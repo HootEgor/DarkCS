@@ -185,6 +185,30 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 			true, // protect_content on Telegram
 		)
 		if sendErr != nil {
+			if isTooLarge(sendErr) {
+				// File exceeds Telegram's 50 MB bot upload limit.
+				// Try again as a document (sometimes accepted when video codec is rejected).
+				log.Warn("select_video: video too large, retrying as document", slog.String("name", video.Name))
+				rc2, dlErr2 := s.driveService.DownloadVideo(video.ID)
+				if dlErr2 == nil {
+					fileErr := m.SendFile(state.ChatID, chat.FileMessage{Reader: rc2, Filename: video.Name, Caption: video.Name})
+					rc2.Close()
+					if fileErr == nil {
+						return chat.StepResult{}
+					}
+					if isTooLarge(fileErr) {
+						log.Warn("select_video: document also too large, sending link", slog.String("name", video.Name))
+					} else {
+						log.Error("select_video: send as document failed", slog.String("name", video.Name), sl.Err(fileErr))
+					}
+				} else {
+					log.Error("select_video: re-download for document failed", slog.String("name", video.Name), sl.Err(dlErr2))
+				}
+				// Final fallback: send a Drive viewer link.
+				driveLink := fmt.Sprintf("https://drive.google.com/file/d/%s/view", video.ID)
+				_ = m.SendText(state.ChatID, fmt.Sprintf("Відео \"%s\" занадто велике для надсилання через Telegram.\n\nВідкрийте за посиланням:\n%s", video.Name, driveLink))
+				return chat.StepResult{}
+			}
 			log.Error("select_video: send video failed", slog.String("name", video.Name), sl.Err(sendErr))
 			_ = m.SendText(state.ChatID, "Помилка відправки відео. Спробуйте пізніше.")
 			return chat.StepResult{}
@@ -245,4 +269,10 @@ func (s *SelectVideoStep) buildPage(videos []gdrive.VideoItem, page int) [][]cha
 	})
 
 	return rows
+}
+
+// isTooLarge reports whether the error is a Telegram 413 / "Request Entity Too Large".
+func isTooLarge(err error) bool {
+	return strings.Contains(err.Error(), "Request Entity Too Large") ||
+		strings.Contains(err.Error(), "413")
 }
