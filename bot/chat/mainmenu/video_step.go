@@ -90,6 +90,8 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 }
 
 func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
+	log := s.log.With(slog.String("platform", state.Platform), slog.String("user_id", state.UserID))
+
 	if s.driveService == nil {
 		return chat.StepResult{NextStep: StepMainMenu}
 	}
@@ -162,8 +164,10 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		// Download from Drive only when there is no cached Telegram file_id.
 		var reader io.Reader
 		if cached == "" {
+			log.Info("select_video: downloading from Drive", slog.String("file_id", video.ID), slog.String("name", video.Name))
 			rc, dlErr := s.driveService.DownloadVideo(video.ID)
 			if dlErr != nil {
+				log.Error("select_video: download failed", slog.String("file_id", video.ID), sl.Err(dlErr))
 				_ = m.SendText(state.ChatID, "Помилка завантаження відео. Спробуйте пізніше.")
 				return chat.StepResult{}
 			}
@@ -171,6 +175,7 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 			reader = rc
 		}
 
+		log.Info("select_video: sending video to Telegram", slog.String("name", video.Name), slog.Bool("cached", cached != ""))
 		returnedID, sendErr := m.SendVideo(
 			state.ChatID,
 			reader,
@@ -180,6 +185,7 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 			true, // protect_content on Telegram
 		)
 		if sendErr != nil {
+			log.Error("select_video: send video failed", slog.String("name", video.Name), sl.Err(sendErr))
 			_ = m.SendText(state.ChatID, "Помилка відправки відео. Спробуйте пізніше.")
 			return chat.StepResult{}
 		}
