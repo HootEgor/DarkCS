@@ -128,7 +128,7 @@ func (b *UserBot) handleReset(bot *tgbotapi.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	steps := []chat.StepID{chatmainmenu.StepAIConsultant, chatmainmenu.StepMakeOrder}
+	steps := []chat.StepID{chatmainmenu.StepAIConsultant, chatmainmenu.StepMakeOrder, chatmainmenu.StepSelectVideo}
 	count, err := b.chatEngine.ResetUsersAtSteps(context.Background(), chatmainmenu.WorkflowID, steps, chatmainmenu.StepMainMenu)
 	if err != nil {
 		b.log.Error("handleReset: failed to reset users", sl.Err(err))
