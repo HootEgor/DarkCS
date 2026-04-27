@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sync"
 	"time"
 
 	"DarkCS/bot/chat"
@@ -24,9 +25,17 @@ import (
 
 const graphAPIURL = "https://graph.instagram.com/v24.0/me/messages"
 
+// tokenRefreshURL is the Instagram endpoint for refreshing long-lived access tokens.
+const tokenRefreshURL = "https://graph.instagram.com/refresh_access_token"
+
+// tokenRefreshInterval controls how often the token is proactively renewed.
+// Instagram long-lived tokens expire after 60 days; 30 days gives a safe buffer.
+const tokenRefreshInterval = 30 * 24 * time.Hour
+
 // InstaBot handles Instagram messaging via the Graph API
 type InstaBot struct {
 	log         *slog.Logger
+	mu          sync.RWMutex
 	accessToken string
 	verifyToken string
 	appSecret   string
@@ -85,6 +94,66 @@ func NewInstaBot(accessToken, verifyToken, appSecret string, log *slog.Logger) *
 // SetChatEngine sets the unified chat engine for this bot.
 func (b *InstaBot) SetChatEngine(engine *chat.ChatEngine) {
 	b.chatEngine = engine
+}
+
+// token returns the current access token under a read lock.
+func (b *InstaBot) token() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.accessToken
+}
+
+// refreshToken exchanges the current long-lived token for a new one.
+// Instagram long-lived tokens expire after 60 days and must be refreshed before expiry.
+func (b *InstaBot) refreshToken() error {
+	reqURL := fmt.Sprintf("%s?grant_type=ig_refresh_token&access_token=%s", tokenRefreshURL, b.token())
+	resp, err := http.Get(reqURL)
+	if err != nil {
+		return fmt.Errorf("refresh request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("refresh API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode refresh response: %w", err)
+	}
+	if result.AccessToken == "" {
+		return fmt.Errorf("empty access token in refresh response")
+	}
+
+	b.mu.Lock()
+	b.accessToken = result.AccessToken
+	b.mu.Unlock()
+
+	b.log.Info("access token refreshed", slog.Int("expires_in_seconds", result.ExpiresIn))
+	return nil
+}
+
+// StartTokenRefresh spawns a background goroutine that refreshes the long-lived Instagram
+// access token every tokenRefreshInterval. It stops when ctx is cancelled.
+func (b *InstaBot) StartTokenRefresh(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(tokenRefreshInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := b.refreshToken(); err != nil {
+					b.log.Error("failed to refresh Instagram access token", sl.Err(err))
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // HandleWebhookVerification handles the GET request for webhook verification
@@ -240,7 +309,7 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.accessToken)
+	url := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.token())
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
@@ -258,7 +327,7 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 
 // GetUserUsername fetches the Instagram username for a given user ID via Graph API.
 func (b *InstaBot) GetUserUsername(userID string) (string, error) {
-	url := fmt.Sprintf("https://graph.instagram.com/v24.0/%s?fields=username&access_token=%s", userID, b.accessToken)
+	url := fmt.Sprintf("https://graph.instagram.com/v24.0/%s?fields=username&access_token=%s", userID, b.token())
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch user profile: %w", err)
@@ -338,7 +407,7 @@ func (b *InstaBot) SendMediaMessage(recipientID, mediaURL, mediaType string) err
 		return fmt.Errorf("failed to marshal media request: %w", err)
 	}
 
-	apiURL := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.accessToken)
+	apiURL := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.token())
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to send media message: %w", err)

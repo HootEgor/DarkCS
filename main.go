@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"path/filepath"
@@ -239,6 +240,7 @@ func main() {
 			instaBot.SetChatEngine(chatEngine)
 		}
 		handler.SetPlatformMessenger("instagram", igmessenger.NewMessenger(instaBot))
+		instaBot.StartTokenRefresh(context.Background())
 		lg.Info("instagram bot initialized")
 	}
 
