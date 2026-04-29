@@ -240,6 +240,13 @@ func main() {
 			instaBot.SetChatEngine(chatEngine)
 		}
 		handler.SetPlatformMessenger("instagram", igmessenger.NewMessenger(instaBot))
+		// Persist the token to MongoDB so DarkBot can import it via the same server.
+		if db != nil {
+			instaBot.SetTokenPersister(db.SaveInstagramToken)
+			if err := db.SaveInstagramToken(conf.Instagram.AccessToken); err != nil {
+				lg.Error("failed to persist initial instagram token", slog.String("error", err.Error()))
+			}
+		}
 		instaBot.StartTokenRefresh(context.Background())
 		lg.Info("instagram bot initialized")
 	}

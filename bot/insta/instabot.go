@@ -34,12 +34,19 @@ const tokenRefreshInterval = 30 * 24 * time.Hour
 
 // InstaBot handles Instagram messaging via the Graph API
 type InstaBot struct {
-	log         *slog.Logger
-	mu          sync.RWMutex
-	accessToken string
-	verifyToken string
-	appSecret   string
-	chatEngine  *chat.ChatEngine
+	log            *slog.Logger
+	mu             sync.RWMutex
+	accessToken    string
+	verifyToken    string
+	appSecret      string
+	chatEngine     *chat.ChatEngine
+	tokenPersister func(token string) error // nil = no persistence
+}
+
+// SetTokenPersister registers a callback that is called after every successful token refresh.
+// Use this to persist the refreshed token to a database so it survives restarts.
+func (b *InstaBot) SetTokenPersister(fn func(string) error) {
+	b.tokenPersister = fn
 }
 
 // WebhookPayload represents the incoming webhook payload from Instagram
@@ -134,6 +141,12 @@ func (b *InstaBot) refreshToken() error {
 	b.mu.Unlock()
 
 	b.log.Info("access token refreshed", slog.Int("expires_in_seconds", result.ExpiresIn))
+
+	if b.tokenPersister != nil {
+		if err := b.tokenPersister(result.AccessToken); err != nil {
+			b.log.Error("failed to persist refreshed Instagram token", slog.String("error", err.Error()))
+		}
+	}
 	return nil
 }
 
