@@ -151,9 +151,15 @@ func (b *InstaBot) refreshToken() error {
 }
 
 // StartTokenRefresh spawns a background goroutine that refreshes the long-lived Instagram
-// access token every tokenRefreshInterval. It stops when ctx is cancelled.
+// access token immediately on startup and then every tokenRefreshInterval. It stops when
+// ctx is cancelled. The immediate refresh ensures the persisted token is always long-lived
+// so other services (e.g. DarkBot) can import it right after startup.
 func (b *InstaBot) StartTokenRefresh(ctx context.Context) {
 	go func() {
+		if err := b.refreshToken(); err != nil {
+			b.log.Warn("instagram token refresh on startup failed", sl.Err(err))
+		}
+
 		ticker := time.NewTicker(tokenRefreshInterval)
 		defer ticker.Stop()
 		for {
