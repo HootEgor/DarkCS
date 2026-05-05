@@ -76,19 +76,30 @@ type QrStatRepository interface {
 
 // MainMenuWorkflow implements the main menu for chat platforms.
 type MainMenuWorkflow struct {
-	steps map[chat.StepID]chat.Step
+	steps       map[chat.StepID]chat.Step
+	activeSteps map[chat.StepID]bool
 }
 
 // NewMainMenuWorkflow constructs the main menu workflow.
 // driveService may be nil; when nil the "Навчання" step shows an unavailable message.
+// StepAIConsultant and StepMakeOrder are inactive by default; enable them with SetStepActive.
 func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, qrStatRepo QrStatRepository, driveService gdrive.DriveService, log *slog.Logger) *MainMenuWorkflow {
 	w := &MainMenuWorkflow{
 		steps: make(map[chat.StepID]chat.Step),
+		activeSteps: map[chat.StepID]bool{
+			StepMyOffice:     true,
+			StepServiceRate:  true,
+			StepCurrentOrder: true,
+			StepAIConsultant: false,
+			StepMakeOrder:    false,
+			StepSelectVideo:  true,
+			StepSchoolStat:   true,
+		},
 	}
 
 	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo, authService: authService, zohoService: zohoService, qrStatRepo: qrStatRepo}
 	w.steps[StepPreMainMenu] = &PreMainMenuStep{}
-	w.steps[StepMainMenu] = &MainMenuStep{authService: authService}
+	w.steps[StepMainMenu] = &MainMenuStep{authService: authService, activeSteps: w.activeSteps}
 	w.steps[StepMyOffice] = &MyOfficeStep{}
 	w.steps[StepCurrentOrder] = &CurrentOrderStep{authService: authService, zohoService: zohoService}
 	w.steps[StepCompletedOrders] = &CompletedOrdersStep{authService: authService, zohoService: zohoService}
@@ -99,6 +110,12 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 	w.steps[StepSelectVideo] = &SelectVideoStep{driveService: driveService, log: log, fileIDCache: make(map[string]string)}
 
 	return w
+}
+
+// SetStepActive enables or disables a step in the main menu globally for all users.
+// Inactive steps are hidden from the menu and cannot be navigated to.
+func (w *MainMenuWorkflow) SetStepActive(stepID chat.StepID, active bool) {
+	w.activeSteps[stepID] = active
 }
 
 func (w *MainMenuWorkflow) ID() chat.WorkflowID      { return WorkflowID }

@@ -165,18 +165,46 @@ func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat
 	return rows
 }
 
-// mainMenuButtonsForRole builds the main menu layout, appending the manager-only
-// "School statistic" button when the caller has manager privileges.
-func mainMenuButtonsForRole(isManager bool) [][]chat.MenuButton {
-	buttons := [][]chat.MenuButton{
-		{{Text: BtnMyOffice}, {Text: BtnServiceRate}},
-		{{Text: BtnOrderStatus}},
-		{{Text: BtnAIConsultant}, {Text: BtnMakeOrder}},
-		{{Text: BtnLearning}},
+// mainMenuButtonsForRole builds the main menu layout dynamically.
+// Any step absent or false in activeSteps is omitted from the menu.
+// The manager-only "School statistic" button requires both manager role and active step.
+func mainMenuButtonsForRole(isManager bool, activeSteps map[chat.StepID]bool) [][]chat.MenuButton {
+	var buttons [][]chat.MenuButton
+
+	var row1 []chat.MenuButton
+	if activeSteps[StepMyOffice] {
+		row1 = append(row1, chat.MenuButton{Text: BtnMyOffice})
 	}
-	if isManager {
+	if activeSteps[StepServiceRate] {
+		row1 = append(row1, chat.MenuButton{Text: BtnServiceRate})
+	}
+	if len(row1) > 0 {
+		buttons = append(buttons, row1)
+	}
+
+	if activeSteps[StepCurrentOrder] {
+		buttons = append(buttons, []chat.MenuButton{{Text: BtnOrderStatus}})
+	}
+
+	var aiRow []chat.MenuButton
+	if activeSteps[StepAIConsultant] {
+		aiRow = append(aiRow, chat.MenuButton{Text: BtnAIConsultant})
+	}
+	if activeSteps[StepMakeOrder] {
+		aiRow = append(aiRow, chat.MenuButton{Text: BtnMakeOrder})
+	}
+	if len(aiRow) > 0 {
+		buttons = append(buttons, aiRow)
+	}
+
+	if activeSteps[StepSelectVideo] {
+		buttons = append(buttons, []chat.MenuButton{{Text: BtnLearning}})
+	}
+
+	if isManager && activeSteps[StepSchoolStat] {
 		buttons = append(buttons, []chat.MenuButton{{Text: BtnSchoolStat}})
 	}
+
 	return buttons
 }
 
@@ -226,9 +254,11 @@ func (s *PreMainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 
 // MainMenuStep — Show main menu. Manager-role users additionally see the
 // "School statistic" button. Non-managers cannot navigate to that step even
-// if they somehow send the correct button text.
+// if they somehow send the correct button text. Steps absent or false in
+// activeSteps are hidden and unreachable.
 type MainMenuStep struct {
 	authService AuthService
+	activeSteps map[chat.StepID]bool
 }
 
 func (s *MainMenuStep) ID() chat.StepID { return StepMainMenu }
@@ -239,7 +269,7 @@ func (s *MainMenuStep) Enter(ctx context.Context, m chat.Messenger, state *chat.
 		isManager = user.IsManager()
 	}
 
-	buttons := mainMenuButtonsForRole(isManager)
+	buttons := mainMenuButtonsForRole(isManager, s.activeSteps)
 	if err := m.SendMenu(state.ChatID, "Натисніть на потрібний варіант, щоб перейти у бажаний розділ 👇", buttons); err != nil {
 		return chat.StepResult{Error: err}
 	}
@@ -255,30 +285,49 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 		isManager = user.IsManager()
 	}
 
-	// Exact button text match.
+	// Exact button text match. Each case guards its step via activeSteps so that
+	// manually sent button text cannot bypass a disabled step.
 	switch text {
 	case BtnMyOffice:
-		return chat.StepResult{NextStep: StepMyOffice}
+		if s.activeSteps[StepMyOffice] {
+			return chat.StepResult{NextStep: StepMyOffice}
+		}
+		return chat.StepResult{}
 	case BtnServiceRate:
-		return chat.StepResult{NextStep: StepServiceRate}
+		if s.activeSteps[StepServiceRate] {
+			return chat.StepResult{NextStep: StepServiceRate}
+		}
+		return chat.StepResult{}
 	case BtnOrderStatus:
-		return chat.StepResult{NextStep: StepCurrentOrder}
+		if s.activeSteps[StepCurrentOrder] {
+			return chat.StepResult{NextStep: StepCurrentOrder}
+		}
+		return chat.StepResult{}
 	case BtnAIConsultant:
-		return chat.StepResult{NextStep: StepAIConsultant}
+		if s.activeSteps[StepAIConsultant] {
+			return chat.StepResult{NextStep: StepAIConsultant}
+		}
+		return chat.StepResult{}
 	case BtnMakeOrder:
-		return chat.StepResult{NextStep: StepMakeOrder}
+		if s.activeSteps[StepMakeOrder] {
+			return chat.StepResult{NextStep: StepMakeOrder}
+		}
+		return chat.StepResult{}
 	case BtnLearning:
-		return chat.StepResult{NextStep: StepSelectVideo}
+		if s.activeSteps[StepSelectVideo] {
+			return chat.StepResult{NextStep: StepSelectVideo}
+		}
+		return chat.StepResult{}
 	case BtnSchoolStat:
-		if isManager {
+		if isManager && s.activeSteps[StepSchoolStat] {
 			return chat.StepResult{NextStep: StepSchoolStat}
 		}
 		return chat.StepResult{}
 	}
 
 	// Number-based match (for text-only platforms like Instagram/WhatsApp).
-	// Use the role-appropriate button set so numbers line up correctly.
-	buttons := mainMenuButtonsForRole(isManager)
+	// Buttons only appear when active/permitted, so no extra checks needed here.
+	buttons := mainMenuButtonsForRole(isManager, s.activeSteps)
 	switch chat.MatchNumberToOption(text, buttons) {
 	case BtnMyOffice:
 		return chat.StepResult{NextStep: StepMyOffice}
@@ -293,7 +342,6 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 	case BtnLearning:
 		return chat.StepResult{NextStep: StepSelectVideo}
 	case BtnSchoolStat:
-		// Button only appears in the list for managers, so no extra check needed.
 		return chat.StepResult{NextStep: StepSchoolStat}
 	}
 
