@@ -3,6 +3,7 @@ package core
 import (
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/ws"
 	"context"
@@ -73,12 +74,13 @@ type Assistant interface {
 type AuthService interface {
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
+	GetOrCreateUser(email, phone string, telegramId int64) (*entity.User, error)
 	GetUserByUUID(uuid string) (*entity.User, error)
 	GetUserByInstagramId(instagramId string) (*entity.User, error)
 	GetUserBySmartSenderId(smartSenderId string) (*entity.User, error)
 	UserExists(email, phone string, telegramId int64) (*entity.User, error)
 	BlockUser(email, phone string, telegramId int64, block bool, role string) error
-	UpdateUser(user *entity.User) error
+	UpdateUserFields(user *entity.User, fields map[string]any) error
 
 	ActivatePromoCode(phone, code string) error
 
@@ -136,7 +138,7 @@ type Core struct {
 	authKey       string
 	signingSecret string
 	publicURL     string
-	keys          map[string]string
+	keys          *keyCache
 	log           *slog.Logger
 	wsHub         *ws.Hub
 	messengers    map[string]chat.Messenger
@@ -145,7 +147,7 @@ type Core struct {
 func New(log *slog.Logger) *Core {
 	return &Core{
 		log:        log.With(sl.Module("core")),
-		keys:       make(map[string]string),
+		keys:       newKeyCache(),
 		messengers: make(map[string]chat.Messenger),
 	}
 }
@@ -224,7 +226,7 @@ func (c *Core) Init() {
 
 			time.Sleep(time.Until(nextRun))
 
-			_ = c.AttachNewFile()
+			safego.Run(c.log, "product list update", func() { _ = c.AttachNewFile() })
 		}
 	}()
 
@@ -242,11 +244,21 @@ func (c *Core) Init() {
 
 			time.Sleep(time.Until(nextRun))
 
-			if err := c.repo.CleanupChatMessages(); err != nil {
-				c.log.Error("chat message cleanup failed", slog.String("error", err.Error()))
-			}
+			safego.Run(c.log, "chat message cleanup", func() {
+				if c.repo == nil {
+					return
+				}
+				if err := c.repo.CleanupChatMessages(); err != nil {
+					c.log.Error("chat message cleanup failed", slog.String("error", err.Error()))
+				}
+			})
 		}
 	}()
+
+	// Everything below needs the database; with mongo disabled c.repo is nil.
+	if c.repo == nil {
+		return
+	}
 
 	// Ensure chat message indexes
 	if err := c.repo.EnsureChatMessageIndexes(); err != nil {

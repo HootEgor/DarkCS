@@ -9,6 +9,9 @@ import (
 	"fmt"
 )
 
+// emptyBasketMsg is returned to the model instead of an error so it can tell the user.
+const emptyBasketMsg = "The basket is empty. Add products before validating or creating an order."
+
 const (
 	orderInProcessLimit = 2
 )
@@ -98,7 +101,7 @@ type orderResp struct {
 //   - []entity.ProductInfo: Array of product information objects
 //   - error: Any error encountered during processing
 func (o *Overseer) handleGetProductInfo(args json.RawMessage) ([]entity.ProductInfo, error) {
-	var resp *getProductInfoResp
+	var resp getProductInfoResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
@@ -124,14 +127,12 @@ func (o *Overseer) handleGetProductInfo(args json.RawMessage) ([]entity.ProductI
 //   - string: Success message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleUpdateUserPhone(user *entity.User, args json.RawMessage) (string, error) {
-	var resp *updateUserPhoneResp
+	var resp updateUserPhoneResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
-	user.Phone = resp.Phone
-
-	err = o.authService.UpdateUser(user)
+	err = o.authService.UpdateUserFields(user, map[string]any{entity.UserFieldPhone: resp.Phone})
 	if err != nil {
 		return "", err
 	}
@@ -151,14 +152,12 @@ func (o *Overseer) handleUpdateUserPhone(user *entity.User, args json.RawMessage
 //   - string: Success message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleUpdateUserEmail(user *entity.User, args json.RawMessage) (string, error) {
-	var resp *updateUserEmailResp
+	var resp updateUserEmailResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
-	user.Email = resp.Email
-
-	err = o.authService.UpdateUser(user)
+	err = o.authService.UpdateUserFields(user, map[string]any{entity.UserFieldEmail: resp.Email})
 	if err != nil {
 		return "", err
 	}
@@ -178,14 +177,12 @@ func (o *Overseer) handleUpdateUserEmail(user *entity.User, args json.RawMessage
 //   - string: Success message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleUpdateUserAddress(user *entity.User, args json.RawMessage) (string, error) {
-	var resp *updateUserAddressResp
+	var resp updateUserAddressResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
-	user.Address = resp.Address
-
-	err = o.authService.UpdateUser(user)
+	err = o.authService.UpdateUserFields(user, map[string]any{entity.UserFieldAddress: resp.Address})
 	if err != nil {
 		return "", err
 	}
@@ -205,14 +202,12 @@ func (o *Overseer) handleUpdateUserAddress(user *entity.User, args json.RawMessa
 //   - string: Success message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleUpdateUserName(user *entity.User, args json.RawMessage) (string, error) {
-	var resp *updateUserNameResp
+	var resp updateUserNameResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return "", err
 	}
-	user.Name = resp.Name
-
-	err = o.authService.UpdateUser(user)
+	err = o.authService.UpdateUserFields(user, map[string]any{entity.UserFieldName: resp.Name})
 	if err != nil {
 		return "", err
 	}
@@ -278,7 +273,7 @@ func (o *Overseer) handleGetBasket(user *entity.User) (interface{}, error) {
 //   - interface{}: Updated basket contents formatted for the assistant
 //   - error: Any error encountered during processing
 func (o *Overseer) handleRemoveFromBasket(user *entity.User, args json.RawMessage) (interface{}, error) {
-	var resp *orderResp
+	var resp orderResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
@@ -308,7 +303,7 @@ func (o *Overseer) handleRemoveFromBasket(user *entity.User, args json.RawMessag
 //   - interface{}: Updated basket contents formatted for the assistant
 //   - error: Any error encountered during processing
 func (o *Overseer) handleAddToBasket(user *entity.User, args json.RawMessage) (interface{}, error) {
-	var resp *orderResp
+	var resp orderResp
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
@@ -404,6 +399,9 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {
 		return nil, err
+	}
+	if basket == nil || len(basket.Products) == 0 {
+		return emptyBasketMsg, nil
 	}
 
 	// Extract product codes from the basket
@@ -501,6 +499,10 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {
 		return nil, err
+	}
+	// GetBasket returns (nil, nil) for users who never added anything.
+	if basket == nil || len(basket.Products) == 0 {
+		return emptyBasketMsg, nil
 	}
 
 	// Create a new order from the basket contents

@@ -1,16 +1,27 @@
+// Package auth manages customer records: lookup, registration, promo access, baskets and
+// the AI conversation history stored on the user document.
+//
+// There is deliberately no in-memory user cache: it was shared across goroutines without
+// locking and served stale copies that were then written back over newer data. All user
+// writes are field-level (UpdateUserFields, PushConversation) for the same reason.
 package auth
 
 import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
-	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log/slog"
+	"time"
+	"unicode/utf8"
 )
 
 type Repository interface {
-	UpsertUser(user entity.User) error
+	CreateUser(user *entity.User) error
+	UpdateUserFields(uuid string, fields map[string]any) error
+	SetUserUUID(id primitive.ObjectID, uuid string) error
+	PushConversation(uuid string, message entity.DialogMessage, keep int) error
 	GetUser(email, phone string, telegramId int64) (*entity.User, error)
 	GetUserByUUID(uuid string) (*entity.User, error)
 	GetUserByInstagramId(instagramId string) (*entity.User, error)
@@ -27,14 +38,12 @@ type Repository interface {
 
 type Service struct {
 	repository Repository
-	users      []entity.User
 	log        *slog.Logger
 }
 
 func NewAuthService(logger *slog.Logger) *Service {
 	return &Service{
 		repository: nil,
-		users:      make([]entity.User, 0),
 		log:        logger.With(sl.Module("auth-service")),
 	}
 }
@@ -43,209 +52,222 @@ func (s *Service) SetRepository(repository Repository) {
 	s.repository = repository
 }
 
-func (s *Service) updateUser(user entity.User) {
-	for i, u := range s.users {
-		if user.SameUser(&u) {
-			s.users[i] = user
-		}
+// ensureUUID backfills a UUID on legacy documents stored without one.
+func (s *Service) ensureUUID(user *entity.User) error {
+	if user == nil || user.UUID != "" {
+		return nil
 	}
+	if user.ID.IsZero() {
+		return fmt.Errorf("user has neither uuid nor _id")
+	}
+	id := uuid.NewString()
+	if err := s.repository.SetUserUUID(user.ID, id); err != nil {
+		s.log.Error("assigning user uuid", sl.Err(err))
+		return err
+	}
+	user.UUID = id
+	return nil
 }
 
+// RegisterUser returns the existing user matching any of the identifiers, linking the
+// Telegram ID when it differs, or creates a new guest user.
 func (s *Service) RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error) {
-	user, _ := s.repository.GetUser(email, phone, telegramId)
+	user, err := s.GetUser(email, phone, telegramId)
+	if err != nil {
+		return nil, err
+	}
 
 	if user == nil {
 		user = entity.NewUser(email, phone, telegramId)
 		user.Name = name
-		err := s.repository.UpsertUser(*user)
-		if err != nil {
+		if err = s.repository.CreateUser(user); err != nil {
 			return nil, err
 		}
-		s.users = append(s.users, *user)
-	} else {
-		// Update telegram ID if provided and missing/different
-		if telegramId != 0 && user.TelegramId != telegramId {
-			user.TelegramId = telegramId
-			err := s.repository.UpsertUser(*user)
-			if err != nil {
-				return nil, err
-			}
-			s.updateUser(*user)
+		return user, nil
+	}
+
+	if telegramId != 0 && user.TelegramId != telegramId {
+		if err = s.UpdateUserFields(user, map[string]any{entity.UserFieldTelegramId: telegramId}); err != nil {
+			return nil, err
 		}
 	}
 
 	return user, nil
 }
 
-func (s *Service) UpdateUser(user *entity.User) error {
+// UpdateUserFields persists only the given fields (keys are entity.UserField* constants)
+// and mirrors them onto the in-memory user so callers keep a consistent copy.
+// Phone values are normalized before saving.
+func (s *Service) UpdateUserFields(user *entity.User, fields map[string]any) error {
 	if user == nil {
 		return fmt.Errorf("user is nil")
 	}
-
-	err := s.repository.UpsertUser(*user)
-	if err != nil {
+	if len(fields) == 0 {
+		return nil
+	}
+	if err := s.ensureUUID(user); err != nil {
 		return err
 	}
-
-	s.updateUser(*user)
-
+	if p, ok := fields[entity.UserFieldPhone].(string); ok {
+		fields[entity.UserFieldPhone] = entity.NormalizePhone(p)
+	}
+	if err := s.repository.UpdateUserFields(user.UUID, fields); err != nil {
+		return err
+	}
+	applyFields(user, fields)
 	return nil
 }
 
-func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
-	filterUser := entity.NewUser(email, phone, telegramId)
-	for _, user := range s.users {
-		if user.SameUser(filterUser) {
-			return &user, nil
+// applyFields copies updated values onto the struct; unknown keys are ignored.
+func applyFields(u *entity.User, fields map[string]any) {
+	for k, v := range fields {
+		switch k {
+		case entity.UserFieldName:
+			u.Name, _ = v.(string)
+		case entity.UserFieldEmail:
+			u.Email, _ = v.(string)
+		case entity.UserFieldPhone:
+			u.Phone, _ = v.(string)
+		case entity.UserFieldAddress:
+			u.Address, _ = v.(string)
+		case entity.UserFieldTelegramId:
+			u.TelegramId, _ = v.(int64)
+		case entity.UserFieldTelegramUsername:
+			u.TelegramUsername, _ = v.(string)
+		case entity.UserFieldInstagramId:
+			u.InstagramId, _ = v.(string)
+		case entity.UserFieldInstagramUser:
+			u.InstagramUsername, _ = v.(string)
+		case entity.UserFieldSmartSenderId:
+			u.SmartSenderId, _ = v.(string)
+		case entity.UserFieldZohoId:
+			u.ZohoId, _ = v.(string)
+		case entity.UserFieldRole:
+			u.Role, _ = v.(string)
+		case entity.UserFieldBlocked:
+			u.Blocked, _ = v.(bool)
+		case entity.UserFieldPromoExpire:
+			u.PromoExpire, _ = v.(time.Time)
+		case entity.UserFieldConversation:
+			u.Conversation, _ = v.([]entity.DialogMessage)
 		}
+	}
+}
+
+// GetUser looks a user up by any of the identifiers. Returns (nil, nil) when not found;
+// read paths must never register users (see GetOrCreateUser).
+func (s *Service) GetUser(email, phone string, telegramId int64) (*entity.User, error) {
+	phone = entity.NormalizePhone(phone)
+	if email == "" && phone == "" && telegramId == 0 {
+		return nil, nil
 	}
 	user, err := s.repository.GetUser(email, phone, telegramId)
 	if err != nil {
 		return nil, err
 	}
-	if user != nil {
-		if user.UUID == "" {
-			user.UUID = uuid.NewString()
-			err = s.repository.UpsertUser(*user)
-			if err != nil {
-				s.log.Error("upserting user", sl.Err(err))
-				return nil, err
-			}
-		}
-		s.users = append(s.users, *user)
-		return user, nil
+	if err = s.ensureUUID(user); err != nil {
+		return nil, err
 	}
+	return user, nil
+}
 
-	user, err = s.RegisterUser("", email, phone, telegramId)
-
-	return user, err
+// GetOrCreateUser is GetUser that registers a guest when nothing matches. Only for entry
+// points that legitimately introduce new customers (AI requests from website/SmartSender).
+func (s *Service) GetOrCreateUser(email, phone string, telegramId int64) (*entity.User, error) {
+	user, err := s.GetUser(email, phone, telegramId)
+	if err != nil || user != nil {
+		return user, err
+	}
+	if email == "" && entity.NormalizePhone(phone) == "" && telegramId == 0 {
+		return nil, fmt.Errorf("no user identifier provided")
+	}
+	return s.RegisterUser("", email, phone, telegramId)
 }
 
 func (s *Service) GetUserByUUID(uuid string) (*entity.User, error) {
-	for _, user := range s.users {
-		if user.UUID == uuid {
-			return &user, nil
-		}
-	}
 	user, err := s.repository.GetUserByUUID(uuid)
 	if err != nil {
 		return nil, err
 	}
-	if user != nil {
-		s.users = append(s.users, *user)
-		return user, nil
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
 	}
-	return nil, fmt.Errorf("user not found")
+	return user, nil
 }
 
 func (s *Service) GetUserByInstagramId(instagramId string) (*entity.User, error) {
-	for _, user := range s.users {
-		if user.InstagramId == instagramId {
-			return &user, nil
-		}
+	if instagramId == "" {
+		return nil, nil
 	}
 	user, err := s.repository.GetUserByInstagramId(instagramId)
 	if err != nil {
 		return nil, err
 	}
-	if user != nil {
-		s.users = append(s.users, *user)
-		return user, nil
+	if err = s.ensureUUID(user); err != nil {
+		return nil, err
 	}
-	return nil, nil
+	return user, nil
 }
 
 func (s *Service) GetUserBySmartSenderId(smartSenderId string) (*entity.User, error) {
-	for _, user := range s.users {
-		if user.SmartSenderId == smartSenderId {
-			return &user, nil
-		}
+	if smartSenderId == "" {
+		return nil, nil
 	}
 	user, err := s.repository.GetUserBySmartSenderId(smartSenderId)
 	if err != nil {
 		return nil, err
 	}
-	if user != nil {
-		s.users = append(s.users, *user)
-		return user, nil
-	}
-	return nil, nil
-}
-
-func (s *Service) UserExists(email, phone string, telegramId int64) (*entity.User, error) {
-	filterUser := entity.NewUser(email, phone, telegramId)
-	for _, user := range s.users {
-		if user.SameUser(filterUser) {
-			return &user, nil
-		}
-	}
-	user, err := s.repository.GetUser(email, phone, telegramId)
-	if err != nil {
+	if err = s.ensureUUID(user); err != nil {
 		return nil, err
 	}
-	if user != nil {
-		if user.UUID == "" {
-			user.UUID = uuid.NewString()
-			err = s.repository.UpsertUser(*user)
-			if err != nil {
-				s.log.Error("upserting user", sl.Err(err))
-				return nil, err
-			}
-		}
-		s.users = append(s.users, *user)
-		return user, nil
-	}
+	return user, nil
+}
 
-	return user, err
+// UserExists is kept for existing callers; it is identical to GetUser.
+func (s *Service) UserExists(email, phone string, telegramId int64) (*entity.User, error) {
+	return s.GetUser(email, phone, telegramId)
 }
 
 func (s *Service) IsUserGuest(email, phone string, telegramId int64) bool {
 	user, err := s.GetUser(email, phone, telegramId)
-	if err != nil {
-		s.log.Error("getting user", sl.Err(err))
+	if err != nil || user == nil {
 		return true
 	}
-
 	return user.IsGuest()
 }
 
 func (s *Service) IsUserAdmin(email, phone string, telegramId int64) bool {
 	user, err := s.GetUser(email, phone, telegramId)
-	if err != nil {
-		s.log.Error("getting user", sl.Err(err))
+	if err != nil || user == nil {
 		return false
 	}
-
 	return user.IsAdmin()
 }
 
 func (s *Service) IsUserManager(email, phone string, telegramId int64) bool {
 	user, err := s.GetUser(email, phone, telegramId)
-	if err != nil {
-		s.log.Error("getting user", sl.Err(err))
+	if err != nil || user == nil {
 		return false
 	}
-
 	return user.IsManager()
 }
 
+// BlockUser sets the blocked flag. The role changes only when one is supplied, so
+// blocking without a role no longer wipes the user's role.
 func (s *Service) BlockUser(email, phone string, telegramId int64, block bool, role string) error {
 	user, err := s.GetUser(email, phone, telegramId)
 	if err != nil {
 		return err
 	}
-
-	user.Blocked = block
-	user.Role = role
-
-	err = s.repository.UpsertUser(*user)
-	if err != nil {
-		return err
+	if user == nil {
+		return fmt.Errorf("user not found")
 	}
 
-	s.updateUser(*user)
-
-	return nil
+	fields := map[string]any{entity.UserFieldBlocked: block}
+	if role != "" {
+		fields[entity.UserFieldRole] = role
+	}
+	return s.UpdateUserFields(user, fields)
 }
 
 func (s *Service) SetSmartSenderId(email, phone string, telegramId int64, smartSenderId string) error {
@@ -253,86 +275,42 @@ func (s *Service) SetSmartSenderId(email, phone string, telegramId int64, smartS
 	if err != nil {
 		return err
 	}
-
-	user.SmartSenderId = smartSenderId
-
-	err = s.repository.UpsertUser(*user)
-	if err != nil {
-		return err
+	if user == nil {
+		return fmt.Errorf("user not found")
 	}
-
-	s.updateUser(*user)
-
-	return nil
+	return s.UpdateUserFields(user, map[string]any{entity.UserFieldSmartSenderId: smartSenderId})
 }
 
+const (
+	// maxConversationMessages is how many Q/A pairs are kept as AI context.
+	maxConversationMessages = 20
+	// maxDialogFieldBytes caps each question/answer so 20 pairs stay under ~280 KB,
+	// the budget the previous whole-history trimming enforced.
+	maxDialogFieldBytes = 7000
+)
+
+// UpdateConversation appends a Q/A pair. Only the conversation field is written, so the
+// user snapshot held during a long AI turn cannot revert changes made in the meantime.
 func (s *Service) UpdateConversation(user entity.User, message entity.DialogMessage) error {
-	const contextLimit = 400000
-	const safeMargin = int(float64(contextLimit) * 0.7)
-	const maxMessages = 20
-
-	// Append the new message
-	user.Conversation = append(user.Conversation, message)
-
-	// Trim oldest messages if exceeding safe margin
-	data, err := json.Marshal(user.Conversation)
-	if err != nil {
-		return fmt.Errorf("failed to marshal conversation: %w", err)
+	if err := s.ensureUUID(&user); err != nil {
+		return err
 	}
-	for len(data) > safeMargin && len(user.Conversation) > 1 {
-		user.Conversation = user.Conversation[1:]
-		data, _ = json.Marshal(user.Conversation)
-	}
-
-	// Ensure max message count
-	if len(user.Conversation) > maxMessages {
-		user.Conversation = user.Conversation[len(user.Conversation)-maxMessages:]
-	}
-
-	return s.UpdateUser(&user)
+	message.Question = truncateUTF8(message.Question, maxDialogFieldBytes)
+	message.Answer = truncateUTF8(message.Answer, maxDialogFieldBytes)
+	return s.repository.PushConversation(user.UUID, message, maxConversationMessages)
 }
 
 func (s *Service) ClearConversation(user *entity.User) error {
-	if user == nil {
-		return fmt.Errorf("user is nil")
-	}
-
-	user.Conversation = make([]entity.DialogMessage, 0)
-
-	return s.UpdateUser(user)
+	return s.UpdateUserFields(user, map[string]any{entity.UserFieldConversation: []entity.DialogMessage{}})
 }
 
-//func (a *Service) getAssistantsBySection(section string) []entity.AssistantData {
-//
-//	var assistants []entity.AssistantData
-//	for _, ass := range a.assistants {
-//		if strings.HasPrefix(ass.Name, a.devPrefix) {
-//			continue
-//		}
-//		if ass.Section == section {
-//			assistants = append(assistants, ass)
-//		}
-//	}
-//
-//	return assistants
-//}
-
-//func (a *Service) GetAssistantsForUser(chatId int64) ([]entity.AssistantData, error) {
-//
-//	if a.IsUserAdmin(chatId) {
-//		return a.assistants, nil
-//	}
-//
-//	user, err := a.GetUser(chatId)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	assistants := make([]entity.AssistantData, 0)
-//	for _, section := range user.Sections {
-//		sectionAss := a.getAssistantsBySection(section)
-//		assistants = append(assistants, sectionAss...)
-//	}
-//
-//	return assistants, nil
-//}
+// truncateUTF8 cuts s to at most n bytes without splitting a multi-byte rune.
+func truncateUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}

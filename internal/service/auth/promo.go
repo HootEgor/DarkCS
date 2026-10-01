@@ -82,16 +82,16 @@ func (s *Service) GetActivePromoCodes() ([]entity.PromoCode, error) {
 }
 
 func (s *Service) ActivatePromoCode(phone, code string) error {
-	if phone == "" {
-		return nil
+	if entity.NormalizePhone(phone) == "" {
+		return fmt.Errorf("phone number is required")
 	}
 
-	user, err := s.repository.GetUser("", phone, 0)
+	user, err := s.GetUser("", phone, 0)
 	if err != nil {
 		return err
 	}
 	if user == nil {
-		return nil
+		return fmt.Errorf("user not found")
 	}
 
 	promoCode, err := s.repository.GetPromoCode(code)
@@ -110,9 +110,9 @@ func (s *Service) ActivatePromoCode(phone, code string) error {
 		return fmt.Errorf("failed to activate promo code: %w", err)
 	}
 
-	user.PromoExpire = time.Now().Add(30 * 24 * time.Hour)
-
-	err = s.UpdateUser(user)
+	err = s.UpdateUserFields(user, map[string]any{
+		entity.UserFieldPromoExpire: time.Now().Add(30 * 24 * time.Hour),
+	})
 	if err != nil {
 		return err
 	}

@@ -1,29 +1,33 @@
 package entity
 
 import (
-	"fmt"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"strings"
 	"time"
 )
 
+// User is a customer record shared by all platforms. Identity fields (phone, email,
+// telegram_id, instagram_id) are matched with an $or lookup, so Phone must always be
+// stored in NormalizePhone form or lookups miss and duplicate users get created.
 type User struct {
-	UUID              string          `json:"uuid" bson:"uuid"`
-	Name              string          `json:"name" bson:"name" validate:"omitempty"`
-	Email             string          `json:"email" bson:"email" validate:"omitempty,email"`
-	Phone             string          `json:"phone" bson:"phone" validate:"omitempty"`
-	Address           string          `json:"address" bson:"address" validate:"omitempty"`
-	TelegramId        int64           `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
-	TelegramUsername  string          `json:"telegram_username" bson:"telegram_username" validate:"omitempty"`
-	InstagramId       string          `json:"instagram_id" bson:"instagram_id" validate:"omitempty"`
-	InstagramUsername string          `json:"instagram_username" bson:"instagram_username" validate:"omitempty"`
-	SmartSenderId     string          `json:"smart_sender_id" bson:"smart_sender_id" validate:"omitempty"`
-	ZohoId            string          `json:"zoho_id" bson:"zoho_id" validate:"omitempty"`
-	Role              string          `json:"role" bson:"role" validate:"omitempty"`
-	Blocked           bool            `json:"blocked" bson:"blocked" validate:"omitempty"`
-	LastSeen          time.Time       `json:"last_seen" bson:"lastSeen"`
-	PromoExpire       time.Time       `json:"promo_expire" bson:"promoExpire" validate:"omitempty"`
-	Conversation      []DialogMessage `json:"conversation" bson:"conversation" validate:"omitempty"`
+	ID                primitive.ObjectID `json:"-" bson:"_id,omitempty"`
+	UUID              string             `json:"uuid" bson:"uuid"`
+	Name              string             `json:"name" bson:"name" validate:"omitempty"`
+	Email             string             `json:"email" bson:"email" validate:"omitempty,email"`
+	Phone             string             `json:"phone" bson:"phone" validate:"omitempty"`
+	Address           string             `json:"address" bson:"address" validate:"omitempty"`
+	TelegramId        int64              `json:"telegram_id" bson:"telegram_id" validate:"omitempty"`
+	TelegramUsername  string             `json:"telegram_username" bson:"telegram_username" validate:"omitempty"`
+	InstagramId       string             `json:"instagram_id" bson:"instagram_id" validate:"omitempty"`
+	InstagramUsername string             `json:"instagram_username" bson:"instagram_username" validate:"omitempty"`
+	SmartSenderId     string             `json:"smart_sender_id" bson:"smart_sender_id" validate:"omitempty"`
+	ZohoId            string             `json:"zoho_id" bson:"zoho_id" validate:"omitempty"`
+	Role              string             `json:"role" bson:"role" validate:"omitempty"`
+	Blocked           bool               `json:"blocked" bson:"blocked" validate:"omitempty"`
+	LastSeen          time.Time          `json:"last_seen" bson:"lastSeen"`
+	PromoExpire       time.Time          `json:"promo_expire" bson:"promoExpire" validate:"omitempty"`
+	Conversation      []DialogMessage    `json:"conversation" bson:"conversation" validate:"omitempty"`
 }
 
 type DialogMessage struct {
@@ -58,20 +62,48 @@ type TelegramImportItem struct {
 	TelegramUsername string `json:"telegram_username"`
 }
 
-func NewUser(email, phone string, telegramId int64) *User {
+// User document field names for partial updates. Writes must touch only the fields they
+// change: whole-document writes from a stale copy silently revert concurrent updates.
+const (
+	UserFieldName             = "name"
+	UserFieldEmail            = "email"
+	UserFieldPhone            = "phone"
+	UserFieldAddress          = "address"
+	UserFieldTelegramId       = "telegram_id"
+	UserFieldTelegramUsername = "telegram_username"
+	UserFieldInstagramId      = "instagram_id"
+	UserFieldInstagramUser    = "instagram_username"
+	UserFieldSmartSenderId    = "smart_sender_id"
+	UserFieldZohoId           = "zoho_id"
+	UserFieldRole             = "role"
+	UserFieldBlocked          = "blocked"
+	UserFieldLastSeen         = "lastSeen"
+	UserFieldPromoExpire      = "promoExpire"
+	UserFieldConversation     = "conversation"
+)
 
-	phoneDigits := ""
+// NormalizePhone reduces a phone to "+digits", the only form stored in the database.
+// Returns "" when the input has no digits, so an empty phone never becomes a "+" that
+// would match other phoneless users.
+func NormalizePhone(phone string) string {
+	var b strings.Builder
 	for _, ch := range phone {
 		if ch >= '0' && ch <= '9' {
-			phoneDigits += string(ch)
+			b.WriteRune(ch)
 		}
 	}
-	phone = fmt.Sprintf("+%s", phoneDigits)
+	if b.Len() == 0 {
+		return ""
+	}
+	return "+" + b.String()
+}
 
+// NewUser creates a guest user with a fresh UUID and a normalized phone.
+func NewUser(email, phone string, telegramId int64) *User {
 	return &User{
 		UUID:       uuid.NewString(),
 		Email:      email,
-		Phone:      phone,
+		Phone:      NormalizePhone(phone),
 		TelegramId: telegramId,
 		Role:       GuestRole,
 		Blocked:    false,

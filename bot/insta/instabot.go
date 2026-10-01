@@ -20,6 +20,7 @@ import (
 	"DarkCS/bot/chat"
 	igmessenger "DarkCS/bot/chat/instagram"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -39,6 +40,7 @@ type InstaBot struct {
 	accessToken    string
 	verifyToken    string
 	appSecret      string
+	fallbackToken  string // token from config, see SetFallbackToken
 	chatEngine     *chat.ChatEngine
 	tokenPersister func(token string) error // nil = no persistence
 }
@@ -150,29 +152,81 @@ func (b *InstaBot) refreshToken() error {
 	return nil
 }
 
-// StartTokenRefresh spawns a background goroutine that refreshes the long-lived Instagram
-// access token immediately on startup and then every tokenRefreshInterval. It stops when
-// ctx is cancelled. The immediate refresh ensures the persisted token is always long-lived
-// so other services (e.g. DarkBot) can import it right after startup.
-func (b *InstaBot) StartTokenRefresh(ctx context.Context) {
-	go func() {
-		if err := b.refreshToken(); err != nil {
-			b.log.Warn("instagram token refresh on startup failed", sl.Err(err))
-		}
+// Retry schedule for failed refreshes: a single transient error must not leave the token
+// unrefreshed for a whole tokenRefreshInterval, or it can expire in the meantime.
+const (
+	tokenRetryMin = time.Hour
+	tokenRetryMax = 24 * time.Hour
+)
 
-		ticker := time.NewTicker(tokenRefreshInterval)
-		defer ticker.Stop()
+// SetFallbackToken registers the token from config. It is tried when refreshing the
+// current (persisted) token fails, which covers an operator replacing an expired token
+// in config while an older one is still stored in MongoDB.
+func (b *InstaBot) SetFallbackToken(token string) {
+	b.mu.Lock()
+	b.fallbackToken = token
+	b.mu.Unlock()
+}
+
+// refreshWithFallback refreshes the current token and, if that fails, retries once with
+// the fallback token.
+func (b *InstaBot) refreshWithFallback() error {
+	err := b.refreshToken()
+	if err == nil {
+		return nil
+	}
+
+	b.mu.Lock()
+	previous := b.accessToken
+	fallback := b.fallbackToken
+	switched := fallback != "" && fallback != previous
+	if switched {
+		b.accessToken = fallback
+	}
+	b.mu.Unlock()
+	if !switched {
+		return err
+	}
+
+	b.log.Warn("refreshing persisted instagram token failed, trying config token", sl.Err(err))
+	if fbErr := b.refreshToken(); fbErr != nil {
+		// Both failed; keep the persisted token, since the first failure may be transient.
+		b.mu.Lock()
+		b.accessToken = previous
+		b.mu.Unlock()
+		return fmt.Errorf("persisted token: %w; config token: %v", err, fbErr)
+	}
+	return nil
+}
+
+// StartTokenRefresh spawns a background goroutine that refreshes the long-lived Instagram
+// access token immediately on startup and then every tokenRefreshInterval, retrying
+// failures with exponential backoff. It stops when ctx is cancelled. The immediate refresh
+// ensures the persisted token is always long-lived so other services (e.g. DarkBot) can
+// import it right after startup.
+func (b *InstaBot) StartTokenRefresh(ctx context.Context) {
+	safego.Go(b.log, "instagram token refresh", func() {
+		retry := tokenRetryMin
 		for {
+			wait := tokenRefreshInterval
+			if err := b.refreshWithFallback(); err != nil {
+				b.log.Error("failed to refresh Instagram access token",
+					slog.Duration("retry_in", retry), sl.Err(err))
+				wait = retry
+				retry = min(retry*2, tokenRetryMax)
+			} else {
+				retry = tokenRetryMin
+			}
+
+			timer := time.NewTimer(wait)
 			select {
-			case <-ticker.C:
-				if err := b.refreshToken(); err != nil {
-					b.log.Error("failed to refresh Instagram access token", sl.Err(err))
-				}
+			case <-timer.C:
 			case <-ctx.Done():
+				timer.Stop()
 				return
 			}
 		}
-	}()
+	})
 }
 
 // HandleWebhookVerification handles the GET request for webhook verification
@@ -232,7 +286,7 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process messages asynchronously
-	go b.processPayload(payload)
+	safego.Go(b.log, "instagram webhook", func() { b.processPayload(payload) })
 }
 
 // processPayload processes the webhook payload

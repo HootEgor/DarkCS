@@ -3,6 +3,7 @@ package services
 import (
 	"DarkCS/entity"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -89,7 +90,7 @@ func (s *ZohoService) buildZohoOrder(order *entity.Order, contactID string) enti
 
 func getCountryName(phone string) string {
 	if len(phone) >= 3 {
-		if phone[:4] == "+380" {
+		if strings.HasPrefix(phone, "+380") {
 			return "Україна"
 		} else if phone[:2] == "+1" {
 			return "США або Канада"

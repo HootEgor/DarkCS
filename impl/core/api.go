@@ -49,7 +49,7 @@ func (c *Core) CreateUser(name, email, phone, smartSenderId string, telegramId i
 	}
 
 	if user.SmartSenderId == "" && smartSenderId != "" {
-		err = c.authService.SetSmartSenderId(email, phone, telegramId, smartSenderId)
+		err = c.authService.UpdateUserFields(user, map[string]any{entity.UserFieldSmartSenderId: smartSenderId})
 		if err != nil {
 			return "", "", err
 		}
@@ -153,9 +153,7 @@ func (c *Core) ClosePromoForUser(phone string) error {
 		return fmt.Errorf("user not found")
 	}
 
-	user.PromoExpire = time.Time{} // Reset promo expiration
-	err = c.authService.UpdateUser(user)
-	return err
+	return c.authService.UpdateUserFields(user, map[string]any{entity.UserFieldPromoExpire: time.Time{}})
 }
 
 func (c *Core) SendMessage(userId, text string) error {
@@ -175,13 +173,10 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 		return "", fmt.Errorf("authService is not set")
 	}
 
-	phoneDigits := ""
-	for _, ch := range phone {
-		if ch >= '0' && ch <= '9' {
-			phoneDigits += string(ch)
-		}
+	phone = entity.NormalizePhone(phone)
+	if phone == "" {
+		return "", fmt.Errorf("phone number is required")
 	}
-	phone = fmt.Sprintf("+%s", phoneDigits)
 
 	user, err := c.authService.UserExists("", phone, 0)
 	if err != nil {
@@ -242,7 +237,7 @@ func (c *Core) GenerateApiKey(username string) (string, error) {
 		return "", fmt.Errorf("failed to generate API key: %w", err)
 	}
 
-	c.keys[apiKey] = username
+	c.keys.set(apiKey, username)
 	return apiKey, nil
 }
 
@@ -450,19 +445,7 @@ func (c *Core) ImportTelegramUsers(items []entity.TelegramImportItem) (int, erro
 			continue
 		}
 
-		// Normalize phone
-		phone := ""
-		if item.Phone != "" {
-			phoneDigits := ""
-			for _, ch := range item.Phone {
-				if ch >= '0' && ch <= '9' {
-					phoneDigits += string(ch)
-				}
-			}
-			if phoneDigits != "" {
-				phone = "+" + phoneDigits
-			}
-		}
+		phone := entity.NormalizePhone(item.Phone)
 
 		// Try to find user by phone (priority)
 		var user *entity.User
@@ -491,9 +474,11 @@ func (c *Core) ImportTelegramUsers(items []entity.TelegramImportItem) (int, erro
 		}
 
 		// Update Telegram data
-		user.TelegramId = item.TelegramID
-		user.TelegramUsername = item.TelegramUsername
-		if err := c.authService.UpdateUser(user); err != nil {
+		fields := map[string]any{
+			entity.UserFieldTelegramId:       item.TelegramID,
+			entity.UserFieldTelegramUsername: item.TelegramUsername,
+		}
+		if err := c.authService.UpdateUserFields(user, fields); err != nil {
 			c.log.Error("import telegram: update user", sl.Err(err))
 			continue
 		}

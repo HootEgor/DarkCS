@@ -57,8 +57,8 @@ func New(log *slog.Logger, auth Authenticate) func(next http.Handler) http.Handl
 				authFailed(ww, r, "Authorization header not found")
 				return
 			}
-			if strings.Contains(header, "Bearer") {
-				token = strings.Split(header, " ")[1]
+			if t, ok := strings.CutPrefix(header, "Bearer "); ok {
+				token = strings.TrimSpace(t)
 			}
 			if len(token) == 0 {
 				logger = logger.With(sl.Err(fmt.Errorf("token not found")))

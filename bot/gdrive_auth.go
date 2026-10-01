@@ -72,7 +72,11 @@ func (t *TgBot) handleGDriveAuth(b *tgbotapi.Bot, ctx *ext.Context) error {
 func (t *TgBot) handleDriveAuthCode(b *tgbotapi.Bot, ctx *ext.Context) error {
 	code := ctx.EffectiveMessage.Text
 	raw, _ := t.pendingDriveAuth.LoadAndDelete(ctx.EffectiveUser.Id)
-	cfg := raw.(*oauth2.Config)
+	cfg, ok := raw.(*oauth2.Config)
+	if !ok {
+		// A concurrent message already consumed the pending flow.
+		return nil
+	}
 
 	tok, err := cfg.Exchange(context.Background(), code)
 	if err != nil {

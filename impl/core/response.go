@@ -2,6 +2,7 @@ package core
 
 import (
 	"DarkCS/entity"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"fmt"
 	"log/slog"
@@ -14,6 +15,7 @@ const (
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	if msg.SmartSenderId != "" {
 		go func(msg entity.HttpUserMsg) {
+			defer safego.Recover(c.log, "smart-sender response")
 
 			answer, err := c.processRequest(msg)
 			if err != nil {
@@ -76,13 +78,13 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 		return nil, fmt.Errorf("assistant not initialized")
 	}
 
-	user, err := c.authService.GetUser(msg.Email, msg.Phone, msg.TelegramId)
+	user, err := c.authService.GetOrCreateUser(msg.Email, msg.Phone, msg.TelegramId)
 	if err != nil {
 		return nil, err
 	}
 
 	if user.SmartSenderId == "" && msg.SmartSenderId != "" {
-		err = c.authService.SetSmartSenderId(msg.Email, msg.Phone, msg.TelegramId, msg.SmartSenderId)
+		err = c.authService.UpdateUserFields(user, map[string]any{entity.UserFieldSmartSenderId: msg.SmartSenderId})
 		if err != nil {
 			return nil, err
 		}

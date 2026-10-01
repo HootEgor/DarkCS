@@ -15,17 +15,19 @@ func (m *MongoDB) FollowQr(smartSenderId string) error {
 	}
 	defer m.disconnect(connection)
 
-	qrStat := entity.QrStat{
-		SmartSenderId: smartSenderId,
-		Date:          time.Now(),
-		FollowQr:      true,
-		Registered:    false,
-	}
-
 	collection := connection.Database(m.database).Collection(qrStatCollection)
 
+	// Re-scanning must not reset registered or wipe the school/platform fields,
+	// so only scan fields are $set and registered is initialized on insert only.
 	filter := bson.D{{"smart_sender_id", smartSenderId}}
-	update := bson.M{"$set": qrStat}
+	update := bson.M{
+		"$set": bson.M{
+			"smart_sender_id": smartSenderId,
+			"date":            time.Now(),
+			"follow_qr":       true,
+		},
+		"$setOnInsert": bson.M{"registered": false},
+	}
 
 	_, err = collection.UpdateOne(m.ctx, filter, update, options.Update().SetUpsert(true))
 	if err != nil {

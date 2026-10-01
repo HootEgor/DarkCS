@@ -110,8 +110,10 @@ func (s *ZohoService) getOrderProducts(orderId string) (*productsResponse, error
 	// Parse response
 	var result productsResponse
 
-	if bodyBytes == nil || len(bodyBytes) == 0 {
-		return nil, nil
+	// An empty body (e.g. 204 for an order without items) means no products; return an
+	// empty result rather than nil so callers can range over Data safely.
+	if len(bodyBytes) == 0 {
+		return &result, nil
 	}
 
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {

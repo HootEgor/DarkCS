@@ -181,6 +181,9 @@ func (s *ZohoService) createContact(contactData entity.Contact) (string, error) 
 			if err := json.Unmarshal(item.Details, &multiErr); err != nil {
 				return "", fmt.Errorf("failed to parse multiple errors: %w", err)
 			}
+			if len(multiErr.Errors) == 0 {
+				return "", fmt.Errorf("zoho error [%s] without details: %s", item.Code, item.Message)
+			}
 			s.log.With(
 				slog.Any("error_message", multiErr.Errors[0].Message),
 			).Debug("multiple errors detected")

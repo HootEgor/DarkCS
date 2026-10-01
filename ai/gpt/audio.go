@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/sashabaranov/go-openai"
 	"io"
-	"log"
 	"os"
 )
 
@@ -38,14 +37,23 @@ func (o *Overseer) GetAudioText(base64 string) (string, error) {
 	return transcription, nil
 }
 
+// maxAudioBytes matches the Whisper API upload limit; larger input is rejected before
+// decoding so a request cannot force a huge allocation.
+const maxAudioBytes = 25 << 20
+
+// base64Decode decodes client-supplied audio. Invalid input is returned as an error:
+// this runs in the request path, where exiting the process would take every bot down.
 func (o *Overseer) base64Decode(base64Str string) (io.Reader, error) {
+	if base64.StdEncoding.DecodedLen(len(base64Str)) > maxAudioBytes {
+		return nil, fmt.Errorf("audio exceeds %d bytes", maxAudioBytes)
+	}
 
 	decoded, err := base64.StdEncoding.DecodeString(base64Str)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return bytes.NewBuffer(decoded), nil
+	return bytes.NewReader(decoded), nil
 }
 
 func (o *Overseer) transcribeAudio(filePath string) (string, error) {

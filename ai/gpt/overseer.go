@@ -46,8 +46,8 @@ type ProductService interface {
 // AuthService defines the interface for authentication and user-related operations.
 // It provides methods for updating user information and managing shopping baskets.
 type AuthService interface {
-	// UpdateUser updates a user's information in the system
-	UpdateUser(user *entity.User) error
+	// UpdateUserFields persists only the given user fields (entity.UserField* keys)
+	UpdateUserFields(user *entity.User, fields map[string]any) error
 
 	// UpdateBasket updates the contents of a user's shopping basket
 	UpdateBasket(userUUID string, products []entity.OrderProduct) (*entity.Basket, error)

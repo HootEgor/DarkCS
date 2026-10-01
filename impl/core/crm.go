@@ -96,6 +96,7 @@ func (c *Core) lookupUserByPlatform(platform, userID string) *entity.User {
 	case "instagram":
 		user, err = c.authService.GetUserByInstagramId(userID)
 	case "whatsapp":
+		// wa_id is digits without "+"; GetUser normalizes it to the stored "+digits" form.
 		user, err = c.authService.GetUser("", userID, 0)
 	}
 
@@ -190,22 +191,23 @@ func (c *Core) UpdateUserPlatformInfo(platform, userID, messengerName string) {
 		return
 	}
 
+	var field string
 	switch platform {
 	case "telegram":
 		if user.TelegramUsername == messengerName {
 			return
 		}
-		user.TelegramUsername = messengerName
+		field = entity.UserFieldTelegramUsername
 	case "instagram":
 		if user.InstagramUsername == messengerName {
 			return
 		}
-		user.InstagramUsername = messengerName
+		field = entity.UserFieldInstagramUser
 	default:
 		return
 	}
 
-	if err := c.authService.UpdateUser(user); err != nil {
+	if err := c.authService.UpdateUserFields(user, map[string]any{field: messengerName}); err != nil {
 		c.log.Error("failed to update platform username",
 			slog.String("platform", platform),
 			slog.String("user_id", userID),

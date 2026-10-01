@@ -1,24 +1,17 @@
 package chat
 
 import (
+	"DarkCS/entity"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-// normalizePhone strips non-digit characters and prepends "+".
+// NormalizePhone strips non-digit characters and prepends "+".
+// Delegates to entity.NormalizePhone so bots and the user store agree on one format.
 func NormalizePhone(phone string) string {
-	digits := ""
-	for _, ch := range phone {
-		if ch >= '0' && ch <= '9' {
-			digits += string(ch)
-		}
-	}
-	if len(digits) > 0 {
-		digits = "+" + digits
-	}
-	return digits
+	return entity.NormalizePhone(phone)
 }
 
 // IsValidPhone checks if the input looks like a valid phone number (10-15 digits).

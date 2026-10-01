@@ -17,6 +17,7 @@ import (
 	"DarkCS/bot/chat"
 	wamessenger "DarkCS/bot/chat/whatsapp"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -176,7 +177,7 @@ func (b *WhatsAppBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	// Process messages asynchronously
-	go b.processPayload(payload)
+	safego.Go(b.log, "whatsapp webhook", func() { b.processPayload(payload) })
 }
 
 // processPayload processes the webhook payload

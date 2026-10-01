@@ -23,6 +23,7 @@ import (
 	"DarkCS/internal/gdrive"
 	"DarkCS/internal/http-server/api"
 	"DarkCS/internal/lib/logger"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/service/auth"
 	"DarkCS/internal/service/product"
@@ -59,6 +60,8 @@ func main() {
 		// Start admin telegram bot
 		if tgBot != nil {
 			go func() {
+				// tgBot.Start panics if polling cannot start; keep the rest of the service up.
+				defer safego.Recover(lg, "admin telegram bot")
 				if err := tgBot.Start(); err != nil {
 					lg.Error("telegram bot error", slog.String("error", err.Error()))
 				}
@@ -221,6 +224,7 @@ func main() {
 		userBot.SetAuthService(authService)
 		handler.SetPlatformMessenger("telegram", tgmessenger.NewMessenger(userBot.GetAPI()))
 		go func() {
+			defer safego.Recover(lg, "user telegram bot")
 			if err := userBot.Start(); err != nil {
 				lg.Error("user bot error", slog.String("error", err.Error()))
 			}
@@ -230,8 +234,23 @@ func main() {
 	// Initialize Instagram bot if enabled
 	var instaBot *insta.InstaBot
 	if conf.Instagram.Enabled {
+		// Prefer the token persisted by the last refresh: the config token is the one
+		// originally issued and expires 60 days after that, while refreshed tokens don't.
+		igToken := conf.Instagram.AccessToken
+		storedToken := ""
+		if db != nil {
+			t, err := db.GetInstagramToken()
+			if err != nil {
+				lg.Error("failed to load persisted instagram token", slog.String("error", err.Error()))
+			}
+			storedToken = t
+		}
+		if storedToken != "" {
+			igToken = storedToken
+		}
+
 		instaBot = insta.NewInstaBot(
-			conf.Instagram.AccessToken,
+			igToken,
 			conf.Instagram.VerifyToken,
 			conf.Instagram.AppSecret,
 			lg,
@@ -240,11 +259,15 @@ func main() {
 			instaBot.SetChatEngine(chatEngine)
 		}
 		handler.SetPlatformMessenger("instagram", igmessenger.NewMessenger(instaBot))
+		instaBot.SetFallbackToken(conf.Instagram.AccessToken)
 		// Persist the token to MongoDB so DarkBot can import it via the same server.
+		// Seed it from config only when nothing is stored, never over a refreshed token.
 		if db != nil {
 			instaBot.SetTokenPersister(db.SaveInstagramToken)
-			if err := db.SaveInstagramToken(conf.Instagram.AccessToken); err != nil {
-				lg.Error("failed to persist initial instagram token", slog.String("error", err.Error()))
+			if storedToken == "" && igToken != "" {
+				if err := db.SaveInstagramToken(igToken); err != nil {
+					lg.Error("failed to persist initial instagram token", slog.String("error", err.Error()))
+				}
 			}
 		}
 		instaBot.StartTokenRefresh(context.Background())

@@ -2,6 +2,7 @@ package core
 
 import (
 	"DarkCS/entity"
+	"crypto/subtle"
 	"fmt"
 )
 
@@ -19,21 +20,25 @@ func (c *Core) AuthenticateByToken(token string) (*entity.UserAuth, error) {
 		return nil, fmt.Errorf("token not provided")
 	}
 
-	if userName, ok := c.keys[token]; ok {
+	if userName, ok := c.keys.get(token); ok {
 		return &entity.UserAuth{Username: userName}, nil
 	}
 
-	userName, err := c.repo.CheckApiKey(token)
+	var userName string
+	var err error = fmt.Errorf("repository is not set")
+	if c.repo != nil {
+		userName, err = c.repo.CheckApiKey(token)
+	}
 	if err == nil {
 		c.log.With("username", userName).Debug("user authenticated from database")
-		c.keys[token] = userName
+		c.keys.set(token, userName)
 		return &entity.UserAuth{Username: userName}, nil
 	}
 
-	if c.authKey == token {
+	if c.authKey != "" && subtle.ConstantTimeCompare([]byte(c.authKey), []byte(token)) == 1 {
 		userName = "internal"
 		c.log.With("username", userName).Debug("user authenticated from config")
-		c.keys[token] = userName
+		c.keys.set(token, userName)
 		return &entity.UserAuth{Username: userName}, nil
 	}
 

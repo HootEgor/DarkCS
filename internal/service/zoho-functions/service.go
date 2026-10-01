@@ -4,6 +4,7 @@ package zoho_functions
 
 import (
 	"DarkCS/entity"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"bytes"
 	"encoding/json"
@@ -34,13 +35,17 @@ func NewZohoFunctionsService(msgURL, apiKey string, log *slog.Logger) *ZohoFunct
 	}
 
 	s.msgBuffer.Start(func(contactID string, items []entity.ZohoMessageItem) {
-		if err := s.SendMessages(contactID, items); err != nil {
-			s.log.Error("flush messages failed",
-				slog.String("contact_id", contactID),
-				slog.Int("count", len(items)),
-				slog.String("error", err.Error()),
-			)
-		}
+		// Guard each flush: a panic here would otherwise kill the only flush goroutine
+		// (or the process) and stop CRM message delivery.
+		safego.Run(s.log, "zoho-functions flush", func() {
+			if err := s.SendMessages(contactID, items); err != nil {
+				s.log.Error("flush messages failed",
+					slog.String("contact_id", contactID),
+					slog.Int("count", len(items)),
+					slog.String("error", err.Error()),
+				)
+			}
+		})
 	})
 
 	return s

@@ -12,6 +12,7 @@ import (
 
 	"DarkCS/bot/chat"
 	"DarkCS/internal/gdrive"
+	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 )
 
@@ -54,6 +55,7 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 	}
 	ch := make(chan videoResult, 1)
 	go func() {
+		defer safego.Recover(log, "list drive videos")
 		v, e := s.driveService.ListVideos()
 		ch <- videoResult{v, e}
 	}()

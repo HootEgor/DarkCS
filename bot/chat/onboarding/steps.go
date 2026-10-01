@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"DarkCS/bot/chat"
+	"DarkCS/entity"
 )
 
 // HelloStep — Welcome message, then auto-transition to request phone.
@@ -132,32 +133,27 @@ func (s *CheckUserStep) Enter(ctx context.Context, m chat.Messenger, state *chat
 	user, _ := s.authService.UserExists("", phone, 0)
 
 	if user != nil && user.Name != "" {
-		needsUpdate := false
+		fields := map[string]any{}
 
 		// Link Instagram ID if missing
 		if state.Platform == "instagram" && user.InstagramId == "" {
-			user.InstagramId = state.UserID
-			needsUpdate = true
+			fields[entity.UserFieldInstagramId] = state.UserID
 		}
 
 		// Link Telegram ID if missing
-		if state.Platform == "telegram" && user.TelegramId == 0 && telegramId != 0 && telegramId != user.TelegramId {
-			user.TelegramId = telegramId
-			needsUpdate = true
+		if state.Platform == "telegram" && user.TelegramId == 0 && telegramId != 0 {
+			fields[entity.UserFieldTelegramId] = telegramId
 		}
 
 		// Ensure Zoho contact exists
 		if s.zohoService != nil {
 			zohoId, err := s.zohoService.CreateContact(user)
-			if err == nil && zohoId != "" {
-				user.ZohoId = zohoId
-				needsUpdate = true
+			if err == nil && zohoId != "" && zohoId != user.ZohoId {
+				fields[entity.UserFieldZohoId] = zohoId
 			}
 		}
 
-		if needsUpdate {
-			_ = s.authService.UpdateUser(user)
-		}
+		_ = s.authService.UpdateUserFields(user, fields)
 
 		return chat.StepResult{
 			NextStep: StepDone,
@@ -257,28 +253,32 @@ func (s *ConfirmDataStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		}
 
 		// Sync fields from onboarding state
+		fields := map[string]any{}
 		if user.Phone != phone {
-			user.Phone = phone
+			fields[entity.UserFieldPhone] = phone
 		}
-		if state.Platform == "instagram" {
-			user.InstagramId = state.UserID
+		if state.Platform == "instagram" && user.InstagramId != state.UserID {
+			fields[entity.UserFieldInstagramId] = state.UserID
 		}
 		if state.Platform == "telegram" && user.TelegramId == 0 && telegramId != 0 {
-			user.TelegramId = telegramId
+			fields[entity.UserFieldTelegramId] = telegramId
 		}
 		if user.Name != name {
-			user.Name = name
+			fields[entity.UserFieldName] = name
+		}
+		// Apply before CreateContact so Zoho receives the confirmed name and phone.
+		if err = s.authService.UpdateUserFields(user, fields); err != nil {
+			_ = m.SendText(state.ChatID, "Виникла помилка при збереженні даних. Спробуйте пізніше.")
+			return chat.StepResult{Error: err}
 		}
 
 		// Create or update Zoho contact
 		if s.zohoService != nil {
 			zohoId, zohoErr := s.zohoService.CreateContact(user)
-			if zohoErr == nil && zohoId != "" {
-				user.ZohoId = zohoId
+			if zohoErr == nil && zohoId != "" && zohoId != user.ZohoId {
+				_ = s.authService.UpdateUserFields(user, map[string]any{entity.UserFieldZohoId: zohoId})
 			}
 		}
-
-		_ = s.authService.UpdateUser(user)
 
 		state.Set(KeyUserUUID, user.UUID)
 		_ = m.SendText(state.ChatID, "✅ Дані збережено!")

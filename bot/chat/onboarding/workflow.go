@@ -33,7 +33,7 @@ const (
 type AuthService interface {
 	UserExists(email, phone string, telegramId int64) (*entity.User, error)
 	RegisterUser(name, email, phone string, telegramId int64) (*entity.User, error)
-	UpdateUser(user *entity.User) error
+	UpdateUserFields(user *entity.User, fields map[string]any) error
 	GetUserByInstagramId(instagramId string) (*entity.User, error)
 }
 
