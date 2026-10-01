@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"DarkCS/bot/chat"
 	wamessenger "DarkCS/bot/chat/whatsapp"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/dedup"
 	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 )
@@ -31,6 +33,7 @@ type WhatsAppBot struct {
 	appSecret     string
 	phoneNumberID string
 	chatEngine    *chat.ChatEngine
+	seen          *dedup.Set // message IDs already processed (Meta redelivers)
 }
 
 // WebhookPayload represents the incoming webhook payload from WhatsApp
@@ -108,15 +111,23 @@ type SendMessageRequest struct {
 	} `json:"text"`
 }
 
+// maxWebhookBody caps an incoming webhook request body.
+const maxWebhookBody = 5 << 20
+
 // NewWhatsAppBot creates a new WhatsApp bot instance
 func NewWhatsAppBot(accessToken, verifyToken, appSecret, phoneNumberID string, log *slog.Logger) *WhatsAppBot {
-	return &WhatsAppBot{
+	b := &WhatsAppBot{
 		log:           log.With(sl.Module("whatsappbot")),
 		accessToken:   accessToken,
 		verifyToken:   verifyToken,
 		appSecret:     appSecret,
 		phoneNumberID: phoneNumberID,
+		seen:          dedup.New(10 * time.Minute),
 	}
+	if appSecret == "" {
+		b.log.Error("whatsapp app_secret is empty: webhook signatures are NOT verified, anyone can post fake messages")
+	}
+	return b
 }
 
 // SetChatEngine sets the unified chat engine for this bot.
@@ -130,8 +141,14 @@ func (b *WhatsAppBot) HandleWebhookVerification(w http.ResponseWriter, r *http.R
 	token := r.URL.Query().Get("hub.verify_token")
 	challenge := r.URL.Query().Get("hub.challenge")
 
-	if mode == "subscribe" && token == b.verifyToken {
+	// An empty configured token must never match an empty hub.verify_token.
+	tokenMatch := b.verifyToken != "" &&
+		subtle.ConstantTimeCompare([]byte(token), []byte(b.verifyToken)) == 1
+	if mode == "subscribe" && tokenMatch {
 		b.log.Info("webhook verified")
+		// The challenge is echoed back; plain text + nosniff stops it rendering as HTML.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(challenge))
 		return
@@ -139,22 +156,22 @@ func (b *WhatsAppBot) HandleWebhookVerification(w http.ResponseWriter, r *http.R
 
 	b.log.Warn("webhook verification failed",
 		slog.String("mode", mode),
-		slog.Bool("token_match", token == b.verifyToken),
+		slog.Bool("token_match", tokenMatch),
 	)
 	http.Error(w, "Forbidden", http.StatusForbidden)
 }
 
 // HandleWebhook handles incoming webhook POST requests
 func (b *WhatsAppBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	// Bounded read: this endpoint is unauthenticated and the body is read before the
+	// signature can be checked. Meta webhook payloads are a few KB.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebhookBody))
 	if err != nil {
 		b.log.Error("failed to read request body", sl.Err(err))
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
-
-	b.log.Debug("webhook payload", slog.String("body", string(body)))
 
 	// Verify signature if app secret is configured
 	if b.appSecret != "" {
@@ -193,6 +210,10 @@ func (b *WhatsAppBot) processPayload(payload WebhookPayload) {
 			}
 
 			for _, message := range change.Value.Messages {
+				if !b.seen.FirstSeen(message.ID) {
+					b.log.Debug("skipping redelivered message", slog.String("id", message.ID))
+					continue
+				}
 				senderPhone := message.From
 
 				// Handle media messages

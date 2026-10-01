@@ -317,3 +317,16 @@ func ToolsDescription(assName string) map[string]interface{} {
 		"tools": tools,
 	}
 }
+
+// ToolAllowed reports whether the named tool is advertised to the assistant by
+// ToolsDescription. tools/call is checked against it so a caller cannot invoke tools the
+// assistant was never offered (including handlers that exist but are not advertised).
+func ToolAllowed(assName, toolName string) bool {
+	tools, _ := ToolsDescription(assName)["tools"].([]map[string]interface{})
+	for _, t := range tools {
+		if t["name"] == toolName {
+			return true
+		}
+	}
+	return false
+}

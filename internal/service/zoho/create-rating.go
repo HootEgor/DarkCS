@@ -54,7 +54,7 @@ func (s *ZohoService) createRating(rating entity.ServiceRating) error {
 	log := s.log.With(
 		slog.String("url", fullURL),
 		slog.String("method", req.Method),
-		slog.String("payload", string(body)),
+		slog.Int("payload_bytes", len(body)),
 	)
 	t := time.Now()
 	defer func() {

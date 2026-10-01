@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,7 @@ import (
 
 	"DarkCS/bot/insta"
 	"DarkCS/bot/whatsapp"
+	"DarkCS/entity"
 	"DarkCS/internal/config"
 	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/crm"
@@ -106,7 +108,12 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	router.Use(middleware.Recoverer)
 	router.Use(corsMiddleware)
 	router.Use(render.SetContentType(render.ContentTypeJSON))
-	router.Use(detectPublicURL(handler, log))
+	if conf.Listen.PublicURL != "" {
+		handler.SetPublicURL(strings.TrimRight(conf.Listen.PublicURL, "/"))
+	} else {
+		log.Warn("listen.public_url not set; detecting it from the first request's Host header")
+		router.Use(detectPublicURL(handler, log))
+	}
 
 	router.NotFound(errors.NotFound(log))
 	router.MethodNotAllowed(errors.NotAllowed(log))
@@ -135,55 +142,63 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 		// File download endpoint — authenticated via HMAC-signed URL
 		v1.Get("/crm/files/{file_id}", crm.DownloadFile(log, handler))
 
-		// Authenticated routes
+		// Authenticated routes. Each endpoint declares which key scopes may call it
+		// (admin keys pass everywhere; see authenticate.RequireScope for legacy keys).
+		integration := authenticate.RequireScope(log, "integration", entity.ScopeIntegration)
+		admin := authenticate.RequireScope(log, "admin")
+		crmOnly := authenticate.RequireScope(log, "crm", entity.ScopeCRM)
+		mcpOnly := authenticate.RequireScope(log, "mcp", entity.ScopeMCP)
+
 		v1.Group(func(auth chi.Router) {
 			auth.Use(authenticate.New(log, handler))
 			auth.Route("/products", func(r chi.Router) {
-				r.Post("/info", product.ProductsInfo(log, handler))
+				r.With(integration).Post("/info", product.ProductsInfo(log, handler))
 			})
 			auth.Route("/response", func(r chi.Router) {
-				r.Post("/", response.ComposeResponse(log, handler))
+				r.With(integration).Post("/", response.ComposeResponse(log, handler))
 			})
 			auth.Route("/user", func(r chi.Router) {
-				r.Get("/", user.GetUser(log, handler))
-				r.Post("/create", user.CreateUser(log, handler))
-				r.Post("/block", user.BlockUser(log, handler))
-				r.Post("/promo", user.GetUserPromoAccess(log, handler))
-				r.Post("/activate", user.ActivateUserPromo(log, handler))
-				r.Post("/close", user.CloseUserPromo(log, handler))
-				r.Post("/phone", user.CheckPhone(log, handler))
-				r.Get("/reset_conv", user.ResetConversation(log, handler))
-				r.Post("/import-telegram", user.ImportTelegram(log, handler))
+				r.With(integration).Get("/", user.GetUser(log, handler))
+				r.With(integration).Post("/create", user.CreateUser(log, handler))
+				r.With(admin).Post("/block", user.BlockUser(log, handler))
+				r.With(integration).Post("/promo", user.GetUserPromoAccess(log, handler))
+				r.With(integration).Post("/activate", user.ActivateUserPromo(log, handler))
+				r.With(admin).Post("/close", user.CloseUserPromo(log, handler))
+				r.With(integration).Post("/phone", user.CheckPhone(log, handler))
+				r.With(admin).Get("/reset_conv", user.ResetConversation(log, handler))
+				r.With(admin).Post("/import-telegram", user.ImportTelegram(log, handler))
 			})
 			auth.Route("/assistant", func(r chi.Router) {
-				r.Get("/attach", assistant.AttachFile(log, handler))
-				r.Post("/update", assistant.Update(log, handler))
-				r.Get("/all", assistant.GetAllAssistants(log, handler))
+				r.With(admin).Get("/attach", assistant.AttachFile(log, handler))
+				r.With(admin).Post("/update", assistant.Update(log, handler))
+				r.With(admin).Get("/all", assistant.GetAllAssistants(log, handler))
 			})
 			auth.Route("/zoho", func(r chi.Router) {
-				r.Post("/order_products", zoho.GetOrderProducts(log, handler))
+				r.With(integration).Post("/order_products", zoho.GetOrderProducts(log, handler))
 			})
 			auth.Route("/promo", func(r chi.Router) {
-				r.Get("/get", promo.GetActivePromoCodes(log, handler))
-				r.Post("/generate", promo.GeneratePromoCodes(log, handler))
+				r.With(admin).Get("/get", promo.GetActivePromoCodes(log, handler))
+				r.With(admin).Post("/generate", promo.GeneratePromoCodes(log, handler))
 			})
 			auth.Route("/smart", func(r chi.Router) {
-				r.Post("/send", smart.SendMsg(log, handler))
+				r.With(integration).Post("/send", smart.SendMsg(log, handler))
 			})
 			auth.Route("/key", func(r chi.Router) {
-				r.Post("/new", key.Generate(log, handler))
+				r.With(admin).Post("/new", key.Generate(log, handler))
 			})
 			auth.Route("/qr", func(r chi.Router) {
-				r.Post("/follow", qr_stat.FollowQr(log, handler))
-				r.Post("/stat", qr_stat.GetStat(log, handler))
+				r.With(integration).Post("/follow", qr_stat.FollowQr(log, handler))
+				r.With(admin).Post("/stat", qr_stat.GetStat(log, handler))
 			})
 			auth.Route("/school", func(r chi.Router) {
-				r.Post("/add", school.AddSchools(log, handler))
-				r.Get("/list", school.ListSchools(log, handler))
-				r.Post("/status", school.SetStatus(log, handler))
+				r.With(admin).Post("/add", school.AddSchools(log, handler))
+				r.With(integration).Get("/list", school.ListSchools(log, handler))
+				r.With(admin).Post("/status", school.SetStatus(log, handler))
 			})
-			auth.Post("/mcp", mcp.Handler(log, handler))
+			auth.With(mcpOnly).Post("/mcp", mcp.Handler(log, handler))
 			auth.Route("/crm", func(r chi.Router) {
+				r.Use(crmOnly)
+				r.Post("/ws-ticket", crm.IssueWsTicket(log, handler))
 				r.Get("/chats", crm.GetChats(log, handler))
 				r.Get("/chats/{platform}/{user_id}/messages", crm.GetMessages(log, handler))
 				r.Post("/chats/{platform}/{user_id}/send", crm.SendMessage(log, handler))

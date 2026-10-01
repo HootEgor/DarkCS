@@ -19,6 +19,7 @@ const (
 	StepRequestName  chat.StepID = "request_name"
 	StepConfirmData  chat.StepID = "confirm_data"
 	StepDone         chat.StepID = "done"
+	StepVerifyCode   chat.StepID = "verify_code"
 )
 
 // State data keys
@@ -47,7 +48,10 @@ type OnboardingWorkflow struct {
 	steps map[chat.StepID]chat.Step
 }
 
-func NewOnboardingWorkflow(authService AuthService, zohoService ZohoService, log *slog.Logger) *OnboardingWorkflow {
+// NewOnboardingWorkflow builds the onboarding flow. codeSender delivers phone
+// verification codes to an existing customer's Telegram; nil disables code verification
+// (linking an unverified phone to an existing customer is then refused).
+func NewOnboardingWorkflow(authService AuthService, zohoService ZohoService, codeSender CodeSender, log *slog.Logger) *OnboardingWorkflow {
 	w := &OnboardingWorkflow{
 		steps: make(map[chat.StepID]chat.Step),
 	}
@@ -55,7 +59,8 @@ func NewOnboardingWorkflow(authService AuthService, zohoService ZohoService, log
 	w.steps[StepHello] = &HelloStep{}
 	w.steps[StepChoosePhone] = &ChoosePhoneStep{}
 	w.steps[StepRequestPhone] = &RequestPhoneStep{}
-	w.steps[StepCheckUser] = &CheckUserStep{authService: authService, zohoService: zohoService}
+	w.steps[StepCheckUser] = &CheckUserStep{authService: authService, zohoService: zohoService, codeSender: codeSender, log: log.With(slog.String("workflow", string(WorkflowID)))}
+	w.steps[StepVerifyCode] = &VerifyCodeStep{}
 	w.steps[StepRequestName] = &RequestNameStep{}
 	w.steps[StepConfirmData] = &ConfirmDataStep{authService: authService, zohoService: zohoService}
 	w.steps[StepDone] = &DoneStep{}

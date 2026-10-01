@@ -1,10 +1,11 @@
 package crm
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -52,12 +53,26 @@ func DownloadFile(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 		defer reader.Close()
 
-		if mimeType != "" {
-			w.Header().Set("Content-Type", mimeType)
-		} else {
-			w.Header().Set("Content-Type", "application/octet-stream")
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
 		}
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
+		w.Header().Set("Content-Type", mimeType)
+		// Files come from customers and managers, so the stored type is untrusted: never
+		// sniff, and only display media/PDF/plain text inline. Everything else (HTML, SVG,
+		// ...) is forced to download and sandboxed in case a browser renders it anyway, so
+		// it can't run script on the API origin. Inline types get no sandbox CSP because
+		// Chrome refuses to show PDFs under it.
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		disposition := "inline"
+		if !inlineSafe(mimeType) {
+			disposition = "attachment"
+			w.Header().Set("Content-Security-Policy", "sandbox")
+		}
+		if cd := mime.FormatMediaType(disposition, map[string]string{"filename": filename}); cd != "" {
+			w.Header().Set("Content-Disposition", cd)
+		} else {
+			w.Header().Set("Content-Disposition", disposition)
+		}
 
 		if _, err := io.Copy(w, reader); err != nil {
 			log.Error("failed to stream file",
@@ -66,4 +81,22 @@ func DownloadFile(log *slog.Logger, handler Core) http.HandlerFunc {
 			)
 		}
 	}
+}
+
+// inlineSafe reports whether a type can be shown in the browser without running script.
+// SVG is an image type but can contain script, so it is excluded.
+func inlineSafe(mimeType string) bool {
+	mt, _, err := mime.ParseMediaType(mimeType)
+	if err != nil {
+		return false
+	}
+	switch {
+	case mt == "image/svg+xml":
+		return false
+	case strings.HasPrefix(mt, "image/"), strings.HasPrefix(mt, "video/"), strings.HasPrefix(mt, "audio/"):
+		return true
+	case mt == "application/pdf", mt == "text/plain":
+		return true
+	}
+	return false
 }

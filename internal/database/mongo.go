@@ -117,30 +117,33 @@ func (m *MongoDB) findError(err error) error {
 	return fmt.Errorf("mongodb find error: %w", err)
 }
 
-func (m *MongoDB) CheckApiKey(key string) (string, error) {
-	connection, err := m.connect()
-	if err != nil {
-		return "", err
-	}
-	defer m.disconnect(connection)
-
-	collection := connection.Database(m.database).Collection(apiKeysCollection)
-	filter := bson.D{{"key", key}}
-
+// CheckApiKey returns the username and scope of an API key. Keys created before scopes
+// existed have no scope field and come back as entity.ScopeLegacy.
+func (m *MongoDB) CheckApiKey(key string) (string, string, error) {
 	var result struct {
 		Username string `bson:"username"`
-		Kay      string `bson:"key"`
+		Scope    string `bson:"scope"`
 	}
-	err = collection.FindOne(m.ctx, filter).Decode(&result)
+	err := m.collection(apiKeysCollection).FindOne(m.ctx, bson.D{{"key", key}}).Decode(&result)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if result.Username == "" {
-		return "", fmt.Errorf("api key not found")
+		return "", "", fmt.Errorf("api key not found")
 	}
 
-	return result.Username, nil
+	return result.Username, result.Scope, nil
+}
+
+// SetApiKeyScope sets the scope on every key of a username.
+func (m *MongoDB) SetApiKeyScope(username, scope string) error {
+	_, err := m.collection(apiKeysCollection).UpdateMany(m.ctx,
+		bson.D{{"username", username}}, bson.M{"$set": bson.M{"scope": scope}})
+	if err != nil {
+		return fmt.Errorf("mongodb set api key scope: %w", err)
+	}
+	return nil
 }
 
 func (m *MongoDB) getKeyByUsername(username string) (string, error) {
@@ -164,7 +167,11 @@ func (m *MongoDB) getKeyByUsername(username string) (string, error) {
 	return result.Key, nil
 }
 
-func (m *MongoDB) GenerateApiKey(username string) (string, error) {
+// GenerateApiKey returns the existing key for username, or creates one with the given
+// scope. Returning the existing key is kept because current integrations rely on it; the
+// route is limited to admin (and legacy) keys instead. New keys are random UUIDv4
+// (crypto/rand), keeping the old format, instead of time+MAC based UUIDv1.
+func (m *MongoDB) GenerateApiKey(username, scope string) (string, error) {
 
 	k, err := m.getKeyByUsername(username)
 	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
@@ -174,25 +181,17 @@ func (m *MongoDB) GenerateApiKey(username string) (string, error) {
 		return k, nil
 	}
 
-	connection, err := m.connect()
-	if err != nil {
-		return "", err
-	}
-	defer m.disconnect(connection)
-
-	collection := connection.Database(m.database).Collection(apiKeysCollection)
-	uuid, err := uuid.NewUUID()
-	if err != nil {
-		return "", fmt.Errorf("uuid generation error: %w", err)
-	}
-	key := uuid.String()
+	key := uuid.NewString()
 
 	doc := bson.D{
 		{"username", username},
 		{"key", key},
 	}
+	if scope != "" {
+		doc = append(doc, bson.E{Key: "scope", Value: scope})
+	}
 
-	_, err = collection.InsertOne(m.ctx, doc)
+	_, err = m.collection(apiKeysCollection).InsertOne(m.ctx, doc)
 	if err != nil {
 		return "", fmt.Errorf("mongodb insert error: %w", err)
 	}

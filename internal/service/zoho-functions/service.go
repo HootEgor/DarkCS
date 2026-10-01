@@ -101,7 +101,7 @@ func (s *ZohoFunctionsService) doRequest(body []byte) error {
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request: %w", err)
+		return fmt.Errorf("send request: %w", sl.RedactURLError(err))
 	}
 	defer resp.Body.Close()
 

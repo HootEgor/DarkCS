@@ -3,6 +3,7 @@ package ws
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -18,9 +19,34 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 4096,
-	CheckOrigin: func(r *http.Request) bool {
+	CheckOrigin:     checkOrigin,
+}
+
+// allowedOrigins is set once at startup by SetAllowedOrigins; empty allows any origin.
+var allowedOrigins []string
+
+// SetAllowedOrigins restricts which browser origins may open the CRM socket. Call before
+// the server starts. Requests without an Origin header (non-browser clients) are allowed.
+func SetAllowedOrigins(origins []string) {
+	allowedOrigins = nil
+	for _, o := range origins {
+		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o != "" {
+			allowedOrigins = append(allowedOrigins, o)
+		}
+	}
+}
+
+func checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if len(allowedOrigins) == 0 || origin == "" {
 		return true
-	},
+	}
+	for _, o := range allowedOrigins {
+		if strings.EqualFold(o, origin) {
+			return true
+		}
+	}
+	return false
 }
 
 // Client represents a single WebSocket connection from a CRM manager.
@@ -91,21 +117,26 @@ func (c *Client) writePump() {
 	}
 }
 
-// Authenticator validates a token and returns the username.
+// Authenticator resolves socket credentials to a CRM username.
 type Authenticator interface {
 	ValidateToken(token string) (string, error)
+	RedeemWsTicket(ticket string) (string, error)
 }
 
 // ServeWs handles WebSocket upgrade requests for CRM clients.
 func ServeWs(hub *Hub, auth Authenticator, log *slog.Logger, w http.ResponseWriter, r *http.Request) {
-	// Auth: read token from query param
-	token := r.URL.Query().Get("token")
-	if token == "" {
+	// Auth: prefer a one-time ticket (POST /api/v1/crm/ws-ticket); the API key in
+	// ?token= still works for existing clients but ends up in proxy and access logs.
+	var username string
+	var err error
+	if ticket := r.URL.Query().Get("ticket"); ticket != "" {
+		username, err = auth.RedeemWsTicket(ticket)
+	} else if token := r.URL.Query().Get("token"); token != "" {
+		username, err = auth.ValidateToken(token)
+	} else {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	username, err := auth.ValidateToken(token)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return

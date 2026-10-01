@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,11 @@ import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 )
+
+// orderNotShownMsg answers a products request for an order that was not listed to this
+// user. Callback data can be forged by custom clients, so only order IDs this chat was
+// shown (stored in state) are fetched from Zoho.
+const orderNotShownMsg = "Список замовлень застарів. Відкрийте його ще раз з меню."
 
 const schoolsPerPage = 5
 
@@ -449,6 +455,10 @@ func (s *CurrentOrderStep) HandleInput(ctx context.Context, m chat.Messenger, st
 
 	if strings.HasPrefix(data, "products:") {
 		orderID := strings.TrimPrefix(data, "products:")
+		if orderID == "" || orderID != state.GetString("current_order_id") {
+			_ = m.SendText(state.ChatID, orderNotShownMsg)
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
 		products, err := s.zohoService.GetOrderProducts(orderID)
 		if err != nil {
 			_ = m.SendText(state.ChatID, "Не вдалося отримати товари.")
@@ -542,6 +552,10 @@ func (s *CompletedOrdersStep) HandleInput(ctx context.Context, m chat.Messenger,
 
 	if strings.HasPrefix(data, "products:") {
 		orderID := strings.TrimPrefix(data, "products:")
+		if orderID == "" || !slices.Contains(strings.Split(state.GetString("completed_order_ids"), ","), orderID) {
+			_ = m.SendText(state.ChatID, orderNotShownMsg)
+			return chat.StepResult{NextStep: StepMyOffice}
+		}
 		products, err := s.zohoService.GetOrderProducts(orderID)
 		if err != nil {
 			_ = m.SendText(state.ChatID, "Не вдалося отримати товари.")

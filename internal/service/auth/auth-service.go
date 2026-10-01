@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log/slog"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -273,6 +274,13 @@ func (s *Service) BlockUser(email, phone string, telegramId int64, block bool, r
 
 	fields := map[string]any{entity.UserFieldBlocked: block}
 	if role != "" {
+		// Reject unknown roles: GetAssistants and role checks treat them as no role.
+		role = strings.ToLower(strings.TrimSpace(role))
+		switch role {
+		case entity.GuestRole, entity.UserRole, entity.ManagerRole, entity.AdminRole:
+		default:
+			return fmt.Errorf("unknown role %q", role)
+		}
 		fields[entity.UserFieldRole] = role
 	}
 	return s.UpdateUserFields(user, fields)

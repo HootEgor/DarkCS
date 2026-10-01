@@ -231,7 +231,9 @@ func (b *UserBot) handleContact(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	phone := contact.PhoneNumber
-	err := b.chatEngine.HandleContact(context.Background(), messenger, "telegram", userID, chatID, phone)
+	// A user can share any contact card; only their own contact proves the phone is theirs.
+	verified := contact.UserId != 0 && contact.UserId == ctx.EffectiveUser.Id
+	err := b.chatEngine.HandleContact(context.Background(), messenger, "telegram", userID, chatID, phone, verified)
 	if err != nil {
 		b.log.Error("contact error",
 			slog.String("user_id", userID),
@@ -346,7 +348,7 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	if err != nil {
 		b.log.Error("failed to download file from Telegram",
 			slog.String("user_id", userID),
-			sl.Err(err),
+			sl.Err(sl.RedactURLError(err)),
 		)
 		return err
 	}

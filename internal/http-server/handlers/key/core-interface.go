@@ -1,5 +1,5 @@
 package key
 
 type Core interface {
-	GenerateApiKey(username string) (string, error)
+	GenerateApiKey(username, scope string) (string, error)
 }

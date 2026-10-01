@@ -11,8 +11,11 @@ import (
 	"net/http"
 )
 
+// GenerateRequest names the key. Scope is optional: omitted means a legacy key with
+// the same full access keys had before scopes existed, so existing callers keep working.
 type GenerateRequest struct {
-	Name string `json:"name"`
+	Name  string `json:"name"`
+	Scope string `json:"scope"`
 }
 
 func Generate(log *slog.Logger, handler Core) http.HandlerFunc {
@@ -37,7 +40,7 @@ func Generate(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		code, err := handler.GenerateApiKey(req.Name)
+		code, err := handler.GenerateApiKey(req.Name, req.Scope)
 		if err != nil {
 			logger.Error("generate key", sl.Err(err))
 			render.JSON(w, r, response.Error(fmt.Sprintf("generation failed: %v", err)))

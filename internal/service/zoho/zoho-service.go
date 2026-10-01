@@ -79,9 +79,8 @@ func (s *ZohoService) refreshTokenCall() error {
 	}
 
 	if response != (entity.TokenResponse{}) {
-		s.log.With(
-			slog.Any("response", response),
-		).Debug("refresh token succeeded")
+		// Never log the response itself: it contains the access token.
+		s.log.Debug("refresh token succeeded", slog.Int("expires_in", response.ExpiresIn))
 	} else {
 		return fmt.Errorf("empty response from Zoho API")
 	}
@@ -230,10 +229,11 @@ func (s *ZohoService) createOrder(orderData entity.ZohoOrder) error {
 	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
 	req.Header.Set("Content-Type", "application/json")
 
+	// Payload size only: the order body holds the customer's name, phone, email and address.
 	log := s.log.With(
 		slog.String("url", fullURL),
 		slog.String("method", req.Method),
-		slog.String("payload", string(body)))
+		slog.Int("payload_bytes", len(body)))
 	t := time.Now()
 	defer func() {
 		log = log.With(slog.Duration("duration", time.Since(t)))

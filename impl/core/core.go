@@ -16,9 +16,10 @@ import (
 )
 
 type Repository interface {
-	CheckApiKey(key string) (string, error)
+	CheckApiKey(key string) (string, string, error)
+	SetApiKeyScope(username, scope string) error
 	SaveMessage(message entity.Message) error
-	GenerateApiKey(username string) (string, error)
+	GenerateApiKey(username, scope string) (string, error)
 
 	SaveChatMessage(msg entity.ChatMessage) error
 	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
@@ -138,6 +139,7 @@ type Core struct {
 	signingSecret string
 	publicURL     string
 	keys          *keyCache
+	wsTickets     *wsTickets
 	log           *slog.Logger
 	wsHub         *ws.Hub
 	messengers    map[string]chat.Messenger
@@ -147,6 +149,7 @@ func New(log *slog.Logger) *Core {
 	return &Core{
 		log:        log.With(sl.Module("core")),
 		keys:       newKeyCache(),
+		wsTickets:  &wsTickets{m: make(map[string]wsTicket)},
 		messengers: make(map[string]chat.Messenger),
 	}
 }

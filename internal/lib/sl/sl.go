@@ -3,6 +3,7 @@ package sl
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 )
 
 func Err(err error) slog.Attr {
@@ -33,4 +34,15 @@ func Module(mod string) slog.Attr {
 		Key:   "mod",
 		Value: slog.StringValue(mod),
 	}
+}
+
+// Phone logs a phone number with the middle digits masked (+380*****4567): enough to
+// tell customers apart in logs, which are also forwarded to the admin Telegram chat.
+func Phone(key, phone string) slog.Attr {
+	r := []rune(phone)
+	if len(r) <= 7 {
+		return slog.String(key, "***")
+	}
+	masked := string(r[:4]) + strings.Repeat("*", len(r)-8) + string(r[len(r)-4:])
+	return slog.String(key, masked)
 }

@@ -140,7 +140,7 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 		tools = append(tools, Tool{
 			Type:        "mcp",
 			ServerLabel: "darkcs",
-			ServerURL:   "https://backup.darkbyrior.com/api/v1/mcp",
+			ServerURL:   o.mcpURL,
 			Headers: map[string]string{
 				"Authorization": "Bearer " + o.mcpKey,
 				"X-Assistant":   assistant.Name,

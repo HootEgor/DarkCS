@@ -74,8 +74,8 @@ func (s *Service) SendMessage(userId, text string) error {
 
 	s.log.With(
 		slog.String("user", userId),
-		slog.String("text", text),
-	).Info("message send successfully")
+		slog.Int("text_len", len(text)),
+	).Debug("message send successfully")
 
 	return nil
 }

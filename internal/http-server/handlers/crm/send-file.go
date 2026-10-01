@@ -12,6 +12,9 @@ import (
 	"DarkCS/internal/lib/api/response"
 )
 
+// maxFilesPerRequest caps how many files one CRM message can carry.
+const maxFilesPerRequest = 20
+
 // SendFile handles file uploads from a CRM manager to a user.
 // Endpoint: POST /api/v1/crm/chats/{platform}/{user_id}/send-file
 // Content-Type: multipart/form-data
@@ -27,6 +30,9 @@ func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
+		// Bound the whole request: ParseMultipartForm only limits memory and spools the
+		// rest to disk without limit.
+		r.Body = http.MaxBytesReader(w, r.Body, maxFilesPerRequest*entity.MaxFileSize+1<<20)
 		if err := r.ParseMultipartForm(entity.MaxFileSize); err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, response.Error("invalid multipart form"))
@@ -39,6 +45,11 @@ func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
 		if len(files) == 0 {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, response.Error("at least one file is required"))
+			return
+		}
+		if len(files) > maxFilesPerRequest {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, response.Error(fmt.Sprintf("at most %d files per message", maxFilesPerRequest)))
 			return
 		}
 

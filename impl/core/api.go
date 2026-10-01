@@ -227,18 +227,39 @@ func (c *Core) CheckUserPhone(phone string) (string, error) {
 	//return code, c.smartService.SendMessage(user.SmartSenderId, codeMsg)
 }
 
-func (c *Core) GenerateApiKey(username string) (string, error) {
+// GenerateApiKey returns the key for username, creating it with the given scope if it
+// doesn't exist. An unknown scope is rejected.
+func (c *Core) GenerateApiKey(username, scope string) (string, error) {
 	if c.repo == nil {
 		return "", fmt.Errorf("repository is not set")
 	}
+	if username == "" {
+		return "", fmt.Errorf("key name is required")
+	}
+	if !entity.ValidScope(scope) {
+		return "", fmt.Errorf("unknown scope %q", scope)
+	}
 
-	apiKey, err := c.repo.GenerateApiKey(username)
+	apiKey, err := c.repo.GenerateApiKey(username, scope)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate API key: %w", err)
 	}
 
-	c.keys.set(apiKey, username)
 	return apiKey, nil
+}
+
+// EnsureMcpKey returns the key OpenAI uses to call the MCP endpoint, restricted to the
+// mcp scope: it is sent to OpenAI with every request, so it must not open admin routes.
+func (c *Core) EnsureMcpKey(username string) (string, error) {
+	key, err := c.GenerateApiKey(username, entity.ScopeMCP)
+	if err != nil {
+		return "", err
+	}
+	// Narrow a key created before scopes existed.
+	if err = c.repo.SetApiKeyScope(username, entity.ScopeMCP); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 func (c *Core) UpdateAssistant(name, id string, active bool, model, prompt, vectorStoreId, responseFormat string, allowedTools []string) error {
@@ -316,7 +337,7 @@ func (c *Core) ResetConversation(phone string) error {
 	}
 
 	c.log.With(
-		slog.String("phone", phone),
+		sl.Phone("phone", phone),
 		slog.String("user_id", user.UUID),
 	).Info("reset conversation")
 
@@ -501,4 +522,18 @@ func (c *Core) ImportTelegramUsers(items []entity.TelegramImportItem) (int, erro
 	}
 
 	return processed, nil
+}
+
+// SendTelegramText sends a bot message to a customer's Telegram chat. Used for onboarding
+// phone-verification codes, so it is deliberately not saved to the CRM chat history,
+// where anyone reading the chat would see the code.
+func (c *Core) SendTelegramText(telegramID int64, text string) error {
+	tgMessenger, ok := c.messengers["telegram"]
+	if !ok {
+		return fmt.Errorf("telegram messenger is not configured")
+	}
+	if err := tgMessenger.SendText(strconv.FormatInt(telegramID, 10), text); err != nil {
+		return fmt.Errorf("failed to send message: %w", err)
+	}
+	return nil
 }

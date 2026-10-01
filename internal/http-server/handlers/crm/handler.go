@@ -25,6 +25,23 @@ type Core interface {
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
 	SendCrmFiles(platform, userID, caption string, attachments []entity.Attachment) error
 	FileSigningSecret() string
+	IssueWsTicket(username string) (string, error)
+}
+
+// IssueWsTicket returns a one-time ticket for opening the CRM socket as
+// /api/v1/crm/ws?ticket=..., so the browser doesn't put the API key in the socket URL.
+func IssueWsTicket(log *slog.Logger, handler Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := cont.GetUser(r.Context()).Username
+		ticket, err := handler.IssueWsTicket(username)
+		if err != nil {
+			log.Error("failed to issue ws ticket", slog.String("error", err.Error()))
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, response.Error("failed to issue ticket"))
+			return
+		}
+		render.JSON(w, r, response.Ok(map[string]string{"ticket": ticket}))
+	}
 }
 
 // GetChats returns the list of active chats with last message info.

@@ -82,7 +82,8 @@ type ZohoService interface {
 type Overseer struct {
 	client         *openai.Client        // OpenAI API client
 	apiKey         string                // OpenAI API key
-	mcpKey         string                // MCP API key
+	mcpKey         string                // MCP API key (mcp scope only)
+	mcpURL         string                // public URL of this service's /api/v1/mcp
 	threads        map[string]ThreadMeta // Map of user IDs to their thread metadata
 	productService ProductService        // Service for product-related operations
 	authService    AuthService           // Service for authentication and user operations
@@ -126,6 +127,7 @@ func NewOverseer(conf *config.Config, logger *slog.Logger, mcpApiKey string) *Ov
 		client:   client,
 		apiKey:   conf.OpenAI.ApiKey,
 		mcpKey:   mcpApiKey,
+		mcpURL:   conf.OpenAI.McpURL,
 		threads:  make(map[string]ThreadMeta),
 		savePath: conf.SavePath,
 		locker:   &LockThreads{threads: make(map[string]*sync.Mutex)},

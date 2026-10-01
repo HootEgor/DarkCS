@@ -98,7 +98,8 @@ func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, 
 }
 
 // HandleContact processes a contact share (phone number) from any platform.
-func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, userID, chatID, phone string) error {
+// verified reports whether the platform confirmed the contact is the sender's own.
+func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, userID, chatID, phone string, verified bool) error {
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	state, err := e.storage.Load(ctx, platform, userID)
@@ -119,7 +120,7 @@ func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, u
 		return fmt.Errorf("step not found: %s", state.CurrentStep)
 	}
 
-	input := UserInput{Phone: phone}
+	input := UserInput{Phone: phone, PhoneVerified: verified}
 	result := step.HandleInput(ctx, m, state, input)
 	return e.processResult(ctx, m, state, w, result)
 }

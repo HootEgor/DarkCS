@@ -18,6 +18,7 @@ type keyCache struct {
 
 type cachedKey struct {
 	username string
+	scope    string
 	expires  time.Time
 }
 
@@ -25,17 +26,17 @@ func newKeyCache() *keyCache {
 	return &keyCache{m: make(map[string]cachedKey)}
 }
 
-func (c *keyCache) get(token string) (string, bool) {
+func (c *keyCache) get(token string) (cachedKey, bool) {
 	c.mu.RLock()
 	k, ok := c.m[token]
 	c.mu.RUnlock()
 	if !ok || time.Now().After(k.expires) {
-		return "", false
+		return cachedKey{}, false
 	}
-	return k.username, true
+	return k, true
 }
 
-func (c *keyCache) set(token, username string) {
+func (c *keyCache) set(token, username, scope string) {
 	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -45,5 +46,5 @@ func (c *keyCache) set(token, username string) {
 			delete(c.m, t)
 		}
 	}
-	c.m[token] = cachedKey{username: username, expires: now.Add(keyCacheTTL)}
+	c.m[token] = cachedKey{username: username, scope: scope, expires: now.Add(keyCacheTTL)}
 }

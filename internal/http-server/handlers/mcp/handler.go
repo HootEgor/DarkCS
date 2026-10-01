@@ -30,7 +30,11 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-// Example MCP handler over HTTP
+// maxBodyBytes caps a JSON-RPC request; tool arguments are small.
+const maxBodyBytes = 1 << 20
+
+// Handler serves MCP JSON-RPC for OpenAI's hosted MCP tool. Request bodies are not
+// logged: tool arguments and results contain customer PII.
 func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -38,17 +42,11 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		bodyBytes, err := io.ReadAll(r.Body)
+		bodyBytes, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 		if err != nil {
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}
-
-		log.With(
-			slog.String("module", "http.handlers.mcp"),
-			slog.String("request", r.URL.Path),
-			slog.String("body", string(bodyBytes)),
-		).Debug("handling MCP request")
 
 		var req RPCRequest
 		if err := json.Unmarshal(bodyBytes, &req); err != nil {
@@ -69,9 +67,6 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		userUUID := r.Header.Get("X-User-UUID")
-		if userUUID == "" {
-			userUUID = "default-user"
-		}
 
 		switch req.Method {
 		case "initialize":
@@ -102,6 +97,16 @@ func Handler(log *slog.Logger, handler Core) http.HandlerFunc {
 			}
 			if err := json.Unmarshal(req.Params, &callParams); err != nil {
 				res.Error = &ErrorResponse{Code: -32602, Message: "Invalid params: " + err.Error()}
+				break
+			}
+			if userUUID == "" {
+				res.Error = &ErrorResponse{Code: -32602, Message: "X-User-UUID header is required"}
+				break
+			}
+			if !ToolAllowed(assistantName, callParams.Name) {
+				log.Warn("mcp tool not allowed for assistant",
+					slog.String("assistant", assistantName), slog.String("tool", callParams.Name))
+				res.Error = &ErrorResponse{Code: -32601, Message: "Tool not available: " + callParams.Name}
 				break
 			}
 

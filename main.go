@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"log/slog"
 	"path/filepath"
@@ -74,7 +76,7 @@ func main() {
 
 	handler := core.New(lg)
 	handler.SetAuthKey(conf.Listen.ApiKey)
-	handler.SetSigningSecret(conf.Listen.ApiKey)
+	handler.SetSigningSecret(fileSigningSecret(conf, lg))
 
 	authService := auth.NewAuthService(lg)
 
@@ -133,7 +135,7 @@ func main() {
 		lg.Debug("zoho service initialized")
 	}
 
-	mcpApiKey, err := handler.GenerateApiKey("openai")
+	mcpApiKey, err := handler.EnsureMcpKey("openai")
 	if err != nil {
 		lg.With(
 			sl.Err(err),
@@ -167,6 +169,7 @@ func main() {
 	}
 
 	// Create WebSocket hub for CRM
+	ws.SetAllowedOrigins(conf.Listen.AllowedOrigins)
 	wsHub := ws.NewHub(lg)
 	wsHub.SetHandler(handler)
 	go wsHub.Run()
@@ -216,7 +219,7 @@ func main() {
 		chatEngine = chat.NewChatEngine(chatStateStorage, lg)
 
 		// Register chat workflows
-		chatOnboarding := chatonboarding.NewOnboardingWorkflow(authService, zohoService, lg)
+		chatOnboarding := chatonboarding.NewOnboardingWorkflow(authService, zohoService, handler, lg)
 		chatEngine.RegisterWorkflow(chatOnboarding)
 
 		chatMainMenu := chatmainmenu.NewMainMenuWorkflow(authService, zohoService, handler, db, db, driveService, lg)
@@ -316,4 +319,24 @@ func main() {
 		return
 	}
 	lg.Error("service stopped")
+}
+
+// fileSigningSecret picks the HMAC secret for CRM file links: the dedicated secret, else
+// the API key (previous behaviour), else a random per-process secret. An empty HMAC key
+// would let anyone forge download links. Links live 15 minutes, so a changed secret only
+// invalidates links issued just before a restart.
+func fileSigningSecret(conf *config.Config, lg *slog.Logger) string {
+	if conf.Listen.FileSigningSecret != "" {
+		return conf.Listen.FileSigningSecret
+	}
+	if conf.Listen.ApiKey != "" {
+		lg.Warn("listen.file_signing_secret not set; signing file links with the API key")
+		return conf.Listen.ApiKey
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand failed: " + err.Error())
+	}
+	lg.Warn("no file signing secret configured; using a random one (links break on restart)")
+	return hex.EncodeToString(b)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"DarkCS/bot/chat"
 	igmessenger "DarkCS/bot/chat/instagram"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/dedup"
 	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 )
@@ -40,7 +42,8 @@ type InstaBot struct {
 	accessToken    string
 	verifyToken    string
 	appSecret      string
-	fallbackToken  string // token from config, see SetFallbackToken
+	fallbackToken  string     // token from config, see SetFallbackToken
+	seen           *dedup.Set // message IDs already processed (Meta redelivers)
 	chatEngine     *chat.ChatEngine
 	tokenPersister func(token string) error // nil = no persistence
 }
@@ -90,14 +93,22 @@ type SendMessageRequest struct {
 	} `json:"message"`
 }
 
+// maxWebhookBody caps an incoming webhook request body.
+const maxWebhookBody = 5 << 20
+
 // NewInstaBot creates a new Instagram bot instance
 func NewInstaBot(accessToken, verifyToken, appSecret string, log *slog.Logger) *InstaBot {
-	return &InstaBot{
+	b := &InstaBot{
 		log:         log.With(sl.Module("instabot")),
 		accessToken: accessToken,
 		verifyToken: verifyToken,
 		appSecret:   appSecret,
+		seen:        dedup.New(10 * time.Minute),
 	}
+	if appSecret == "" {
+		b.log.Error("instagram app_secret is empty: webhook signatures are NOT verified, anyone can post fake messages")
+	}
+	return b
 }
 
 // SetChatEngine sets the unified chat engine for this bot.
@@ -118,7 +129,7 @@ func (b *InstaBot) refreshToken() error {
 	reqURL := fmt.Sprintf("%s?grant_type=ig_refresh_token&access_token=%s", tokenRefreshURL, b.token())
 	resp, err := http.Get(reqURL)
 	if err != nil {
-		return fmt.Errorf("refresh request failed: %w", err)
+		return fmt.Errorf("refresh request failed: %w", sl.RedactURLError(err))
 	}
 	defer resp.Body.Close()
 
@@ -235,8 +246,14 @@ func (b *InstaBot) HandleWebhookVerification(w http.ResponseWriter, r *http.Requ
 	token := r.URL.Query().Get("hub.verify_token")
 	challenge := r.URL.Query().Get("hub.challenge")
 
-	if mode == "subscribe" && token == b.verifyToken {
+	// An empty configured token must never match an empty hub.verify_token.
+	tokenMatch := b.verifyToken != "" &&
+		subtle.ConstantTimeCompare([]byte(token), []byte(b.verifyToken)) == 1
+	if mode == "subscribe" && tokenMatch {
 		b.log.Info("webhook verified")
+		// The challenge is echoed back; plain text + nosniff stops it rendering as HTML.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(challenge))
 		return
@@ -244,14 +261,16 @@ func (b *InstaBot) HandleWebhookVerification(w http.ResponseWriter, r *http.Requ
 
 	b.log.Warn("webhook verification failed",
 		slog.String("mode", mode),
-		slog.Bool("token_match", token == b.verifyToken),
+		slog.Bool("token_match", tokenMatch),
 	)
 	http.Error(w, "Forbidden", http.StatusForbidden)
 }
 
 // HandleWebhook handles incoming webhook POST requests
 func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	// Bounded read: this endpoint is unauthenticated and the body is read before the
+	// signature can be checked. Meta webhook payloads are a few KB.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebhookBody))
 	if err != nil {
 		b.log.Error("failed to read request body", sl.Err(err))
 		http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -267,9 +286,8 @@ func (b *InstaBot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	if b.appSecret != "" {
 		signature := r.Header.Get("X-Hub-Signature-256")
 		if !b.verifySignature(body, signature) {
-			b.log.With(
-				slog.String("body", string(body)),
-			).Warn("invalid webhook signature")
+			b.log.Warn("invalid webhook signature",
+				slog.Int("body_bytes", len(body)), slog.String("remote_addr", r.RemoteAddr))
 			sigValid = false
 		}
 	}
@@ -298,6 +316,10 @@ func (b *InstaBot) processPayload(payload WebhookPayload) {
 	for _, entry := range payload.Entry {
 		for _, messaging := range entry.Messaging {
 			if messaging.Message == nil || messaging.Message.IsEcho {
+				continue
+			}
+			if !b.seen.FirstSeen(messaging.Message.Mid) {
+				b.log.Debug("skipping redelivered message", slog.String("mid", messaging.Message.Mid))
 				continue
 			}
 
@@ -385,7 +407,7 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 	url := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.token())
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("failed to send request: %w", sl.RedactURLError(err))
 	}
 	defer resp.Body.Close()
 
@@ -403,7 +425,7 @@ func (b *InstaBot) GetUserUsername(userID string) (string, error) {
 	url := fmt.Sprintf("https://graph.instagram.com/v24.0/%s?fields=username&access_token=%s", userID, b.token())
 	resp, err := http.Get(url)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch user profile: %w", err)
+		return "", fmt.Errorf("failed to fetch user profile: %w", sl.RedactURLError(err))
 	}
 	defer resp.Body.Close()
 
@@ -483,7 +505,7 @@ func (b *InstaBot) SendMediaMessage(recipientID, mediaURL, mediaType string) err
 	apiURL := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.token())
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return fmt.Errorf("failed to send media message: %w", err)
+		return fmt.Errorf("failed to send media message: %w", sl.RedactURLError(err))
 	}
 	defer resp.Body.Close()
 

@@ -161,5 +161,9 @@ type UserInput struct {
 	Text         string // Regular message text
 	CallbackData string // Inline button press or matched number
 	Phone        string // Contact share or typed phone
-	MessageID    string // ID of the message that triggered the callback (for editing)
+	// PhoneVerified is true only when the platform vouches that Phone belongs to the
+	// sender (a Telegram contact share of the sender's own contact). Typed phones and
+	// forwarded contact cards are unverified.
+	PhoneVerified bool
+	MessageID     string // ID of the message that triggered the callback (for editing)
 }

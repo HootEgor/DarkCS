@@ -3,6 +3,7 @@ package onboarding
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -68,7 +69,7 @@ func (s *ChoosePhoneStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		_ = m.SendText(state.ChatID, fmt.Sprintf("✅ Номер телефону: %s", waPhone))
 		return chat.StepResult{
 			NextStep:    StepCheckUser,
-			UpdateState: map[string]any{KeyPhone: waPhone},
+			UpdateState: map[string]any{KeyPhone: waPhone, keyPhoneVerified: true},
 		}
 	case "enter_manual":
 		return chat.StepResult{NextStep: StepRequestPhone}
@@ -108,15 +109,21 @@ func (s *RequestPhoneStep) HandleInput(ctx context.Context, m chat.Messenger, st
 	_ = m.SendText(state.ChatID, fmt.Sprintf("✅ Номер телефону: %s", phone))
 
 	return chat.StepResult{
-		NextStep:    StepCheckUser,
-		UpdateState: map[string]any{KeyPhone: phone},
+		NextStep: StepCheckUser,
+		UpdateState: map[string]any{
+			KeyPhone:         phone,
+			keyPhoneVerified: input.Phone != "" && input.PhoneVerified,
+		},
 	}
 }
 
-// CheckUserStep — Check if user exists by phone (auto-transition step).
+// CheckUserStep — Check if user exists by phone (auto-transition step). An existing
+// customer is only linked to this chat once the phone is verified (see verify.go).
 type CheckUserStep struct {
 	authService AuthService
 	zohoService ZohoService
+	codeSender  CodeSender
+	log         *slog.Logger
 }
 
 func (s *CheckUserStep) ID() chat.StepID { return StepCheckUser }
@@ -131,6 +138,10 @@ func (s *CheckUserStep) Enter(ctx context.Context, m chat.Messenger, state *chat
 	}
 
 	user, _ := s.authService.UserExists("", phone, 0)
+
+	if user != nil && needsVerification(state, user) {
+		return startVerification(m, state, user, s.codeSender, s.log)
+	}
 
 	if user != nil && user.Name != "" {
 		fields := map[string]any{}

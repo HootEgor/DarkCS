@@ -25,6 +25,8 @@ type Config struct {
 	OpenAI struct {
 		ApiKey    string `yaml:"api_key" env-default:""`
 		DevPrefix string `yaml:"dev_prefix" env-default:""`
+		// McpURL is where OpenAI calls back for tools; must be this service's public /api/v1/mcp.
+		McpURL string `yaml:"mcp_url" env-default:"https://backup.darkbyrior.com/api/v1/mcp"`
 	} `yaml:"openai"`
 	Username string `yaml:"username" env-default:""`
 	SavePath string `yaml:"save_path" env-default:""`
@@ -51,6 +53,13 @@ type Config struct {
 		BindIP string `yaml:"bind_ip" env-default:"127.0.0.1"`
 		Port   string `yaml:"port" env-default:"9100"`
 		ApiKey string `yaml:"key" env-default:""`
+		// PublicURL is the externally reachable base URL used in file links sent to
+		// Instagram/WhatsApp. Empty = detected from the first request (spoofable).
+		PublicURL string `yaml:"public_url" env-default:""`
+		// FileSigningSecret signs CRM file download URLs. Empty = falls back to ApiKey.
+		FileSigningSecret string `yaml:"file_signing_secret" env-default:""`
+		// AllowedOrigins restricts browser origins for the CRM WebSocket. Empty = any.
+		AllowedOrigins []string `yaml:"allowed_origins"`
 	} `yaml:"listen"`
 	Zoho struct {
 		ClientId     string `yaml:"client_id" env-default:""`

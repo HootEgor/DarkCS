@@ -45,14 +45,13 @@ func CheckPhone(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		if code == "" {
-			logger.Info("phone not found", slog.String("phone", req.Phone))
+			logger.Info("phone not found", sl.Phone("phone", req.Phone))
 			render.JSON(w, r, response.Error("Phone not found"))
 			return
 		}
 
 		logger.With(
-			slog.String("phone", req.Phone),
-			slog.String("code", code),
+			sl.Phone("phone", req.Phone),
 		).Debug("check phone successfully")
 
 		render.JSON(w, r, response.Ok(code))
