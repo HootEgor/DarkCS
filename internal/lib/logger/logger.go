@@ -2,6 +2,7 @@ package logger
 
 import (
 	"DarkCS/bot"
+	"DarkCS/internal/lib/sl"
 	"log"
 	"log/slog"
 	"os"
@@ -33,21 +34,31 @@ func SetupLogger(env, path string) *slog.Logger {
 	switch env {
 	case envLocal:
 		logger = slog.New(
-			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),
+			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: redactAttr}),
 		)
 	case envDev:
 		logger = slog.New(
-			slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug}),
+			slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: redactAttr}),
 		)
 	case envProd:
 		logger = slog.New(
-			slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelInfo}),
+			slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelInfo, ReplaceAttr: redactAttr}),
 		)
 	default:
 		log.Fatal("invalid environment: ", env)
 	}
 
 	return logger
+}
+
+// redactAttr scrubs credentials from every string attribute written to the log file, so
+// a token inside any error text (e.g. slog.String("error", err.Error())) never lands on
+// disk. The Telegram handler applies the same redaction to what it sends.
+func redactAttr(_ []string, a slog.Attr) slog.Attr {
+	if a.Value.Kind() == slog.KindString {
+		a.Value = slog.StringValue(sl.Redact(a.Value.String()))
+	}
+	return a
 }
 
 func logFilePath(path string) string {

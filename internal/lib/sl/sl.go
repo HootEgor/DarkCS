@@ -6,10 +6,11 @@ import (
 	"strings"
 )
 
+// Err logs an error with credentials embedded in URLs redacted.
 func Err(err error) slog.Attr {
 	return slog.Attr{
 		Key:   "error",
-		Value: slog.StringValue(err.Error()),
+		Value: slog.StringValue(Redact(err.Error())),
 	}
 }
 

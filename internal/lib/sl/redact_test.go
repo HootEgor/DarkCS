@@ -42,3 +42,20 @@ func TestPhoneMasking(t *testing.T) {
 		t.Errorf("short phone = %q", got)
 	}
 }
+
+func TestRedactText(t *testing.T) {
+	// Real gotgbot error shape that leaked the user bot token to logs and Telegram.
+	in := `failed to execute POST request to sendVideo: Post "https://api.telegram.org/bot1234567890:AAFakeTokenForTests_0123456789abcde/sendVideo": context deadline exceeded`
+	got := Redact(in)
+	if strings.Contains(got, "AAFakeTokenForTests_0123456789abcde") {
+		t.Fatalf("token not redacted: %s", got)
+	}
+	if !strings.Contains(got, "context deadline exceeded") {
+		t.Fatalf("error context lost: %s", got)
+	}
+
+	q := Redact(`Get "https://graph.instagram.com/me?fields=username&access_token=IGQVJ123secret": EOF`)
+	if strings.Contains(q, "IGQVJ123secret") || !strings.Contains(q, "fields=username") {
+		t.Fatalf("query redaction wrong: %s", q)
+	}
+}

@@ -2,6 +2,7 @@ package logger
 
 import (
 	"DarkCS/bot"
+	"DarkCS/internal/lib/sl"
 	"context"
 	"fmt"
 	"log/slog"
@@ -94,7 +95,7 @@ func (h *TelegramHandler) Handle(ctx context.Context, record slog.Record) error 
 	})
 
 	select {
-	case h.sink.queue <- tgRecord{level: record.Level, text: truncate(b.String(), tgMaxMessage)}:
+	case h.sink.queue <- tgRecord{level: record.Level, text: truncate(sl.Redact(b.String()), tgMaxMessage)}:
 	default:
 		h.sink.dropped.Add(1)
 	}

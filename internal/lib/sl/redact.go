@@ -36,3 +36,19 @@ func RedactURL(raw string) string {
 	u.RawPath = ""
 	return u.String()
 }
+
+// Patterns for credentials that libraries embed in error messages: a Telegram bot token
+// ("<bot id>:<35 chars>", e.g. in gotgbot's "Post https://api.telegram.org/bot<token>/..."
+// errors) and secret query parameters.
+var (
+	botTokenInText    = regexp.MustCompile(`\d{6,}:[A-Za-z0-9_-]{30,}`)
+	secretQueryInText = regexp.MustCompile(`(?i)(access_token|zapikey|api_key|apikey|token|sig|client_secret|refresh_token)=[^&\s"']+`)
+)
+
+// Redact removes Telegram bot tokens and secret query parameters from free text. It is
+// applied to every logged string (see logger.SetupLogger) as a safety net, because
+// third-party errors include request URLs the call sites don't control.
+func Redact(s string) string {
+	s = botTokenInText.ReplaceAllString(s, "<redacted-token>")
+	return secretQueryInText.ReplaceAllString(s, "$1=<redacted>")
+}
