@@ -2,8 +2,10 @@ package repository
 
 import (
 	"DarkCS/entity"
+	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -45,7 +47,7 @@ func (m *MongoDB) GetAssistant(name string) (*entity.Assistant, error) {
 	var assistant entity.Assistant
 	err = collection.FindOne(m.ctx, filter).Decode(&assistant)
 	if err != nil {
-		if err.Error() == "mongo: no documents in result" {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("assistant with name %s not found", name)
 		}
 		return nil, fmt.Errorf("mongodb find assistant: %w", err)
@@ -91,8 +93,9 @@ func (m *MongoDB) SetVectorStore(assistantName, vectorStoreID string) error {
 	filter := bson.D{{"name", assistantName}}
 	update := bson.D{{"$set", bson.D{{"vector_store_id", vectorStoreID}}}}
 
-	opts := options.Update().SetUpsert(true)
-	result, err := collection.UpdateOne(m.ctx, filter, update, opts)
+	// No upsert: a missing assistant is an error, and upserting would create a bare stub
+	// assistant (name + vector store only) before reporting it.
+	result, err := collection.UpdateOne(m.ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("mongodb update assistant vector store: %w", err)
 	}

@@ -25,14 +25,13 @@ type Repository interface {
 	GetActiveChats() ([]entity.ChatSummary, error)
 	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
 	CleanupChatMessages() error
-	EnsureChatMessageIndexes() error
+	EnsureIndexes() error
 
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
 	DownloadFile(fileID primitive.ObjectID) (string, entity.FileMetadata, io.ReadCloser, error)
 
 	UpsertReadReceipt(username, platform, userID string, readAt time.Time) error
 	GetReadReceipts(username string) ([]entity.ChatReadReceipt, error)
-	EnsureReadReceiptIndexes() error
 
 	SaveChatState(ctx context.Context, state *chat.ChatState) error
 
@@ -260,14 +259,8 @@ func (c *Core) Init() {
 		return
 	}
 
-	// Ensure chat message indexes
-	if err := c.repo.EnsureChatMessageIndexes(); err != nil {
-		c.log.Error("failed to ensure chat message indexes", slog.String("error", err.Error()))
-	}
-
-	// Ensure read receipt indexes
-	if err := c.repo.EnsureReadReceiptIndexes(); err != nil {
-		c.log.Error("failed to ensure read receipt indexes", slog.String("error", err.Error()))
+	if err := c.repo.EnsureIndexes(); err != nil {
+		c.log.Error("failed to ensure indexes (duplicates? run cmd/dedupe-users)", sl.Err(err))
 	}
 }
 

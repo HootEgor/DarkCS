@@ -2,10 +2,12 @@ package auth
 
 import (
 	"DarkCS/entity"
+	"DarkCS/internal/lib/sl"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/mongo"
+	"log/slog"
 	"math/big"
 	"time"
 )
@@ -110,10 +112,17 @@ func (s *Service) ActivatePromoCode(phone, code string) error {
 		return fmt.Errorf("failed to activate promo code: %w", err)
 	}
 
+	// The code is claimed atomically above; if granting access fails, release it again
+	// so the customer doesn't lose the code. (No multi-document transaction: the
+	// deployment is not guaranteed to be a replica set.)
 	err = s.UpdateUserFields(user, map[string]any{
 		entity.UserFieldPromoExpire: time.Now().Add(30 * 24 * time.Hour),
 	})
 	if err != nil {
+		if rbErr := s.repository.DeactivatePromoCode(promoCode.Code); rbErr != nil {
+			s.log.Error("releasing promo code after failed grant",
+				slog.String("code", promoCode.Code), sl.Err(rbErr))
+		}
 		return err
 	}
 

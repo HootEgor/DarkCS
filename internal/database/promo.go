@@ -81,6 +81,17 @@ func (m *MongoDB) ActivatePromoCode(code string) error {
 	return nil
 }
 
+// DeactivatePromoCode undoes ActivatePromoCode. Used as compensation when granting
+// access fails after the code was claimed, so the customer can retry with it.
+func (m *MongoDB) DeactivatePromoCode(code string) error {
+	filter := bson.M{"code": code, "activated": true}
+	update := bson.M{"$set": bson.M{"activated": false}}
+	if _, err := m.collection(promoCodesCollection).UpdateOne(m.ctx, filter, update); err != nil {
+		return fmt.Errorf("mongodb deactivate promoCode: %w", err)
+	}
+	return nil
+}
+
 func (m *MongoDB) GetPromoCode(code string) (*entity.PromoCode, error) {
 	connection, err := m.connect()
 	if err != nil {

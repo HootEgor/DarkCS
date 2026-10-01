@@ -2,7 +2,9 @@ package repository
 
 import (
 	"DarkCS/entity"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -117,7 +119,8 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 		}}},
 	}
 
-	cursor, err := collection.Aggregate(m.ctx, pipeline)
+	// allowDiskUse: the $group can exceed the 100 MB in-memory stage limit on large histories.
+	cursor, err := collection.Aggregate(m.ctx, pipeline, options.Aggregate().SetAllowDiskUse(true))
 	if err != nil {
 		return nil, fmt.Errorf("mongodb aggregate active chats: %w", err)
 	}
@@ -131,56 +134,80 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 	return summaries, nil
 }
 
-// CountUnreadPerChat counts incoming messages after readAt for each chat in a single aggregation.
+// CountUnreadPerChat counts incoming messages after readAt for each chat (keys are
+// "platform:user_id"; chats without a receipt count every incoming message).
+//
+// Counting happens in MongoDB with two aggregations that only return counts: totals for
+// every chat, then counts after readAt for the chats that have a receipt. The previous
+// version pushed every incoming message timestamp into memory.
 func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error) {
-	connection, err := m.connect()
-	if err != nil {
-		return nil, err
-	}
-	defer m.disconnect(connection)
+	collection := m.collection(chatMessagesCollection)
 
-	collection := connection.Database(m.database).Collection(chatMessagesCollection)
-
-	// Build $or conditions: for each chat, count incoming messages after its readAt
-	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.D{{"direction", "incoming"}}}},
-		{{Key: "$group", Value: bson.D{
-			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
-			{"messages", bson.D{{"$push", bson.D{{"created_at", "$created_at"}}}}},
-		}}},
-	}
-
-	cursor, err := collection.Aggregate(m.ctx, pipeline)
-	if err != nil {
-		return nil, fmt.Errorf("mongodb aggregate unread counts: %w", err)
-	}
-	defer cursor.Close(m.ctx)
-
-	type chatGroup struct {
+	type chatCount struct {
 		ID struct {
 			Platform string `bson:"platform"`
 			UserID   string `bson:"user_id"`
 		} `bson:"_id"`
-		Messages []struct {
-			CreatedAt time.Time `bson:"created_at"`
-		} `bson:"messages"`
+		Count int `bson:"count"`
+	}
+	countBy := func(match bson.D) ([]chatCount, error) {
+		pipeline := mongo.Pipeline{
+			{{Key: "$match", Value: match}},
+			{{Key: "$group", Value: bson.D{
+				{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
+				{"count", bson.D{{"$sum", 1}}},
+			}}},
+		}
+		cursor, err := collection.Aggregate(m.ctx, pipeline)
+		if err != nil {
+			return nil, err
+		}
+		var counts []chatCount
+		if err = cursor.All(m.ctx, &counts); err != nil {
+			return nil, err
+		}
+		return counts, nil
 	}
 
-	result := make(map[string]int)
-	for cursor.Next(m.ctx) {
-		var group chatGroup
-		if err := cursor.Decode(&group); err != nil {
+	totals, err := countBy(bson.D{{"direction", "incoming"}})
+	if err != nil {
+		return nil, fmt.Errorf("mongodb aggregate unread totals: %w", err)
+	}
+
+	result := make(map[string]int, len(totals))
+	for _, c := range totals {
+		key := c.ID.Platform + ":" + c.ID.UserID
+		if _, hasReceipt := receipts[key]; !hasReceipt {
+			result[key] = c.Count
+		}
+	}
+	if len(receipts) == 0 {
+		return result, nil
+	}
+
+	// Chats with a receipt: unread starts at 0 and only messages after readAt count.
+	var or bson.A
+	for key, readAt := range receipts {
+		platform, userID, ok := strings.Cut(key, ":")
+		if !ok {
 			continue
 		}
-		key := group.ID.Platform + ":" + group.ID.UserID
-		readAt, ok := receipts[key]
-		count := 0
-		for _, msg := range group.Messages {
-			if !ok || msg.CreatedAt.After(readAt) {
-				count++
-			}
-		}
-		result[key] = count
+		result[key] = 0
+		or = append(or, bson.D{
+			{"platform", platform},
+			{"user_id", userID},
+			{"created_at", bson.D{{"$gt", readAt}}},
+		})
+	}
+	if len(or) == 0 {
+		return result, nil
+	}
+	afterRead, err := countBy(bson.D{{"direction", "incoming"}, {"$or", or}})
+	if err != nil {
+		return nil, fmt.Errorf("mongodb aggregate unread after read: %w", err)
+	}
+	for _, c := range afterRead {
+		result[c.ID.Platform+":"+c.ID.UserID] = c.Count
 	}
 
 	return result, nil
@@ -237,33 +264,6 @@ func (m *MongoDB) GetReadReceipts(username string) ([]entity.ChatReadReceipt, er
 	return receipts, nil
 }
 
-// EnsureReadReceiptIndexes creates a unique compound index on the read receipts collection.
-func (m *MongoDB) EnsureReadReceiptIndexes() error {
-	connection, err := m.connect()
-	if err != nil {
-		return err
-	}
-	defer m.disconnect(connection)
-
-	collection := connection.Database(m.database).Collection(readReceiptsCollection)
-
-	index := mongo.IndexModel{
-		Keys: bson.D{
-			{"username", 1},
-			{"platform", 1},
-			{"user_id", 1},
-		},
-		Options: options.Index().SetUnique(true),
-	}
-
-	_, err = collection.Indexes().CreateOne(m.ctx, index)
-	if err != nil {
-		return fmt.Errorf("mongodb create read receipt index: %w", err)
-	}
-
-	return nil
-}
-
 // CleanupChatMessages deletes messages older than 30 days, keeping at least 20 per user.
 func (m *MongoDB) CleanupChatMessages() error {
 	connection, err := m.connect()
@@ -301,9 +301,13 @@ func (m *MongoDB) CleanupChatMessages() error {
 		Count int `bson:"count"`
 	}
 
+	// Keep going past per-chat failures so one bad chat doesn't block cleanup of the
+	// rest, but report everything that failed.
+	var errs []error
 	for cursor.Next(m.ctx) {
 		var group userGroup
 		if err := cursor.Decode(&group); err != nil {
+			errs = append(errs, fmt.Errorf("decode cleanup group: %w", err))
 			continue
 		}
 
@@ -322,51 +326,33 @@ func (m *MongoDB) CleanupChatMessages() error {
 
 		oldCursor, err := collection.Find(m.ctx, findFilter, findOpts)
 		if err != nil {
+			errs = append(errs, fmt.Errorf("find old messages %s:%s: %w", group.ID.Platform, group.ID.UserID, err))
 			continue
 		}
 
-		var ids []interface{}
-		for oldCursor.Next(m.ctx) {
-			var doc struct {
-				ID interface{} `bson:"_id"`
-			}
-			if err := oldCursor.Decode(&doc); err == nil {
-				ids = append(ids, doc.ID)
-			}
+		var docs []struct {
+			ID interface{} `bson:"_id"`
 		}
-		oldCursor.Close(m.ctx)
+		if err = oldCursor.All(m.ctx, &docs); err != nil {
+			errs = append(errs, fmt.Errorf("read old messages %s:%s: %w", group.ID.Platform, group.ID.UserID, err))
+			continue
+		}
+		if len(docs) == 0 {
+			continue
+		}
 
-		if len(ids) > 0 {
-			deleteFilter := bson.D{{"_id", bson.D{{"$in", ids}}}}
-			_, _ = collection.DeleteMany(m.ctx, deleteFilter)
+		ids := make([]interface{}, 0, len(docs))
+		for _, d := range docs {
+			ids = append(ids, d.ID)
+		}
+		deleteFilter := bson.D{{"_id", bson.D{{"$in", ids}}}}
+		if _, err = collection.DeleteMany(m.ctx, deleteFilter); err != nil {
+			errs = append(errs, fmt.Errorf("delete old messages %s:%s: %w", group.ID.Platform, group.ID.UserID, err))
 		}
 	}
-
-	return nil
-}
-
-// EnsureChatMessageIndexes creates indexes for the chat-messages collection.
-func (m *MongoDB) EnsureChatMessageIndexes() error {
-	connection, err := m.connect()
-	if err != nil {
-		return err
-	}
-	defer m.disconnect(connection)
-
-	collection := connection.Database(m.database).Collection(chatMessagesCollection)
-
-	index := mongo.IndexModel{
-		Keys: bson.D{
-			{"platform", 1},
-			{"user_id", 1},
-			{"created_at", -1},
-		},
+	if err = cursor.Err(); err != nil {
+		errs = append(errs, fmt.Errorf("cleanup cursor: %w", err))
 	}
 
-	_, err = collection.Indexes().CreateOne(m.ctx, index)
-	if err != nil {
-		return fmt.Errorf("mongodb create chat message index: %w", err)
-	}
-
-	return nil
+	return errors.Join(errs...)
 }

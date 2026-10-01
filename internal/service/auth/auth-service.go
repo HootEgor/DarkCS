@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"log/slog"
 	"time"
 	"unicode/utf8"
@@ -32,6 +33,7 @@ type Repository interface {
 
 	GetPromoCode(code string) (*entity.PromoCode, error)
 	ActivatePromoCode(code string) error
+	DeactivatePromoCode(code string) error
 	SavePromoCodes(codes []string) error
 	GetAllPromoCodes() ([]entity.PromoCode, error)
 }
@@ -81,6 +83,12 @@ func (s *Service) RegisterUser(name, email, phone string, telegramId int64) (*en
 		user = entity.NewUser(email, phone, telegramId)
 		user.Name = name
 		if err = s.repository.CreateUser(user); err != nil {
+			// A concurrent registration won the race; the unique index rejected ours.
+			if mongo.IsDuplicateKeyError(err) {
+				if existing, getErr := s.GetUser(email, phone, telegramId); getErr == nil && existing != nil {
+					return existing, nil
+				}
+			}
 			return nil, err
 		}
 		return user, nil

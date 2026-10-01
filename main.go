@@ -80,9 +80,19 @@ func main() {
 
 	db, err := repository.NewMongoClient(conf, lg)
 	if err != nil {
+		// Almost every feature needs the database; exit so systemd restarts us rather
+		// than serving requests that would all fail.
 		lg.With(
 			sl.Err(err),
 		).Error("mongo client")
+		return
+	}
+	if db != nil {
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = db.Close(ctx)
+		}()
 	}
 
 	// Variable to hold userBot for later start
