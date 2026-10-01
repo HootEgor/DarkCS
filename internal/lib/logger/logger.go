@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -22,7 +23,7 @@ func SetupLogger(env, path string) *slog.Logger {
 
 	if env != envLocal {
 		logPath := logFilePath(path)
-		logFile, err = os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		logFile, err = os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
 		if err != nil {
 			log.Fatal("error opening log file: ", err)
 		}
@@ -53,18 +54,23 @@ func logFilePath(path string) string {
 	return filepath.Join(path, logFileName)
 }
 
-// SetupTelegramHandler adds a Telegram handler to the logger
-func SetupTelegramHandler(logger *slog.Logger, tgBot *bot.TgBot, minLevel slog.Level) *slog.Logger {
+// SetupTelegramHandler wraps the logger so records at or above minLevel are also sent to
+// the admin Telegram bot. The returned handler must be flushed on shutdown; it is nil
+// when tgBot is nil.
+func SetupTelegramHandler(logger *slog.Logger, tgBot *bot.TgBot, minLevel slog.Level) (*slog.Logger, *TelegramHandler) {
 	if tgBot == nil {
-		return logger
+		return logger, nil
 	}
+	tgHandler := NewTelegramHandler(logger.Handler(), tgBot, minLevel)
+	return slog.New(tgHandler), tgHandler
+}
 
-	// Get the existing handler from the logger
-	existingHandler := logger.Handler()
-
-	// Create a new Telegram handler that wraps the existing handler
-	tgHandler := NewTelegramHandler(existingHandler, tgBot, minLevel)
-
-	// Create a new logger with the Telegram handler
-	return slog.New(tgHandler)
+// ParseLevel converts a config level name (debug, info, warn, error) to a slog.Level,
+// falling back to def for empty or unknown names.
+func ParseLevel(name string, def slog.Level) slog.Level {
+	var l slog.Level
+	if err := l.UnmarshalText([]byte(strings.TrimSpace(name))); err != nil {
+		return def
+	}
+	return l
 }

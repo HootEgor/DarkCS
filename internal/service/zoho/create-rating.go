@@ -14,7 +14,7 @@ import (
 
 // CreateRating creates a service rating in Zoho CRM.
 func (s *ZohoService) CreateRating(rating entity.ServiceRating) error {
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		err := s.refreshTokenCall()
 		if err != nil {
 			return err
@@ -34,7 +34,7 @@ func (s *ZohoService) createRating(rating entity.ServiceRating) error {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	fullURL, err := buildURL(s.crmUrl, s.scope, s.apiVersion, "Raiting")
+	fullURL, err := buildURL(s.apiDomain(), s.scope, s.apiVersion, "Raiting")
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (s *ZohoService) createRating(rating entity.ServiceRating) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log := s.log.With(
@@ -66,7 +66,7 @@ func (s *ZohoService) createRating(rating entity.ServiceRating) error {
 		}
 	}()
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}

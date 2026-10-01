@@ -3,6 +3,7 @@ package core
 import (
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
+	"DarkCS/internal/lib/keymutex"
 	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/ws"
@@ -140,6 +141,7 @@ type Core struct {
 	publicURL     string
 	keys          *keyCache
 	wsTickets     *wsTickets
+	aiLocks       *keymutex.KeyMutex // serializes AI turns per user UUID
 	log           *slog.Logger
 	wsHub         *ws.Hub
 	messengers    map[string]chat.Messenger
@@ -150,6 +152,7 @@ func New(log *slog.Logger) *Core {
 		log:        log.With(sl.Module("core")),
 		keys:       newKeyCache(),
 		wsTickets:  &wsTickets{m: make(map[string]wsTicket)},
+		aiLocks:    keymutex.New(),
 		messengers: make(map[string]chat.Messenger),
 	}
 }

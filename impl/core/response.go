@@ -59,6 +59,9 @@ func (c *Core) ProcessUserRequest(user *entity.User, message string) (*entity.Ai
 		return nil, fmt.Errorf("user is blocked")
 	}
 
+	// Shares the per-user AI lock with processRequest: both write the same history.
+	defer c.aiLocks.Lock(user.UUID)()
+
 	assistants := user.GetAssistants()
 	systemMsg := "Available assistants: "
 	for _, a := range assistants {
@@ -93,6 +96,10 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 	if user.Blocked {
 		return nil, fmt.Errorf("user is blocked")
 	}
+
+	// One AI turn per user at a time: concurrent turns would both read the same
+	// conversation history and answer without seeing each other.
+	defer c.aiLocks.Lock(user.UUID)()
 
 	assistants := user.GetAssistants()
 	systemMsg := "Available assistants: "

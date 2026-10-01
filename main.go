@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"flag"
 	"log/slog"
+	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"DarkCS/ai/gpt"
@@ -44,6 +47,11 @@ func main() {
 	conf := config.MustLoad(*configPath)
 	lg := logger.SetupLogger(conf.Env, *logPath)
 
+	// Cancelled on SIGINT/SIGTERM (systemctl stop/restart) to start graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	var tgLogHandler *logger.TelegramHandler
+
 	// Initialize Telegram bot if enabled (start later after workflow engine is configured)
 	var tgBot *bot.TgBot
 	if conf.Telegram.Enabled {
@@ -53,7 +61,8 @@ func main() {
 			lg.Error("failed to initialize telegram bot", slog.String("error", err.Error()))
 		} else {
 			// Set up Telegram handler for the logger
-			lg = logger.SetupTelegramHandler(lg, tgBot, slog.LevelDebug)
+			lg, tgLogHandler = logger.SetupTelegramHandler(lg, tgBot,
+				logger.ParseLevel(conf.Telegram.MinLogLevel, slog.LevelDebug))
 			lg.With(
 				slog.String("bot_name", conf.Telegram.BotName),
 			).Info("telegram bot initialized")
@@ -158,8 +167,9 @@ func main() {
 	handler.SetSmartService(smartService)
 	handler.SetZohoService(zohoService)
 
+	var zohoFnService *zoho_functions.ZohoFunctionsService
 	if conf.ZohoFunctions.MsgUrl != "" && conf.ZohoFunctions.ApiKey != "" {
-		zohoFnService := zoho_functions.NewZohoFunctionsService(
+		zohoFnService = zoho_functions.NewZohoFunctionsService(
 			conf.ZohoFunctions.MsgUrl,
 			conf.ZohoFunctions.ApiKey,
 			lg,
@@ -283,7 +293,7 @@ func main() {
 				}
 			}
 		}
-		instaBot.StartTokenRefresh(context.Background())
+		instaBot.StartTokenRefresh(ctx)
 		lg.Info("instagram bot initialized")
 	}
 
@@ -313,12 +323,26 @@ func main() {
 		apiOpts = append(apiOpts, api.WithWhatsAppBot(whatsappBot))
 	}
 	apiOpts = append(apiOpts, api.WithWsHub(wsHub, handler))
-	err = api.New(conf, lg, handler, apiOpts...)
-	if err != nil {
-		lg.Error("server start", sl.Err(err))
-		return
+	// Blocks until ctx is cancelled (graceful) or the server fails.
+	if err = api.New(ctx, conf, lg, handler, apiOpts...); err != nil {
+		lg.Error("api server", sl.Err(err))
+	}
+
+	// Graceful shutdown: in-flight HTTP requests have finished (or timed out) in api.New.
+	// Stop taking Telegram updates, push buffered CRM messages to Zoho, deliver queued
+	// admin alerts; the deferred db.Close then releases the Mongo pool.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if userBot != nil {
+		userBot.Stop()
+	}
+	if zohoFnService != nil {
+		zohoFnService.Stop(shutdownCtx)
 	}
 	lg.Error("service stopped")
+	if tgLogHandler != nil {
+		tgLogHandler.Flush(shutdownCtx)
+	}
 }
 
 // fileSigningSecret picks the HMAC secret for CRM file links: the dedicated secret, else

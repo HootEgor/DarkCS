@@ -11,6 +11,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"DarkCS/bot/chat"
@@ -37,6 +38,7 @@ type UserBot struct {
 	botUsername string
 	chatEngine  *chat.ChatEngine
 	authService userBotAuthService
+	updater     atomic.Pointer[ext.Updater] // set by Start, used by Stop
 }
 
 // NewUserBot creates a new user bot instance.
@@ -80,6 +82,7 @@ func (b *UserBot) Start() error {
 		MaxRoutines: ext.DefaultMaxRoutines,
 	})
 	updater := ext.NewUpdater(dispatcher, nil)
+	b.updater.Store(updater)
 
 	dispatcher.AddHandler(handlers.NewCommand("start", b.handleStart))
 	dispatcher.AddHandler(handlers.NewCommand("reset", b.handleReset))
@@ -110,6 +113,15 @@ func (b *UserBot) Start() error {
 	updater.Idle()
 
 	return nil
+}
+
+// Stop ends polling and waits for in-flight update handlers; Start then returns.
+func (b *UserBot) Stop() {
+	if u := b.updater.Load(); u != nil {
+		if err := u.Stop(); err != nil {
+			b.log.Error("stopping user bot", sl.Err(err))
+		}
+	}
 }
 
 func (b *UserBot) newMessenger() *tgmessenger.Messenger {
@@ -344,7 +356,7 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 
 	// Download file from Telegram servers
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", b.api.Token, file.FilePath)
-	resp, err := http.Get(fileURL)
+	resp, err := telegramFileClient.Get(fileURL)
 	if err != nil {
 		b.log.Error("failed to download file from Telegram",
 			slog.String("user_id", userID),
@@ -407,3 +419,6 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 
 	return nil
 }
+
+// telegramFileClient downloads user media from Telegram with a bound on the transfer.
+var telegramFileClient = &http.Client{Timeout: 2 * time.Minute}

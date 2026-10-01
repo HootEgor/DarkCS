@@ -13,7 +13,7 @@ import (
 
 func (s *ZohoService) GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus, error) {
 
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		err := s.refreshTokenCall()
 		if err != nil {
 			return nil, err
@@ -37,7 +37,7 @@ func (s *ZohoService) GetOrders(userInfo entity.UserInfo) ([]entity.OrderStatus,
 func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) {
 	// Build URL
 	path := fmt.Sprintf("Contacts/%s/SalesOrders", contactID)
-	fullURL, err := buildURL(s.crmUrl, s.scope, "v7", path)
+	fullURL, err := buildURL(s.apiDomain(), s.scope, "v7", path)
 	if err != nil {
 		return nil, fmt.Errorf("build url: %w", err)
 	}
@@ -50,7 +50,7 @@ func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) 
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log := s.log.With(
@@ -69,7 +69,7 @@ func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) 
 	}()
 
 	// Execute request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -110,7 +110,7 @@ func (s *ZohoService) getOrders(contactID string) ([]entity.OrderStatus, error) 
 
 // GetOrdersDetailed retrieves detailed order information for a user.
 func (s *ZohoService) GetOrdersDetailed(userInfo entity.UserInfo) ([]entity.OrderDetail, error) {
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		err := s.refreshTokenCall()
 		if err != nil {
 			return nil, err
@@ -133,7 +133,7 @@ func (s *ZohoService) GetOrdersDetailedByZohoId(zohoId string) ([]entity.OrderDe
 		return nil, fmt.Errorf("zoho id is empty")
 	}
 
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		err := s.refreshTokenCall()
 		if err != nil {
 			return nil, err
@@ -146,7 +146,7 @@ func (s *ZohoService) GetOrdersDetailedByZohoId(zohoId string) ([]entity.OrderDe
 func (s *ZohoService) getOrdersDetailed(contactID string) ([]entity.OrderDetail, error) {
 	// Build URL
 	path := fmt.Sprintf("Contacts/%s/SalesOrders", contactID)
-	fullURL, err := buildURL(s.crmUrl, s.scope, "v7", path)
+	fullURL, err := buildURL(s.apiDomain(), s.scope, "v7", path)
 	if err != nil {
 		return nil, fmt.Errorf("build url: %w", err)
 	}
@@ -159,7 +159,7 @@ func (s *ZohoService) getOrdersDetailed(contactID string) ([]entity.OrderDetail,
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log := s.log.With(
@@ -178,7 +178,7 @@ func (s *ZohoService) getOrdersDetailed(contactID string) ([]entity.OrderDetail,
 	}()
 
 	// Execute request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

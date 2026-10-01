@@ -7,12 +7,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
 // UpdateContactSchool updates the School field on a Zoho CRM contact.
 func (s *ZohoService) UpdateContactSchool(zohoID, schoolName string) error {
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		if err := s.refreshTokenCall(); err != nil {
 			return err
 		}
@@ -28,7 +27,7 @@ func (s *ZohoService) UpdateContactSchool(zohoID, schoolName string) error {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	fullURL, err := buildURL(s.crmUrl, s.scope, s.apiVersion, "Contacts", zohoID)
+	fullURL, err := buildURL(s.apiDomain(), s.scope, s.apiVersion, "Contacts", zohoID)
 	if err != nil {
 		return err
 	}
@@ -37,10 +36,10 @@ func (s *ZohoService) UpdateContactSchool(zohoID, schoolName string) error {
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}

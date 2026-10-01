@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -39,7 +40,7 @@ func (r *Service) ValidateOrder(products []entity.OrderProduct, phone string) ([
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
-	client := &http.Client{}
+	client := &http.Client{Timeout: productHTTPTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)

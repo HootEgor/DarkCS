@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 func (r *Service) GetUserDiscount(phone string) (int, error) {
@@ -21,7 +22,7 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
-	client := &http.Client{}
+	client := &http.Client{Timeout: productHTTPTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("failed to send request: %v", err)

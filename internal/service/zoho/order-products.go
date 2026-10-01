@@ -27,7 +27,7 @@ type productsResponse struct {
 
 func (s *ZohoService) GetOrderProducts(orderId string) (string, error) {
 
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		err := s.refreshTokenCall()
 		if err != nil {
 			return "", err
@@ -62,7 +62,7 @@ func (s *ZohoService) GetOrderProducts(orderId string) (string, error) {
 func (s *ZohoService) getOrderProducts(orderId string) (*productsResponse, error) {
 	// Build URL
 	path := fmt.Sprintf("Sales_Orders/%s", orderId)
-	fullURL, err := buildURL(s.crmUrl, s.scope, "v4", path)
+	fullURL, err := buildURL(s.apiDomain(), s.scope, "v4", path)
 	if err != nil {
 		return nil, fmt.Errorf("build url: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *ZohoService) getOrderProducts(orderId string) (*productsResponse, error
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
 	log := s.log.With(
@@ -94,7 +94,7 @@ func (s *ZohoService) getOrderProducts(orderId string) (*productsResponse, error
 	}()
 
 	// Execute request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

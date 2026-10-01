@@ -339,7 +339,7 @@ func (b *WhatsAppBot) SendMessage(recipientPhone, text string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+b.accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := graphClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -365,7 +365,7 @@ func (b *WhatsAppBot) downloadAndUploadMedia(listener chat.MessageListener, send
 	}
 	req.Header.Set("Authorization", "Bearer "+b.accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := graphClient.Do(req)
 	if err != nil {
 		b.log.Error("failed to get media URL", slog.String("media_id", mediaID), sl.Err(err))
 		return
@@ -388,7 +388,7 @@ func (b *WhatsAppBot) downloadAndUploadMedia(listener chat.MessageListener, send
 	}
 	dlReq.Header.Set("Authorization", "Bearer "+b.accessToken)
 
-	dlResp, err := http.DefaultClient.Do(dlReq)
+	dlResp, err := mediaClient.Do(dlReq)
 	if err != nil {
 		b.log.Error("failed to download media file", sl.Err(err))
 		return
@@ -445,7 +445,7 @@ func (b *WhatsAppBot) SendMediaMessage(recipientPhone, mediaType, mediaURL, capt
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+b.accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := graphClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send media message: %w", err)
 	}
@@ -477,3 +477,10 @@ func (b *WhatsAppBot) verifySignature(body []byte, signature string) bool {
 
 	return hmac.Equal([]byte(expectedSig), []byte(actualSig))
 }
+
+// HTTP clients with timeouts: the default client has none, so a stalled Graph API or
+// media connection would hang the webhook goroutine forever.
+var (
+	graphClient = &http.Client{Timeout: 30 * time.Second}
+	mediaClient = &http.Client{Timeout: 2 * time.Minute}
+)

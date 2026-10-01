@@ -127,7 +127,7 @@ func (b *InstaBot) token() string {
 // Instagram long-lived tokens expire after 60 days and must be refreshed before expiry.
 func (b *InstaBot) refreshToken() error {
 	reqURL := fmt.Sprintf("%s?grant_type=ig_refresh_token&access_token=%s", tokenRefreshURL, b.token())
-	resp, err := http.Get(reqURL)
+	resp, err := graphClient.Get(reqURL)
 	if err != nil {
 		return fmt.Errorf("refresh request failed: %w", sl.RedactURLError(err))
 	}
@@ -405,7 +405,7 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 	}
 
 	url := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.token())
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := graphClient.Post(url, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", sl.RedactURLError(err))
 	}
@@ -423,7 +423,7 @@ func (b *InstaBot) SendMessage(recipientID, text string) error {
 // GetUserUsername fetches the Instagram username for a given user ID via Graph API.
 func (b *InstaBot) GetUserUsername(userID string) (string, error) {
 	url := fmt.Sprintf("https://graph.instagram.com/v24.0/%s?fields=username&access_token=%s", userID, b.token())
-	resp, err := http.Get(url)
+	resp, err := graphClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch user profile: %w", sl.RedactURLError(err))
 	}
@@ -445,7 +445,7 @@ func (b *InstaBot) GetUserUsername(userID string) (string, error) {
 
 // downloadAndUploadAttachment downloads a file from a URL and uploads it to GridFS via the listener.
 func (b *InstaBot) downloadAndUploadAttachment(listener chat.MessageListener, senderID, fileURL, attType, caption string) {
-	resp, err := http.Get(fileURL)
+	resp, err := mediaClient.Get(fileURL)
 	if err != nil {
 		b.log.Error("failed to download Instagram attachment",
 			slog.String("sender_id", senderID),
@@ -503,7 +503,7 @@ func (b *InstaBot) SendMediaMessage(recipientID, mediaURL, mediaType string) err
 	}
 
 	apiURL := fmt.Sprintf("%s?access_token=%s", graphAPIURL, b.token())
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := graphClient.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to send media message: %w", sl.RedactURLError(err))
 	}
@@ -535,3 +535,10 @@ func (b *InstaBot) verifySignature(body []byte, signature string) bool {
 
 	return hmac.Equal([]byte(expectedSig), []byte(actualSig))
 }
+
+// HTTP clients with timeouts: the default client has none, so a stalled Graph API or CDN
+// connection would hang the webhook goroutine forever.
+var (
+	graphClient = &http.Client{Timeout: 30 * time.Second}
+	mediaClient = &http.Client{Timeout: 2 * time.Minute}
+)

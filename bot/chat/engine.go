@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"DarkCS/internal/lib/keymutex"
 	"context"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,16 @@ type ChatEngine struct {
 	storage         ChatStateStorage
 	log             *slog.Logger
 	messageListener MessageListener
+
+	// userLocks serializes load → step → save per {platform, user}. Without it two quick
+	// messages (or a double-tapped button) run concurrently on copies of the same state,
+	// the last save wins, and side effects such as registration or a Zoho rating repeat.
+	userLocks *keymutex.KeyMutex
+}
+
+// lockUser blocks until no other update for this user is being processed.
+func (e *ChatEngine) lockUser(platform, userID string) func() {
+	return e.userLocks.Lock(platform + ":" + userID)
 }
 
 // NewChatEngine creates a new chat engine.
@@ -21,6 +32,7 @@ func NewChatEngine(storage ChatStateStorage, log *slog.Logger) *ChatEngine {
 		workflows: make(map[WorkflowID]Workflow),
 		storage:   storage,
 		log:       log,
+		userLocks: keymutex.New(),
 	}
 }
 
@@ -42,6 +54,7 @@ func (e *ChatEngine) RegisterWorkflow(w Workflow) {
 
 // HandleMessage processes a text message from any platform.
 func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, userID, chatID, text string) error {
+	defer e.lockUser(platform, userID)()
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	state, err := e.storage.Load(ctx, platform, userID)
@@ -51,7 +64,7 @@ func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, u
 
 	// No active workflow — start onboarding
 	if state == nil {
-		return e.StartWorkflow(ctx, m, platform, userID, chatID, "onboarding")
+		return e.startWorkflowWithData(ctx, m, platform, userID, chatID, "onboarding", nil)
 	}
 
 	w, ok := e.workflows[state.WorkflowID]
@@ -72,6 +85,7 @@ func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, u
 // HandleCallback processes a callback/inline button press from any platform.
 // messageID is the ID of the message containing the inline keyboard (used for editing).
 func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, userID, chatID, data, messageID string) error {
+	defer e.lockUser(platform, userID)()
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	state, err := e.storage.Load(ctx, platform, userID)
@@ -100,6 +114,7 @@ func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, 
 // HandleContact processes a contact share (phone number) from any platform.
 // verified reports whether the platform confirmed the contact is the sender's own.
 func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, userID, chatID, phone string, verified bool) error {
+	defer e.lockUser(platform, userID)()
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	state, err := e.storage.Load(ctx, platform, userID)
@@ -132,6 +147,13 @@ func (e *ChatEngine) StartWorkflow(ctx context.Context, m Messenger, platform, u
 
 // StartWorkflowWithData begins a new workflow for a user with initial state data.
 func (e *ChatEngine) StartWorkflowWithData(ctx context.Context, m Messenger, platform, userID, chatID string, workflowID WorkflowID, initialData map[string]any) error {
+	defer e.lockUser(platform, userID)()
+	return e.startWorkflowWithData(ctx, m, platform, userID, chatID, workflowID, initialData)
+}
+
+// startWorkflowWithData is StartWorkflowWithData for callers already holding the user
+// lock (message handling and workflow chaining); the lock is not reentrant.
+func (e *ChatEngine) startWorkflowWithData(ctx context.Context, m Messenger, platform, userID, chatID string, workflowID WorkflowID, initialData map[string]any) error {
 	m = newLoggingMessenger(m, e.messageListener, platform, userID)
 
 	w, ok := e.workflows[workflowID]
@@ -195,7 +217,7 @@ func (e *ChatEngine) processResult(ctx context.Context, m Messenger, state *Chat
 			if err := e.storage.Delete(ctx, state.Platform, state.UserID); err != nil {
 				return err
 			}
-			return e.StartWorkflowWithData(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), deepLinkData(state))
+			return e.startWorkflowWithData(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), deepLinkData(state))
 		}
 
 		return e.storage.Delete(ctx, state.Platform, state.UserID)
@@ -243,7 +265,7 @@ func (e *ChatEngine) processResult(ctx context.Context, m Messenger, state *Chat
 				if err := e.storage.Delete(ctx, state.Platform, state.UserID); err != nil {
 					return err
 				}
-				return e.StartWorkflowWithData(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), deepLinkData(state))
+				return e.startWorkflowWithData(ctx, m, state.Platform, state.UserID, state.ChatID, WorkflowID(nextWorkflowID), deepLinkData(state))
 			}
 
 			return e.storage.Delete(ctx, state.Platform, state.UserID)

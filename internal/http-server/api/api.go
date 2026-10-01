@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
+	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -33,7 +36,6 @@ import (
 	wa "DarkCS/internal/http-server/handlers/whatsapp"
 	"DarkCS/internal/http-server/handlers/zoho"
 	"DarkCS/internal/http-server/middleware/authenticate"
-	"DarkCS/internal/http-server/middleware/timeout"
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/ws"
 )
@@ -91,7 +93,21 @@ type Handler interface {
 	SetPublicURL(url string)
 }
 
-func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option) error {
+// Server timeouts. ReadHeaderTimeout stops slow-header (slowloris) connections; Read and
+// Write are generous because AI answers can take a minute or more and CRM uploads and
+// GridFS downloads stream large bodies. WebSocket connections set their own deadlines
+// after the upgrade.
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 2 * time.Minute
+	writeTimeout      = 5 * time.Minute
+	idleTimeout       = 2 * time.Minute
+	shutdownTimeout   = 30 * time.Second
+)
+
+// New builds the router and serves until ctx is cancelled, then shuts down gracefully:
+// it stops accepting connections and waits up to shutdownTimeout for in-flight requests.
+func New(ctx context.Context, conf *config.Config, log *slog.Logger, handler Handler, opts ...Option) error {
 
 	server := Server{
 		conf: conf,
@@ -103,7 +119,6 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 	}
 
 	router := chi.NewRouter()
-	router.Use(timeout.Timeout(5))
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
 	router.Use(corsMiddleware)
@@ -209,8 +224,12 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 
 	httpLog := slog.NewLogLogger(log.Handler(), slog.LevelError)
 	server.httpServer = &http.Server{
-		Handler:  router,
-		ErrorLog: httpLog,
+		Handler:           router,
+		ErrorLog:          httpLog,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	serverAddress := fmt.Sprintf("%s:%s", conf.Listen.BindIP, conf.Listen.Port)
@@ -221,7 +240,25 @@ func New(conf *config.Config, log *slog.Logger, handler Handler, opts ...Option)
 
 	server.log.Info("starting api server", slog.String("address", serverAddress))
 
-	return server.httpServer.Serve(listener)
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.httpServer.Serve(listener) }()
+
+	select {
+	case err = <-serveErr:
+		return err
+	case <-ctx.Done():
+	}
+
+	server.log.Info("shutting down api server")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err = server.httpServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("graceful shutdown: %w", err)
+	}
+	if err = <-serveErr; err != nil && !stderrors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 // detectPublicURL captures the server's public base URL from the first incoming

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 type Service struct {
@@ -60,7 +61,7 @@ func (r *Service) GetProductInfo(articles []string) ([]entity.ProductInfo, error
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
-	client := &http.Client{}
+	client := &http.Client{Timeout: productHTTPTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
@@ -109,7 +110,7 @@ func (r *Service) GetAvailableProducts() ([]entity.Product, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
-	client := &http.Client{}
+	client := &http.Client{Timeout: productHTTPTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
@@ -143,3 +144,6 @@ func (r *Service) GetAvailableProducts() ([]entity.Product, error) {
 
 	return response.Products, nil
 }
+
+// productHTTPTimeout bounds calls to the product (1C) service.
+const productHTTPTimeout = 30 * time.Second

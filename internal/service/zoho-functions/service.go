@@ -7,11 +7,13 @@ import (
 	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 // ZohoFunctionsService sends chat messages to Zoho Functions in batches.
@@ -29,26 +31,32 @@ func NewZohoFunctionsService(msgURL, apiKey string, log *slog.Logger) *ZohoFunct
 	s := &ZohoFunctionsService{
 		msgURL:     msgURL,
 		apiKey:     apiKey,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: 15 * time.Second},
 		log:        log.With(sl.Module("zoho-functions")),
 		msgBuffer:  newMessageBuffer(),
 	}
 
-	s.msgBuffer.Start(func(contactID string, items []entity.ZohoMessageItem) {
+	s.msgBuffer.Start(func(contactID string, items []entity.ZohoMessageItem) (err error) {
 		// Guard each flush: a panic here would otherwise kill the only flush goroutine
-		// (or the process) and stop CRM message delivery.
+		// (or the process) and stop CRM message delivery. A panicking flush is not retried.
 		safego.Run(s.log, "zoho-functions flush", func() {
-			if err := s.SendMessages(contactID, items); err != nil {
-				s.log.Error("flush messages failed",
+			if err = s.SendMessages(contactID, items); err != nil {
+				s.log.Error("flush messages failed, will retry",
 					slog.String("contact_id", contactID),
 					slog.Int("count", len(items)),
 					slog.String("error", err.Error()),
 				)
 			}
 		})
+		return err
 	})
 
 	return s
+}
+
+// Stop flushes buffered messages to Zoho; call on shutdown.
+func (s *ZohoFunctionsService) Stop(ctx context.Context) {
+	s.msgBuffer.Stop(ctx)
 }
 
 // BufferMessage adds a message to the per-contact buffer for batched sending.

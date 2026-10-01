@@ -176,7 +176,7 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := openAIHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -309,3 +309,7 @@ func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg stri
 
 	return r.Assistant, nil
 }
+
+// openAIHTTPClient bounds a Responses API call. Medium reasoning plus MCP tool calls can
+// legitimately take a couple of minutes; without a limit a hung call blocks forever.
+var openAIHTTPClient = &http.Client{Timeout: 3 * time.Minute}

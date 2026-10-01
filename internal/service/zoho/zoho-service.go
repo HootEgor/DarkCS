@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,7 +29,15 @@ type ZohoService struct {
 	apiVersion          string
 	tokenExpiresIn      time.Time
 	log                 *slog.Logger
+
+	// tokenMu guards refreshToken (the current access token, despite the name), crmUrl
+	// and tokenExpiresIn: every request reads them and a refresh rewrites them.
+	tokenMu sync.RWMutex
+	client  *http.Client
 }
+
+// zohoHTTPTimeout bounds every Zoho call so a stalled connection can't hang a bot step.
+const zohoHTTPTimeout = 30 * time.Second
 
 func NewZohoService(conf *config.Config, log *slog.Logger) *ZohoService {
 
@@ -41,17 +51,87 @@ func NewZohoService(conf *config.Config, log *slog.Logger) *ZohoService {
 		scope:               conf.Zoho.Scope,
 		apiVersion:          conf.Zoho.ApiVersion,
 		log:                 log.With(sl.Module("zoho")),
+		client:              &http.Client{Timeout: zohoHTTPTimeout},
 	}
 }
 
+// token returns the current access token.
+func (s *ZohoService) token() string {
+	s.tokenMu.RLock()
+	defer s.tokenMu.RUnlock()
+	return s.refreshToken
+}
+
+// tokenExpiring reports whether the access token is within 5 minutes of expiry.
+func (s *ZohoService) tokenExpiring() bool {
+	s.tokenMu.RLock()
+	defer s.tokenMu.RUnlock()
+	return !time.Now().Before(s.tokenExpiresIn.Add(-5 * time.Minute))
+}
+
+// apiDomain returns the CRM base URL, which a token refresh may update.
+func (s *ZohoService) apiDomain() string {
+	s.tokenMu.RLock()
+	defer s.tokenMu.RUnlock()
+	return s.crmUrl
+}
+
+// refreshTokenCall refreshes the access token unless another goroutine already did.
+// Callers check expiry without the lock, so many can arrive together after expiry;
+// the double-check under the lock turns that into one refresh instead of a burst that
+// Zoho rate-limits.
 func (s *ZohoService) refreshTokenCall() error {
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+	if time.Now().Before(s.tokenExpiresIn.Add(-5 * time.Minute)) {
+		return nil
+	}
+	return s.doRefreshLocked()
+}
+
+// forceRefresh refreshes regardless of expiry (after a 401). tokenUsed is the token that
+// was rejected: if it was already replaced meanwhile, no new refresh is made.
+func (s *ZohoService) forceRefresh(tokenUsed string) error {
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+	if s.refreshToken != tokenUsed {
+		return nil
+	}
+	return s.doRefreshLocked()
+}
+
+// do sends an authorized request. On 401 it refreshes the token once and retries, which
+// covers tokens revoked or expired before the local expiry estimate.
+func (s *ZohoService) do(req *http.Request) (*http.Response, error) {
+	tokenUsed := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+	resp, err := s.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusUnauthorized || (req.Body != nil && req.GetBody == nil) {
+		return resp, err
+	}
+	_ = resp.Body.Close()
+
+	if err = s.forceRefresh(tokenUsed); err != nil {
+		return nil, fmt.Errorf("refresh after 401: %w", err)
+	}
+	retry := req.Clone(req.Context())
+	if req.GetBody != nil {
+		if retry.Body, err = req.GetBody(); err != nil {
+			return nil, err
+		}
+	}
+	retry.Header.Set("Authorization", "Bearer "+s.token())
+	return s.client.Do(retry)
+}
+
+// doRefreshLocked exchanges the refresh token for a new access token. Caller holds tokenMu.
+func (s *ZohoService) doRefreshLocked() error {
 	form := url.Values{}
 	form.Add("client_id", s.clientID)
 	form.Add("client_secret", s.clientSecret)
 	form.Add("refresh_token", s.defaultRefreshToken)
 	form.Add("grant_type", "refresh_token")
 
-	resp, err := http.PostForm(s.refreshUrl, form)
+	resp, err := s.client.PostForm(s.refreshUrl, form)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -74,9 +154,12 @@ func (s *ZohoService) refreshTokenCall() error {
 		s.crmUrl = response.ApiDomain
 	}
 
-	if response.ExpiresIn != 0 {
-		s.tokenExpiresIn = time.Now().Add(time.Hour * time.Duration(1))
+	// Zoho access tokens live one hour; use expires_in when given.
+	lifetime := time.Hour
+	if response.ExpiresIn > 0 {
+		lifetime = time.Duration(response.ExpiresIn) * time.Second
 	}
+	s.tokenExpiresIn = time.Now().Add(lifetime)
 
 	if response != (entity.TokenResponse{}) {
 		// Never log the response itself: it contains the access token.
@@ -112,7 +195,7 @@ func (s *ZohoService) createContact(contactData entity.Contact) (string, error) 
 		return "", fmt.Errorf("marshal payload: %w", err)
 	}
 
-	fullURL, err := buildURL(s.crmUrl, s.scope, s.apiVersion, "Contacts")
+	fullURL, err := buildURL(s.apiDomain(), s.scope, s.apiVersion, "Contacts")
 	if err != nil {
 		return "", err
 	}
@@ -125,10 +208,10 @@ func (s *ZohoService) createContact(contactData entity.Contact) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return "", fmt.Errorf("send request: %w", err)
 	}
@@ -211,7 +294,7 @@ func (s *ZohoService) createOrder(orderData entity.ZohoOrder) error {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	fullURL, err := buildURL(s.crmUrl, s.scope, s.apiVersion, "Sales_Orders")
+	fullURL, err := buildURL(s.apiDomain(), s.scope, s.apiVersion, "Sales_Orders")
 	if err != nil {
 		return err
 	}
@@ -226,7 +309,7 @@ func (s *ZohoService) createOrder(orderData entity.ZohoOrder) error {
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
 	// Payload size only: the order body holds the customer's name, phone, email and address.
@@ -245,7 +328,7 @@ func (s *ZohoService) createOrder(orderData entity.ZohoOrder) error {
 	}()
 
 	// Execute request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		s.log.With(
 			sl.Err(err),
@@ -312,7 +395,7 @@ func (s *ZohoService) updateOrder(orderData entity.ZohoOrder, id string) error {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	fullURL, err := buildURL(s.crmUrl, s.scope, s.apiVersion, "Sales_Orders", id)
+	fullURL, err := buildURL(s.apiDomain(), s.scope, s.apiVersion, "Sales_Orders", id)
 	if err != nil {
 		return err
 	}
@@ -327,11 +410,11 @@ func (s *ZohoService) updateOrder(orderData entity.ZohoOrder, id string) error {
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+s.refreshToken)
+	req.Header.Set("Authorization", "Bearer "+s.token())
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.do(req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}

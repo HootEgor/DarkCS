@@ -2,11 +2,10 @@ package services
 
 import (
 	"DarkCS/entity"
-	"time"
 )
 
 func (s *ZohoService) CreateContact(user *entity.User) (string, error) {
-	if time.Now().After(s.tokenExpiresIn.Add(time.Minute * time.Duration(-5))) {
+	if s.tokenExpiring() {
 		err := s.refreshTokenCall()
 		if err != nil {
 			return "", err
