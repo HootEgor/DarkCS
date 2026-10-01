@@ -10,6 +10,10 @@
 // affected document to a backup file (MongoDB extended JSON, one per line), then for each
 // group: deletes the duplicates, updates the kept document, and re-points baskets.
 //
+// It also collapses chat_states sharing {platform, user_id} (left by the old
+// check-then-insert race) to the most recently updated one, backing up the dropped ones
+// to a "-chat_states" file next to the users backup.
+//
 // Usage:
 //
 //	go run ./cmd/dedupe-users -conf config.yml           # dry run
@@ -36,8 +40,9 @@ import (
 )
 
 const (
-	usersCollection  = "users"
-	basketCollection = "baskets"
+	usersCollection      = "users"
+	basketCollection     = "baskets"
+	chatStatesCollection = "chat_states"
 )
 
 // roleRank orders roles so a merge never downgrades someone's access.
@@ -104,6 +109,17 @@ func main() {
 		}
 	}
 
+	chatStates := db.Collection(chatStatesCollection)
+	staleStates, err := findStaleChatStates(ctx, chatStates)
+	if err != nil {
+		log.Fatalf("chat states: %v", err)
+	}
+	fmt.Printf("\nchat states to drop: %d\n", len(staleStates))
+	for _, d := range staleStates {
+		fmt.Printf("    drop chat state %s (%s/%s step=%v updated=%v)\n",
+			idOf(d), str(d, "platform"), str(d, "user_id"), d["current_step"], dateOf(d["updated_at"]))
+	}
+
 	if !*apply {
 		fmt.Println("\ndry run: nothing changed. Re-run with -apply to merge.")
 		return
@@ -113,6 +129,21 @@ func main() {
 		log.Fatalf("backup: %v", err)
 	}
 	fmt.Printf("\nbackup written to %s\n", *backupPath)
+
+	if len(staleStates) > 0 {
+		statesBackup := strings.TrimSuffix(*backupPath, ".jsonl") + "-chat_states.jsonl"
+		if err = writeBackup(statesBackup, staleStates); err != nil {
+			log.Fatalf("chat states backup: %v", err)
+		}
+		ids := make([]any, len(staleStates))
+		for i, d := range staleStates {
+			ids[i] = d["_id"]
+		}
+		if _, err = chatStates.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": ids}}); err != nil {
+			log.Fatalf("delete chat states: %v", err)
+		}
+		fmt.Printf("dropped %d chat states (backup in %s)\n", len(staleStates), statesBackup)
+	}
 
 	baskets := db.Collection(basketCollection)
 	for i, g := range groups {
@@ -145,6 +176,34 @@ func main() {
 	}
 
 	fmt.Printf("merged %d groups, normalized %d phones. Restart the service to create unique indexes.\n", len(groups), fixed)
+}
+
+// findStaleChatStates returns every chat state that shares {platform, user_id} with a
+// more recently updated one; those must go before the unique index can be built.
+func findStaleChatStates(ctx context.Context, coll *mongo.Collection) ([]bson.M, error) {
+	cur, err := coll.Aggregate(ctx, mongo.Pipeline{
+		{{"$sort", bson.D{{"updated_at", -1}, {"_id", -1}}}},
+		{{"$group", bson.D{
+			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
+			{"docs", bson.D{{"$push", "$$ROOT"}}},
+			{"n", bson.D{{"$sum", 1}}},
+		}}},
+		{{"$match", bson.D{{"n", bson.D{{"$gt", 1}}}}}},
+	}, options.Aggregate().SetAllowDiskUse(true))
+	if err != nil {
+		return nil, err
+	}
+	var groups []struct {
+		Docs []bson.M `bson:"docs"`
+	}
+	if err = cur.All(ctx, &groups); err != nil {
+		return nil, err
+	}
+	var stale []bson.M
+	for _, g := range groups {
+		stale = append(stale, g.Docs[1:]...) // Docs[0] is the newest and is kept.
+	}
+	return stale, nil
 }
 
 // identifiers returns the identity keys of a document, e.g. "phone:+380...".
@@ -330,8 +389,8 @@ func applyGroup(ctx context.Context, users, baskets *mongo.Collection, g []bson.
 	return nil
 }
 
-// writeBackup saves every user, not only grouped ones, since phone normalization
-// touches documents outside the groups too.
+// writeBackup writes docs as extended JSON, one per line. For users it gets every
+// document, not only grouped ones, since phone normalization touches the rest too.
 func writeBackup(path string, all []bson.M) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
