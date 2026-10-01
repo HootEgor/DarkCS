@@ -1,6 +1,7 @@
 package crm
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 const maxFilesPerRequest = 20
 
 // SendFile handles file uploads from a CRM manager to a user.
-// Endpoint: POST /api/v1/crm/chats/{platform}/{user_id}/send-file
+// Endpoint: POST /api/v1/crm/chats/{platform}/{user_id}/send-file[?channel=]
 // Content-Type: multipart/form-data
 // Fields: files (multiple), caption (optional text)
 func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
@@ -107,7 +108,13 @@ func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
 			})
 		}
 
-		if err := handler.SendCrmFiles(platform, userID, caption, attachments); err != nil {
+		err := handler.SendCrmFiles(platform, userID, chatChannel(r), caption, attachments)
+		if errors.Is(err, entity.ErrChannelUnavailable) {
+			render.Status(r, http.StatusConflict)
+			render.JSON(w, r, response.Error(err.Error()))
+			return
+		}
+		if err != nil {
 			log.Error("failed to send files",
 				slog.String("platform", platform),
 				slog.String("user_id", userID),

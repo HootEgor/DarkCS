@@ -247,6 +247,11 @@ func main() {
 		userBot.SetChatEngine(chatEngine)
 		userBot.SetAuthService(authService)
 		handler.SetPlatformMessenger("telegram", tgmessenger.NewMessenger(userBot.GetAPI()))
+		// Telegram Business: relay premium account chats to the CRM and let managers reply as the account.
+		userBot.SetBusinessListener(handler)
+		handler.SetBusinessMessengerFactory(func(connectionID string) chat.Messenger {
+			return tgmessenger.NewBusinessMessenger(userBot.GetAPI(), connectionID)
+		})
 		go func() {
 			defer safego.Recover(lg, "user telegram bot")
 			if err := userBot.Start(); err != nil {

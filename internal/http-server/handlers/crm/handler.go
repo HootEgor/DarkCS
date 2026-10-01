@@ -2,6 +2,7 @@ package crm
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,13 +20,23 @@ import (
 // Core defines the methods required by CRM handlers.
 type Core interface {
 	GetActiveChats(username string) ([]entity.ChatSummary, error)
-	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
-	SendCrmMessage(platform, userID, text string) error
+	GetChatMessages(platform, userID, channel string, limit, offset int) ([]entity.ChatMessage, error)
+	SendCrmMessage(platform, userID, channel, text string) error
 	DownloadFile(fileID primitive.ObjectID) (filename, mimeType string, reader io.ReadCloser, err error)
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
-	SendCrmFiles(platform, userID, caption string, attachments []entity.Attachment) error
+	SendCrmFiles(platform, userID, channel, caption string, attachments []entity.Attachment) error
 	FileSigningSecret() string
 	IssueWsTicket(username string) (string, error)
+	ListBusinessAccounts() ([]entity.BusinessConnection, error)
+	GetHistoryStatus(platform, userID, channel string) (*entity.ChatHistoryStatus, error)
+	ImportChatHistory(username, platform, userID, channel string, r io.Reader) (*entity.ChatHistoryImportResult, error)
+}
+
+// chatChannel reads the optional ?channel= query that, with platform and user_id,
+// identifies a chat. Only Telegram Business chats have one (the premium account owner id);
+// clients that never send it keep addressing the default channel.
+func chatChannel(r *http.Request) string {
+	return r.URL.Query().Get("channel")
 }
 
 // IssueWsTicket returns a one-time ticket for opening the CRM socket as
@@ -89,7 +100,7 @@ func GetMessages(log *slog.Logger, handler Core) http.HandlerFunc {
 			}
 		}
 
-		messages, err := handler.GetChatMessages(platform, userID, limit, offset)
+		messages, err := handler.GetChatMessages(platform, userID, chatChannel(r), limit, offset)
 		if err != nil {
 			log.Error("failed to get chat messages",
 				slog.String("platform", platform),
@@ -130,7 +141,12 @@ func SendMessage(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		err := handler.SendCrmMessage(platform, userID, req.Text)
+		err := handler.SendCrmMessage(platform, userID, chatChannel(r), req.Text)
+		if errors.Is(err, entity.ErrChannelUnavailable) {
+			render.Status(r, http.StatusConflict)
+			render.JSON(w, r, response.Error(err.Error()))
+			return
+		}
 		if err != nil {
 			log.Error("failed to send CRM message",
 				slog.String("platform", platform),

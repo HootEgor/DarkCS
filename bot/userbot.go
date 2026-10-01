@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -32,12 +33,15 @@ type userBotAuthService interface {
 }
 
 // UserBot is the Telegram bot for general users using the unified ChatEngine.
+// It also relays chats of connected Telegram Business accounts to the CRM
+// (see userbot_business.go); those never reach the ChatEngine.
 type UserBot struct {
 	log         *slog.Logger
 	api         *tgbotapi.Bot
 	botUsername string
 	chatEngine  *chat.ChatEngine
 	authService userBotAuthService
+	business    businessListener            // nil = Telegram Business updates are ignored
 	updater     atomic.Pointer[ext.Updater] // set by Start, used by Stop
 }
 
@@ -94,11 +98,15 @@ func (b *UserBot) Start() error {
 	dispatcher.AddHandler(handlers.NewMessage(message.Video, b.handleMedia))
 	dispatcher.AddHandler(handlers.NewMessage(message.Voice, b.handleMedia))
 	dispatcher.AddHandler(handlers.NewMessage(message.Text, b.handleMessage))
+	// The handlers above only match ordinary messages (AllowBusiness is off by default),
+	// so premium account chats never start onboarding or reach the AI.
+	b.addBusinessHandlers(dispatcher)
 
 	err := updater.StartPolling(b.api, &ext.PollingOpts{
 		DropPendingUpdates: true,
 		GetUpdatesOpts: &tgbotapi.GetUpdatesOpts{
-			Timeout: 9,
+			Timeout:        9,
+			AllowedUpdates: allowedUpdates,
 			RequestOpts: &tgbotapi.RequestOpts{
 				Timeout: time.Second * 10,
 			},
@@ -308,90 +316,25 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	userID := strconv.FormatInt(ctx.EffectiveUser.Id, 10)
 	msg := ctx.EffectiveMessage
 
-	// Determine the file ID, filename, and caption
-	var fileID, filename, caption string
-	switch {
-	case msg.Photo != nil && len(msg.Photo) > 0:
-		// Use largest photo size
-		photo := msg.Photo[len(msg.Photo)-1]
-		fileID = photo.FileId
-		filename = "photo.jpg"
-		caption = msg.Caption
-	case msg.Document != nil:
-		fileID = msg.Document.FileId
-		filename = msg.Document.FileName
-		caption = msg.Caption
-	case msg.Audio != nil:
-		fileID = msg.Audio.FileId
-		filename = msg.Audio.FileName
-		if filename == "" {
-			filename = "audio.mp3"
-		}
-		caption = msg.Caption
-	case msg.Video != nil:
-		fileID = msg.Video.FileId
-		filename = msg.Video.FileName
-		if filename == "" {
-			filename = "video.mp4"
-		}
-		caption = msg.Caption
-	case msg.Voice != nil:
-		fileID = msg.Voice.FileId
-		filename = "voice.ogg"
-		caption = msg.Caption
-	default:
+	fileID, filename := messageMedia(msg)
+	if fileID == "" {
 		return nil
 	}
+	caption := msg.Caption
 
-	// Get file path from Telegram
-	file, err := b.api.GetFile(fileID, nil)
+	body, mimeType, size, err := b.downloadFile(fileID)
 	if err != nil {
-		b.log.Error("failed to get file from Telegram",
+		b.log.Error("failed to download file from Telegram",
 			slog.String("user_id", userID),
 			slog.String("file_id", fileID),
 			sl.Err(err),
 		)
 		return err
 	}
-
-	// Download file from Telegram servers
-	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", b.api.Token, file.FilePath)
-	resp, err := telegramFileClient.Get(fileURL)
-	if err != nil {
-		b.log.Error("failed to download file from Telegram",
-			slog.String("user_id", userID),
-			sl.Err(sl.RedactURLError(err)),
-		)
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Detect MIME type from file extension
-	mimeType := "application/octet-stream"
-	fileExt := strings.ToLower(path.Ext(file.FilePath))
-	switch fileExt {
-	case ".jpg", ".jpeg":
-		mimeType = "image/jpeg"
-	case ".png":
-		mimeType = "image/png"
-	case ".gif":
-		mimeType = "image/gif"
-	case ".webp":
-		mimeType = "image/webp"
-	case ".mp4":
-		mimeType = "video/mp4"
-	case ".mp3":
-		mimeType = "audio/mpeg"
-	case ".ogg", ".oga":
-		mimeType = "audio/ogg"
-	case ".pdf":
-		mimeType = "application/pdf"
-	case ".webm":
-		mimeType = "video/webm"
-	}
+	defer body.Close()
 
 	// Upload to GridFS and save message
-	if err := listener.UploadAndSaveFile("telegram", userID, resp.Body, filename, mimeType, file.FileSize, caption); err != nil {
+	if err := listener.UploadAndSaveFile("telegram", userID, body, filename, mimeType, size, caption); err != nil {
 		b.log.Error("failed to upload and save file",
 			slog.String("user_id", userID),
 			sl.Err(err),
@@ -418,6 +361,81 @@ func (b *UserBot) handleMedia(bot *tgbotapi.Bot, ctx *ext.Context) error {
 	}
 
 	return nil
+}
+
+// messageMedia returns the file id and a filename of the message's media, or "" when
+// the message carries no downloadable media.
+func messageMedia(msg *tgbotapi.Message) (fileID, filename string) {
+	withDefault := func(name, def string) string {
+		if name == "" {
+			return def
+		}
+		return name
+	}
+	switch {
+	case len(msg.Photo) > 0:
+		// Use largest photo size
+		return msg.Photo[len(msg.Photo)-1].FileId, "photo.jpg"
+	case msg.Document != nil:
+		return msg.Document.FileId, msg.Document.FileName
+	case msg.Audio != nil:
+		return msg.Audio.FileId, withDefault(msg.Audio.FileName, "audio.mp3")
+	case msg.Video != nil:
+		return msg.Video.FileId, withDefault(msg.Video.FileName, "video.mp4")
+	case msg.Voice != nil:
+		return msg.Voice.FileId, "voice.ogg"
+	case msg.VideoNote != nil:
+		return msg.VideoNote.FileId, "video_note.mp4"
+	case msg.Animation != nil:
+		return msg.Animation.FileId, withDefault(msg.Animation.FileName, "animation.mp4")
+	}
+	return "", ""
+}
+
+// downloadFile streams a Telegram file; the caller must close the body.
+func (b *UserBot) downloadFile(fileID string) (body io.ReadCloser, mimeType string, size int64, err error) {
+	file, err := b.api.GetFile(fileID, nil)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("get file: %w", err)
+	}
+
+	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", b.api.Token, file.FilePath)
+	resp, err := telegramFileClient.Get(fileURL)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("download file: %w", sl.RedactURLError(err))
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, "", 0, fmt.Errorf("download file: status %d", resp.StatusCode)
+	}
+	return resp.Body, mimeFromPath(file.FilePath), file.FileSize, nil
+}
+
+// mimeFromPath detects the MIME type from the Telegram file path extension.
+func mimeFromPath(filePath string) string {
+	mimeType := "application/octet-stream"
+	fileExt := strings.ToLower(path.Ext(filePath))
+	switch fileExt {
+	case ".jpg", ".jpeg":
+		mimeType = "image/jpeg"
+	case ".png":
+		mimeType = "image/png"
+	case ".gif":
+		mimeType = "image/gif"
+	case ".webp":
+		mimeType = "image/webp"
+	case ".mp4":
+		mimeType = "video/mp4"
+	case ".mp3":
+		mimeType = "audio/mpeg"
+	case ".ogg", ".oga":
+		mimeType = "audio/ogg"
+	case ".pdf":
+		mimeType = "application/pdf"
+	case ".webm":
+		mimeType = "video/webm"
+	}
+	return mimeType
 }
 
 // telegramFileClient downloads user media from Telegram with a bound on the transfer.

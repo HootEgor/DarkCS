@@ -4,18 +4,19 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sync"
+	"time"
 
 	"DarkCS/entity"
 )
 
 // ClientMessageHandler handles incoming WebSocket messages from CRM clients.
 type ClientMessageHandler interface {
-	HandleMarkRead(username, platform, userID string) error
+	HandleMarkRead(username, platform, userID, channel string) error
 }
 
 // Event represents a WebSocket event sent to CRM clients.
 type Event struct {
-	Type string      `json:"type"` // "new_message", "typing"
+	Type string      `json:"type"` // "new_message", "message_edited", "messages_deleted", "typing", "read_receipt", "history_imported"
 	Data interface{} `json:"data"`
 }
 
@@ -102,13 +103,55 @@ func (h *Hub) BroadcastTyping(platform, userID string) {
 }
 
 // BroadcastReadReceipt sends a read_receipt event to all connected CRM clients.
-func (h *Hub) BroadcastReadReceipt(username, platform, userID string) {
+// channel is omitted for chats without one (everything except Telegram Business).
+func (h *Hub) BroadcastReadReceipt(username, platform, userID, channel string) {
+	data := map[string]string{
+		"username": username,
+		"platform": platform,
+		"user_id":  userID,
+	}
+	if channel != "" {
+		data["channel"] = channel
+	}
 	h.broadcast <- &Event{
 		Type: "read_receipt",
-		Data: map[string]string{
-			"username": username,
+		Data: data,
+	}
+}
+
+// BroadcastMessageEdited sends the updated message after an edit made in Telegram.
+func (h *Hub) BroadcastMessageEdited(msg entity.ChatMessage) {
+	h.broadcast <- &Event{
+		Type: "message_edited",
+		Data: msg,
+	}
+}
+
+// BroadcastMessagesDeleted reports messages deleted in Telegram (they stay stored, marked
+// deleted). ids are the CRM message ids, tgMessageIDs the matching Telegram ids.
+func (h *Hub) BroadcastMessagesDeleted(platform, userID, channel string, ids []string, tgMessageIDs []int64, deletedAt time.Time) {
+	h.broadcast <- &Event{
+		Type: "messages_deleted",
+		Data: map[string]any{
+			"platform":       platform,
+			"user_id":        userID,
+			"channel":        channel,
+			"ids":            ids,
+			"tg_message_ids": tgMessageIDs,
+			"deleted_at":     deletedAt,
+		},
+	}
+}
+
+// BroadcastHistoryImported tells CRM clients to reload a chat whose older history was imported.
+func (h *Hub) BroadcastHistoryImported(platform, userID, channel string, count int) {
+	h.broadcast <- &Event{
+		Type: "history_imported",
+		Data: map[string]any{
 			"platform": platform,
 			"user_id":  userID,
+			"channel":  channel,
+			"count":    count,
 		},
 	}
 }
@@ -138,6 +181,7 @@ func (h *Hub) HandleClientMessage(username string, raw []byte) {
 		var data struct {
 			Platform string `json:"platform"`
 			UserID   string `json:"user_id"`
+			Channel  string `json:"channel"` // optional; Telegram Business chats only
 		}
 		if err := json.Unmarshal(event.Data, &data); err != nil {
 			if h.log != nil {
@@ -148,7 +192,7 @@ func (h *Hub) HandleClientMessage(username string, raw []byte) {
 		if data.Platform == "" || data.UserID == "" {
 			return
 		}
-		if err := h.handler.HandleMarkRead(username, data.Platform, data.UserID); err != nil {
+		if err := h.handler.HandleMarkRead(username, data.Platform, data.UserID, data.Channel); err != nil {
 			if h.log != nil {
 				h.log.Error("failed to handle mark_read",
 					slog.String("username", username),

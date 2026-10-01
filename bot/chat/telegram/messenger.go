@@ -26,11 +26,20 @@ type TelegramAPI interface {
 // Messenger implements chat.Messenger for Telegram using native keyboards.
 type Messenger struct {
 	api TelegramAPI
+	// businessConnectionID, when set, sends every message on behalf of a connected
+	// Telegram Business account instead of from the bot itself.
+	businessConnectionID string
 }
 
 // NewMessenger creates a new Telegram Messenger.
 func NewMessenger(api TelegramAPI) *Messenger {
 	return &Messenger{api: api}
+}
+
+// NewBusinessMessenger creates a Messenger that writes as the Telegram Business account
+// of the given connection (used by the CRM to reply in premium account chats).
+func NewBusinessMessenger(api TelegramAPI, businessConnectionID string) *Messenger {
+	return &Messenger{api: api, businessConnectionID: businessConnectionID}
 }
 
 // SendVideo uploads a video to Telegram and optionally protects it from forwarding.
@@ -50,8 +59,9 @@ func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicUR
 	}
 
 	msg, err := m.api.SendVideo(id, inputFile, &tgbotapi.SendVideoOpts{
-		ProtectContent: protected,
-		RequestOpts:    uploadRequestOpts,
+		BusinessConnectionId: m.businessConnectionID,
+		ProtectContent:       protected,
+		RequestOpts:          uploadRequestOpts,
 	})
 	if err != nil {
 		return "", err
@@ -69,9 +79,10 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 	}
 	doc := tgbotapi.InputFileByReader(file.Filename, file.Reader)
 	_, err = m.api.SendDocument(id, doc, &tgbotapi.SendDocumentOpts{
-		Caption:        file.Caption,
-		ProtectContent: file.Protected,
-		RequestOpts:    uploadRequestOpts,
+		BusinessConnectionId: m.businessConnectionID,
+		Caption:              file.Caption,
+		ProtectContent:       file.Protected,
+		RequestOpts:          uploadRequestOpts,
 	})
 	return err
 }
@@ -81,20 +92,44 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 // names) can contain "<" or "&" that Telegram rejects as invalid HTML, so on a parse
 // error the chunk is resent as plain text instead of being lost.
 func (m *Messenger) SendText(chatID, text string) error {
+	_, err := m.SendTextReturningID(chatID, text)
+	return err
+}
+
+// SendTextReturningID is SendText that also returns the Telegram id of the first sent
+// message, so Telegram Business replies can be matched to later edits and deletions.
+func (m *Messenger) SendTextReturningID(chatID, text string) (int64, error) {
 	id, err := strconv.ParseInt(chatID, 10, 64)
 	if err != nil {
-		return err
+		return 0, err
 	}
+	var firstID int64
 	for _, chunk := range chat.SplitText(text, chat.TelegramTextLimit) {
-		_, err = m.api.SendMessage(id, chunk, &tgbotapi.SendMessageOpts{ParseMode: "HTML"})
+		var sent *tgbotapi.Message
+		sent, err = m.api.SendMessage(id, chunk, m.messageOpts(&tgbotapi.SendMessageOpts{ParseMode: "HTML"}))
 		if isParseError(err) {
-			_, err = m.api.SendMessage(id, chunk, nil)
+			sent, err = m.api.SendMessage(id, chunk, m.messageOpts(nil))
 		}
 		if err != nil {
-			return err
+			return firstID, err
+		}
+		if firstID == 0 && sent != nil {
+			firstID = sent.MessageId
 		}
 	}
-	return nil
+	return firstID, nil
+}
+
+// messageOpts adds the business connection to SendMessage options (nil allowed).
+func (m *Messenger) messageOpts(opts *tgbotapi.SendMessageOpts) *tgbotapi.SendMessageOpts {
+	if m.businessConnectionID == "" {
+		return opts
+	}
+	if opts == nil {
+		opts = &tgbotapi.SendMessageOpts{}
+	}
+	opts.BusinessConnectionId = m.businessConnectionID
+	return opts
 }
 
 // uploadRequestOpts lifts gotgbot's default 5 s request timeout for media uploads: it
@@ -122,12 +157,12 @@ func (m *Messenger) SendMenu(chatID, text string, rows [][]chat.MenuButton) erro
 		}
 	}
 
-	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
+	_, err = m.api.SendMessage(id, text, m.messageOpts(&tgbotapi.SendMessageOpts{
 		ReplyMarkup: tgbotapi.ReplyKeyboardMarkup{
 			Keyboard:       keyboard,
 			ResizeKeyboard: true,
 		},
-	})
+	}))
 	return err
 }
 
@@ -145,11 +180,11 @@ func (m *Messenger) SendInlineOptions(chatID, text string, buttons []chat.Inline
 		}
 	}
 
-	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
+	_, err = m.api.SendMessage(id, text, m.messageOpts(&tgbotapi.SendMessageOpts{
 		ReplyMarkup: tgbotapi.InlineKeyboardMarkup{
 			InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{inlineButtons},
 		},
-	})
+	}))
 	return err
 }
 
@@ -170,11 +205,11 @@ func (m *Messenger) SendInlineGrid(chatID, text string, rows [][]chat.InlineButt
 		}
 	}
 
-	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
+	_, err = m.api.SendMessage(id, text, m.messageOpts(&tgbotapi.SendMessageOpts{
 		ReplyMarkup: tgbotapi.InlineKeyboardMarkup{
 			InlineKeyboard: keyboard,
 		},
-	})
+	}))
 	return err
 }
 
@@ -200,8 +235,9 @@ func (m *Messenger) EditInlineGrid(chatID, messageID, text string, rows [][]chat
 	}
 
 	_, _, err = m.api.EditMessageText(text, &tgbotapi.EditMessageTextOpts{
-		ChatId:    chatInt,
-		MessageId: msgInt,
+		BusinessConnectionId: m.businessConnectionID,
+		ChatId:               chatInt,
+		MessageId:            msgInt,
 		ReplyMarkup: tgbotapi.InlineKeyboardMarkup{
 			InlineKeyboard: keyboard,
 		},
@@ -215,7 +251,7 @@ func (m *Messenger) SendContactRequest(chatID, text, buttonText string) error {
 		return err
 	}
 
-	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
+	_, err = m.api.SendMessage(id, text, m.messageOpts(&tgbotapi.SendMessageOpts{
 		ReplyMarkup: tgbotapi.ReplyKeyboardMarkup{
 			Keyboard: [][]tgbotapi.KeyboardButton{
 				{{Text: buttonText, RequestContact: true}},
@@ -223,7 +259,7 @@ func (m *Messenger) SendContactRequest(chatID, text, buttonText string) error {
 			ResizeKeyboard:  true,
 			OneTimeKeyboard: true,
 		},
-	})
+	}))
 	return err
 }
 
@@ -232,7 +268,7 @@ func (m *Messenger) SendTyping(chatID string) error {
 	if err != nil {
 		return err
 	}
-	_, err = m.api.SendChatAction(id, "typing", nil)
+	_, err = m.api.SendChatAction(id, "typing", m.chatActionOpts())
 	return err
 }
 
@@ -241,6 +277,14 @@ func (m *Messenger) SendUploadAction(chatID string) error {
 	if err != nil {
 		return err
 	}
-	_, err = m.api.SendChatAction(id, "upload_video", nil)
+	_, err = m.api.SendChatAction(id, "upload_video", m.chatActionOpts())
 	return err
+}
+
+// chatActionOpts returns nil for the bot itself, keeping the existing call shape.
+func (m *Messenger) chatActionOpts() *tgbotapi.SendChatActionOpts {
+	if m.businessConnectionID == "" {
+		return nil
+	}
+	return &tgbotapi.SendChatActionOpts{BusinessConnectionId: m.businessConnectionID}
 }

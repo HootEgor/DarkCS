@@ -79,10 +79,30 @@ var indexSpecs = []indexSpec{
 	{chatMessagesCollection, []mongo.IndexModel{
 		plain(bson.D{{"platform", 1}, {"user_id", 1}, {"created_at", -1}}),
 		plain(bson.D{{"created_at", -1}}),
+		// Telegram message ids dedupe history imported from Telegram Desktop exports.
+		uniqueWhere(bson.D{{"platform", 1}, {"channel", 1}, {"user_id", 1}, {"tg_message_id", 1}},
+			bson.M{"tg_message_id": bson.M{"$gt": 0}}),
 	}},
 	{readReceiptsCollection, []mongo.IndexModel{
-		unique(bson.D{{"username", 1}, {"platform", 1}, {"user_id", 1}}),
+		unique(bson.D{{"username", 1}, {"platform", 1}, {"user_id", 1}, {"channel", 1}}),
 	}},
+	{businessConnectionsCollection, []mongo.IndexModel{
+		unique(bson.D{{"owner_user_id", 1}}),
+		plain(bson.D{{"connection_id", 1}}),
+	}},
+	{businessContactsCollection, []mongo.IndexModel{
+		unique(bson.D{{"user_id", 1}}),
+	}},
+	{historyImportsCollection, []mongo.IndexModel{
+		unique(bson.D{{"platform", 1}, {"user_id", 1}, {"channel", 1}}),
+	}},
+}
+
+// droppedIndexes are indexes from earlier versions that conflict with the current set.
+// The read receipt index without channel would reject a second receipt for the same
+// client on another Telegram Business account.
+var droppedIndexes = []struct{ collection, name string }{
+	{readReceiptsCollection, "username_1_platform_1_user_id_1"},
 }
 
 // EnsureIndexes creates every index in indexSpecs. It continues past failures so one bad
@@ -93,6 +113,14 @@ func (m *MongoDB) EnsureIndexes() error {
 	defer cancel()
 
 	var errs []error
+	for _, d := range droppedIndexes {
+		_, err := m.collection(d.collection).Indexes().DropOne(ctx, d.name)
+		var cmdErr mongo.CommandError
+		// 27 = IndexNotFound, 26 = NamespaceNotFound: already dropped or no collection yet.
+		if err != nil && !(errors.As(err, &cmdErr) && (cmdErr.Code == 27 || cmdErr.Code == 26)) {
+			errs = append(errs, fmt.Errorf("drop %s %s: %w", d.collection, d.name, err))
+		}
+	}
 	for _, spec := range indexSpecs {
 		for _, model := range spec.models {
 			name, err := m.collection(spec.collection).Indexes().CreateOne(ctx, model)

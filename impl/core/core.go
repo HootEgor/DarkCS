@@ -24,7 +24,7 @@ type Repository interface {
 	GenerateApiKey(username, scope string) (string, error)
 
 	SaveChatMessage(msg entity.ChatMessage) error
-	GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error)
+	GetChatMessages(platform, userID, channel string, limit, offset int) ([]entity.ChatMessage, error)
 	GetActiveChats() ([]entity.ChatSummary, error)
 	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
 	CleanupChatMessages() error
@@ -34,8 +34,23 @@ type Repository interface {
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
 	DownloadFile(fileID primitive.ObjectID) (string, entity.FileMetadata, io.ReadCloser, error)
 
-	UpsertReadReceipt(username, platform, userID string, readAt time.Time) error
+	UpsertReadReceipt(username, platform, userID, channel string, readAt time.Time) error
 	GetReadReceipts(username string) ([]entity.ChatReadReceipt, error)
+
+	UpsertBusinessConnection(conn entity.BusinessConnection) error
+	GetBusinessConnectionByID(connectionID string) (*entity.BusinessConnection, error)
+	GetBusinessConnectionByOwner(ownerUserID int64) (*entity.BusinessConnection, error)
+	ListBusinessConnections() ([]entity.BusinessConnection, error)
+	UpsertBusinessContact(contact entity.BusinessContact) error
+	GetBusinessContact(userID string) (*entity.BusinessContact, error)
+
+	EditChatMessageText(platform, userID, channel string, tgMessageID int64, text string, editedAt time.Time) (*entity.ChatMessage, error)
+	MarkChatMessagesDeleted(platform, userID, channel string, tgMessageIDs []int64, deletedAt time.Time) ([]entity.ChatMessage, error)
+
+	GetEarliestLiveMessageTime(platform, userID, channel string) (*time.Time, error)
+	InsertImportedMessages(msgs []entity.ChatMessage) (int, error)
+	SaveHistoryImport(rec entity.ChatHistoryImport) error
+	GetHistoryImport(platform, userID, channel string) (*entity.ChatHistoryImport, error)
 
 	SaveChatState(ctx context.Context, state *chat.ChatState) error
 
@@ -149,6 +164,9 @@ type Core struct {
 	log           *slog.Logger
 	wsHub         *ws.Hub
 	messengers    map[string]chat.Messenger
+	// businessMessenger builds a messenger that writes as a Telegram Business account
+	// (by connection id); nil when the user bot is disabled.
+	businessMessenger func(connectionID string) chat.Messenger
 }
 
 // defaultAIConcurrency is used until SetAILimits is called.
@@ -231,6 +249,11 @@ func (c *Core) FileSigningSecret() string {
 
 func (c *Core) SetPlatformMessenger(platform string, m chat.Messenger) {
 	c.messengers[platform] = m
+}
+
+// SetBusinessMessengerFactory enables CRM replies in Telegram Business chats.
+func (c *Core) SetBusinessMessengerFactory(f func(connectionID string) chat.Messenger) {
+	c.businessMessenger = f
 }
 
 func (c *Core) Init() {

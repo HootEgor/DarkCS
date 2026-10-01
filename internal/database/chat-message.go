@@ -12,7 +12,23 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// SaveChatMessage inserts a chat message and trims to 100 per user.
+// channelFilter matches one chat channel. The default channel is stored as a missing
+// field (omitempty), which also covers every document written before channels existed.
+func channelFilter(channel string) bson.E {
+	if channel == "" {
+		return bson.E{Key: "channel", Value: bson.D{{"$exists", false}}}
+	}
+	return bson.E{Key: "channel", Value: channel}
+}
+
+// keepsFullHistory reports whether a platform is exempt from message trimming:
+// Telegram Business chats are low-volume B2B conversations and may hold imported history.
+func keepsFullHistory(platform string) bool {
+	return platform == entity.PlatformTelegramBusiness
+}
+
+// SaveChatMessage inserts a chat message and trims the chat to 100 messages
+// (except for platforms that keep their full history).
 func (m *MongoDB) SaveChatMessage(msg entity.ChatMessage) error {
 	connection, err := m.connect()
 	if err != nil {
@@ -27,8 +43,12 @@ func (m *MongoDB) SaveChatMessage(msg entity.ChatMessage) error {
 		return fmt.Errorf("mongodb insert chat message: %w", err)
 	}
 
-	// Trim to 100 messages per user
-	filter := bson.D{{"platform", msg.Platform}, {"user_id", msg.UserID}}
+	if keepsFullHistory(msg.Platform) {
+		return nil
+	}
+
+	// Trim to 100 messages per chat
+	filter := bson.D{{"platform", msg.Platform}, {"user_id", msg.UserID}, channelFilter(msg.Channel)}
 	count, err := collection.CountDocuments(m.ctx, filter)
 	if err != nil {
 		return fmt.Errorf("mongodb count chat messages: %w", err)
@@ -47,6 +67,7 @@ func (m *MongoDB) SaveChatMessage(msg entity.ChatMessage) error {
 		deleteFilter := bson.D{
 			{"platform", msg.Platform},
 			{"user_id", msg.UserID},
+			channelFilter(msg.Channel),
 			{"created_at", bson.D{{"$lt", cutoff.CreatedAt}}},
 		}
 		_, err = collection.DeleteMany(m.ctx, deleteFilter)
@@ -58,8 +79,8 @@ func (m *MongoDB) SaveChatMessage(msg entity.ChatMessage) error {
 	return nil
 }
 
-// GetChatMessages returns messages for a user, paginated (newest first).
-func (m *MongoDB) GetChatMessages(platform, userID string, limit, offset int) ([]entity.ChatMessage, error) {
+// GetChatMessages returns messages of one chat, paginated (newest first).
+func (m *MongoDB) GetChatMessages(platform, userID, channel string, limit, offset int) ([]entity.ChatMessage, error) {
 	connection, err := m.connect()
 	if err != nil {
 		return nil, err
@@ -68,7 +89,7 @@ func (m *MongoDB) GetChatMessages(platform, userID string, limit, offset int) ([
 
 	collection := connection.Database(m.database).Collection(chatMessagesCollection)
 
-	filter := bson.D{{"platform", platform}, {"user_id", userID}}
+	filter := bson.D{{"platform", platform}, {"user_id", userID}, channelFilter(channel)}
 	opts := options.Find().
 		SetSort(bson.D{{"created_at", -1}}).
 		SetLimit(int64(limit)).
@@ -101,9 +122,9 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 	pipeline := mongo.Pipeline{
 		// Sort by created_at descending so $first gives the latest message
 		{{Key: "$sort", Value: bson.D{{"created_at", -1}}}},
-		// Group by (platform, user_id) to get last message per user
+		// Group by (platform, user_id, channel) to get last message per chat
 		{{Key: "$group", Value: bson.D{
-			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
+			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}, {"channel", "$channel"}}},
 			{"last_message", bson.D{{"$first", "$text"}}},
 			{"last_time", bson.D{{"$first", "$created_at"}}},
 		}}},
@@ -114,6 +135,7 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 			{"_id", 0},
 			{"platform", "$_id.platform"},
 			{"user_id", "$_id.user_id"},
+			{"channel", "$_id.channel"},
 			{"last_message", 1},
 			{"last_time", 1},
 		}}},
@@ -135,7 +157,7 @@ func (m *MongoDB) GetActiveChats() ([]entity.ChatSummary, error) {
 }
 
 // CountUnreadPerChat counts incoming messages after readAt for each chat (keys are
-// "platform:user_id"; chats without a receipt count every incoming message).
+// entity.ChatKey values; chats without a receipt count every incoming message).
 //
 // Counting happens in MongoDB with two aggregations that only return counts: totals for
 // every chat, then counts after readAt for the chats that have a receipt. The previous
@@ -147,6 +169,7 @@ func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]
 		ID struct {
 			Platform string `bson:"platform"`
 			UserID   string `bson:"user_id"`
+			Channel  string `bson:"channel"`
 		} `bson:"_id"`
 		Count int `bson:"count"`
 	}
@@ -154,7 +177,7 @@ func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]
 		pipeline := mongo.Pipeline{
 			{{Key: "$match", Value: match}},
 			{{Key: "$group", Value: bson.D{
-				{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
+				{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}, {"channel", "$channel"}}},
 				{"count", bson.D{{"$sum", 1}}},
 			}}},
 		}
@@ -176,7 +199,7 @@ func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]
 
 	result := make(map[string]int, len(totals))
 	for _, c := range totals {
-		key := c.ID.Platform + ":" + c.ID.UserID
+		key := entity.ChatKey(c.ID.Platform, c.ID.UserID, c.ID.Channel)
 		if _, hasReceipt := receipts[key]; !hasReceipt {
 			result[key] = c.Count
 		}
@@ -188,14 +211,19 @@ func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]
 	// Chats with a receipt: unread starts at 0 and only messages after readAt count.
 	var or bson.A
 	for key, readAt := range receipts {
-		platform, userID, ok := strings.Cut(key, ":")
-		if !ok {
+		parts := strings.SplitN(key, ":", 3)
+		if len(parts) < 2 {
 			continue
+		}
+		channel := ""
+		if len(parts) == 3 {
+			channel = parts[2]
 		}
 		result[key] = 0
 		or = append(or, bson.D{
-			{"platform", platform},
-			{"user_id", userID},
+			{"platform", parts[0]},
+			{"user_id", parts[1]},
+			channelFilter(channel),
 			{"created_at", bson.D{{"$gt", readAt}}},
 		})
 	}
@@ -207,14 +235,14 @@ func (m *MongoDB) CountUnreadPerChat(receipts map[string]time.Time) (map[string]
 		return nil, fmt.Errorf("mongodb aggregate unread after read: %w", err)
 	}
 	for _, c := range afterRead {
-		result[c.ID.Platform+":"+c.ID.UserID] = c.Count
+		result[entity.ChatKey(c.ID.Platform, c.ID.UserID, c.ID.Channel)] = c.Count
 	}
 
 	return result, nil
 }
 
 // UpsertReadReceipt upserts a read receipt for a CRM user/chat combination.
-func (m *MongoDB) UpsertReadReceipt(username, platform, userID string, readAt time.Time) error {
+func (m *MongoDB) UpsertReadReceipt(username, platform, userID, channel string, readAt time.Time) error {
 	connection, err := m.connect()
 	if err != nil {
 		return err
@@ -227,6 +255,7 @@ func (m *MongoDB) UpsertReadReceipt(username, platform, userID string, readAt ti
 		{"username", username},
 		{"platform", platform},
 		{"user_id", userID},
+		channelFilter(channel),
 	}
 	update := bson.D{{"$set", bson.D{{"read_at", readAt}}}}
 	opts := options.Update().SetUpsert(true)
@@ -264,7 +293,8 @@ func (m *MongoDB) GetReadReceipts(username string) ([]entity.ChatReadReceipt, er
 	return receipts, nil
 }
 
-// CleanupChatMessages deletes messages older than 30 days, keeping at least 20 per user.
+// CleanupChatMessages deletes messages older than 30 days, keeping at least 20 per chat.
+// Platforms that keep their full history (Telegram Business) are skipped.
 func (m *MongoDB) CleanupChatMessages() error {
 	connection, err := m.connect()
 	if err != nil {
@@ -278,8 +308,11 @@ func (m *MongoDB) CleanupChatMessages() error {
 
 	// Get all users with their message counts
 	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{
+			{"platform", bson.D{{"$ne", entity.PlatformTelegramBusiness}}},
+		}}},
 		{{Key: "$group", Value: bson.D{
-			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}}},
+			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}, {"channel", "$channel"}}},
 			{"count", bson.D{{"$sum", 1}}},
 		}}},
 		{{Key: "$match", Value: bson.D{
@@ -297,6 +330,7 @@ func (m *MongoDB) CleanupChatMessages() error {
 		ID struct {
 			Platform string `bson:"platform"`
 			UserID   string `bson:"user_id"`
+			Channel  string `bson:"channel"`
 		} `bson:"_id"`
 		Count int `bson:"count"`
 	}
@@ -317,6 +351,7 @@ func (m *MongoDB) CleanupChatMessages() error {
 		findFilter := bson.D{
 			{"platform", group.ID.Platform},
 			{"user_id", group.ID.UserID},
+			channelFilter(group.ID.Channel),
 			{"created_at", bson.D{{"$lt", cutoffDate}}},
 		}
 		findOpts := options.Find().
