@@ -27,7 +27,6 @@ type Repository interface {
 	GetChatMessages(platform, userID, channel string, limit, offset int) ([]entity.ChatMessage, error)
 	GetActiveChats() ([]entity.ChatSummary, error)
 	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
-	CleanupChatMessages() error
 	EnsureIndexes() error
 	Ping(ctx context.Context) error
 
@@ -272,31 +271,6 @@ func (c *Core) Init() {
 			time.Sleep(time.Until(nextRun))
 
 			safego.Run(c.log, "product list update", func() { _ = c.AttachNewFile() })
-		}
-	}()
-
-	// Chat message cleanup scheduler — runs daily at 03:00
-	go func() {
-		for {
-			now := time.Now()
-			nextRun := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
-			if now.After(nextRun) {
-				nextRun = nextRun.Add(24 * time.Hour)
-			}
-			c.log.With(
-				slog.Time("nextRun", nextRun),
-			).Info("next chat message cleanup")
-
-			time.Sleep(time.Until(nextRun))
-
-			safego.Run(c.log, "chat message cleanup", func() {
-				if c.repo == nil {
-					return
-				}
-				if err := c.repo.CleanupChatMessages(); err != nil {
-					c.log.Error("chat message cleanup failed", slog.String("error", err.Error()))
-				}
-			})
 		}
 	}()
 

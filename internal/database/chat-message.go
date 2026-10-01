@@ -2,7 +2,6 @@ package repository
 
 import (
 	"DarkCS/entity"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -291,103 +290,4 @@ func (m *MongoDB) GetReadReceipts(username string) ([]entity.ChatReadReceipt, er
 	}
 
 	return receipts, nil
-}
-
-// CleanupChatMessages deletes messages older than 30 days, keeping at least 20 per chat.
-// Platforms that keep their full history (Telegram Business) are skipped.
-func (m *MongoDB) CleanupChatMessages() error {
-	connection, err := m.connect()
-	if err != nil {
-		return err
-	}
-	defer m.disconnect(connection)
-
-	collection := connection.Database(m.database).Collection(chatMessagesCollection)
-
-	cutoffDate := time.Now().AddDate(0, 0, -30)
-
-	// Get all users with their message counts
-	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.D{
-			{"platform", bson.D{{"$ne", entity.PlatformTelegramBusiness}}},
-		}}},
-		{{Key: "$group", Value: bson.D{
-			{"_id", bson.D{{"platform", "$platform"}, {"user_id", "$user_id"}, {"channel", "$channel"}}},
-			{"count", bson.D{{"$sum", 1}}},
-		}}},
-		{{Key: "$match", Value: bson.D{
-			{"count", bson.D{{"$gt", 20}}},
-		}}},
-	}
-
-	cursor, err := collection.Aggregate(m.ctx, pipeline)
-	if err != nil {
-		return fmt.Errorf("mongodb aggregate for cleanup: %w", err)
-	}
-	defer cursor.Close(m.ctx)
-
-	type userGroup struct {
-		ID struct {
-			Platform string `bson:"platform"`
-			UserID   string `bson:"user_id"`
-			Channel  string `bson:"channel"`
-		} `bson:"_id"`
-		Count int `bson:"count"`
-	}
-
-	// Keep going past per-chat failures so one bad chat doesn't block cleanup of the
-	// rest, but report everything that failed.
-	var errs []error
-	for cursor.Next(m.ctx) {
-		var group userGroup
-		if err := cursor.Decode(&group); err != nil {
-			errs = append(errs, fmt.Errorf("decode cleanup group: %w", err))
-			continue
-		}
-
-		maxDeletable := group.Count - 20
-
-		// Find old messages to delete
-		findFilter := bson.D{
-			{"platform", group.ID.Platform},
-			{"user_id", group.ID.UserID},
-			channelFilter(group.ID.Channel),
-			{"created_at", bson.D{{"$lt", cutoffDate}}},
-		}
-		findOpts := options.Find().
-			SetSort(bson.D{{"created_at", 1}}).
-			SetLimit(int64(maxDeletable)).
-			SetProjection(bson.D{{"_id", 1}})
-
-		oldCursor, err := collection.Find(m.ctx, findFilter, findOpts)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("find old messages %s:%s: %w", group.ID.Platform, group.ID.UserID, err))
-			continue
-		}
-
-		var docs []struct {
-			ID interface{} `bson:"_id"`
-		}
-		if err = oldCursor.All(m.ctx, &docs); err != nil {
-			errs = append(errs, fmt.Errorf("read old messages %s:%s: %w", group.ID.Platform, group.ID.UserID, err))
-			continue
-		}
-		if len(docs) == 0 {
-			continue
-		}
-
-		ids := make([]interface{}, 0, len(docs))
-		for _, d := range docs {
-			ids = append(ids, d.ID)
-		}
-		deleteFilter := bson.D{{"_id", bson.D{{"$in", ids}}}}
-		if _, err = collection.DeleteMany(m.ctx, deleteFilter); err != nil {
-			errs = append(errs, fmt.Errorf("delete old messages %s:%s: %w", group.ID.Platform, group.ID.UserID, err))
-		}
-	}
-	if err = cursor.Err(); err != nil {
-		errs = append(errs, fmt.Errorf("cleanup cursor: %w", err))
-	}
-
-	return errors.Join(errs...)
 }

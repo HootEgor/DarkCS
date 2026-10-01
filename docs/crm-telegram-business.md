@@ -173,7 +173,7 @@ POST /api/v1/crm/chats/{platform}/{user_id}/import-history?channel=...    multip
 
 Imported messages are ordinary chat messages with `imported: true`. After an import they page in through the normal `/messages` endpoint. Media in imports is replaced by placeholders such as `[Фото]`, `[Файл: invoice.pdf]` or `[Голосове повідомлення]`.
 
-Business chats are **never trimmed**. Other chats keep the old limits of 100 messages and the 30-day cleanup.
+Business chats are **never trimmed**. Other chats keep the newest 100 messages per chat; there is no age-based cleanup.
 
 ### 2.6 Edits and deletions (Telegram Business only)
 
