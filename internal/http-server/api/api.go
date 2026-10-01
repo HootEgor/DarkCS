@@ -22,6 +22,7 @@ import (
 	"DarkCS/internal/http-server/handlers/assistant"
 	"DarkCS/internal/http-server/handlers/crm"
 	"DarkCS/internal/http-server/handlers/errors"
+	"DarkCS/internal/http-server/handlers/health"
 	"DarkCS/internal/http-server/handlers/instagram"
 	"DarkCS/internal/http-server/handlers/key"
 	"DarkCS/internal/http-server/handlers/mcp"
@@ -90,6 +91,7 @@ type Handler interface {
 	mcp.Core
 	school.Core
 	crm.Core
+	health.Core
 	SetPublicURL(url string)
 }
 
@@ -129,6 +131,8 @@ func New(ctx context.Context, conf *config.Config, log *slog.Logger, handler Han
 		log.Warn("listen.public_url not set; detecting it from the first request's Host header")
 		router.Use(detectPublicURL(handler, log))
 	}
+
+	router.Get("/healthz", health.Handler(handler, time.Now()))
 
 	router.NotFound(errors.NotFound(log))
 	router.MethodNotAllowed(errors.NotAllowed(log))
@@ -268,6 +272,12 @@ func detectPublicURL(handler Handler, log *slog.Logger) func(http.Handler) http.
 	var once sync.Once
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// The deploy health check hits /healthz on localhost right after a restart;
+			// it must not become the detected public URL.
+			if r.URL.Path == "/healthz" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			once.Do(func() {
 				scheme := "https"
 				if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {

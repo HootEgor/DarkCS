@@ -92,6 +92,11 @@ func NewMongoClient(conf *config.Config, logger *slog.Logger) (*MongoDB, error) 
 	}, nil
 }
 
+// Ping checks that the primary is reachable (used by /healthz).
+func (m *MongoDB) Ping(ctx context.Context) error {
+	return m.client.Ping(ctx, readpref.Primary())
+}
+
 // Close releases the connection pool; call once on shutdown.
 func (m *MongoDB) Close(ctx context.Context) error {
 	return m.client.Disconnect(ctx)

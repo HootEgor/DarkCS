@@ -1,10 +1,13 @@
-#name: Deploy to Digital Ocean Droplet
+name: Deploy to Digital Ocean Droplet
 
 on:
   push:
     branches:
       - master
 
+# Third-party actions receive the SSH key, so they are pinned to full commit SHAs (the
+# master commits this workflow used before pinning); a moved tag or branch can't swap
+# the code that runs.
 jobs:
   build:
     name: Build and Deploy
@@ -14,36 +17,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Checks run before anything touches the server, so a broken commit never deploys.
+      # composites=false: bson.D literals ({"key", value}) are idiomatic but unkeyed.
+      - name: Vet
+        run: go vet -composites=false ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build Go application
+        run: go build -v -o darkcs
+
+      # envsubst replaces only the listed variables, and values never pass through a sed
+      # expression, so secrets may contain any character (|, &, /, quotes).
       - name: Prepare configuration file
         run: |
-          sed -i 's|${TELEGRAM_API_KEY}|'"$TELEGRAM_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${USERBOT_API_KEY}|'"$USERBOT_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${LISTEN_PORT}|'"$LISTEN_PORT"'|g' darkcs-conf.yml
-          sed -i 's|${API_KEY}|'"$API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${OPENAI_API_KEY}|'"$OPENAI_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${MONGO_HOST}|'"$MONGO_HOST"'|g' darkcs-conf.yml
-          sed -i 's|${MONGO_PORT}|'"$MONGO_PORT"'|g' darkcs-conf.yml
-          sed -i 's|${MONGO_USER}|'"$MONGO_USER"'|g' darkcs-conf.yml
-          sed -i 's|${MONGO_PASSWORD}|'"$MONGO_PASSWORD"'|g' darkcs-conf.yml
-          sed -i 's|${MONGO_DATABASE}|'"$MONGO_DATABASE"'|g' darkcs-conf.yml
-          sed -i 's|${REPO_LOGIN}|'"$REPO_LOGIN"'|g' darkcs-conf.yml
-          sed -i 's|${REPO_PASSWORD}|'"$REPO_PASSWORD"'|g' darkcs-conf.yml
-          sed -i 's|${REPO_BASE_URL}|'"$REPO_BASE_URL"'|g' darkcs-conf.yml
-          sed -i 's|${SMART_API_KEY}|'"$SMART_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${ZOHO_CLIENT_ID}|'"$ZOHO_CLIENT_ID"'|g' darkcs-conf.yml
-          sed -i 's|${ZOHO_CLIENT_SECRET}|'"$ZOHO_CLIENT_SECRET"'|g' darkcs-conf.yml
-          sed -i 's|${ZOHO_REFRESH_TOKEN}|'"$ZOHO_REFRESH_TOKEN"'|g' darkcs-conf.yml
-          sed -i 's|${ZOHO_REFRESH_URL}|'"$ZOHO_REFRESH_URL"'|g' darkcs-conf.yml
-          sed -i 's|${ZOHO_API_KEY}|'"$ZOHO_API_KEY"'|g' darkcs-conf.yml
-          sed -i 's|${ZOHO_CRM_URL}|'"$ZOHO_CRM_URL"'|g' darkcs-conf.yml
-          sed -i 's|${INSTAGRAM_ACCESS_TOKEN}|'"$INSTAGRAM_ACCESS_TOKEN"'|g' darkcs-conf.yml
-          sed -i 's|${INSTAGRAM_VERIFY_TOKEN}|'"$INSTAGRAM_VERIFY_TOKEN"'|g' darkcs-conf.yml
-          sed -i 's|${INSTAGRAM_APP_SECRET}|'"$INSTAGRAM_APP_SECRET"'|g' darkcs-conf.yml
-          sed -i 's|${GOOGLE_DRIVE_FOLDER_ID}|'"$GOOGLE_DRIVE_FOLDER_ID"'|g' darkcs-conf.yml
-#          sed -i 's|${WHATSAPP_ACCESS_TOKEN}|'"$WHATSAPP_ACCESS_TOKEN"'|g' darkcs-conf.yml
-#          sed -i 's|${WHATSAPP_VERIFY_TOKEN}|'"$WHATSAPP_VERIFY_TOKEN"'|g' darkcs-conf.yml
-#          sed -i 's|${WHATSAPP_APP_SECRET}|'"$WHATSAPP_APP_SECRET"'|g' darkcs-conf.yml
-#          sed -i 's|${WHATSAPP_PHONE_NUMBER_ID}|'"$WHATSAPP_PHONE_NUMBER_ID"'|g' darkcs-conf.yml
+          VARS='$TELEGRAM_API_KEY $USERBOT_API_KEY $LISTEN_PORT $API_KEY $OPENAI_API_KEY
+                $MONGO_HOST $MONGO_PORT $MONGO_USER $MONGO_PASSWORD $MONGO_DATABASE
+                $REPO_LOGIN $REPO_PASSWORD $REPO_BASE_URL $SMART_API_KEY
+                $ZOHO_CLIENT_ID $ZOHO_CLIENT_SECRET $ZOHO_REFRESH_TOKEN $ZOHO_REFRESH_URL
+                $ZOHO_API_KEY $ZOHO_CRM_URL
+                $INSTAGRAM_ACCESS_TOKEN $INSTAGRAM_VERIFY_TOKEN $INSTAGRAM_APP_SECRET
+                $GOOGLE_DRIVE_FOLDER_ID'
+          envsubst "$VARS" < darkcs-conf.yml > darkcs-conf.rendered.yml
+          mv darkcs-conf.rendered.yml darkcs-conf.yml
+          printf '%s' "$GOOGLE_DRIVE_CREDENTIALS" > gdrive-credentials.json
         env:
           TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
           USERBOT_API_KEY: ${{ secrets.USERBOT_API_KEY }}
@@ -69,16 +72,14 @@ jobs:
           INSTAGRAM_VERIFY_TOKEN: ${{ secrets.INSTAGRAM_VERIFY_TOKEN }}
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ vars.GOOGLE_DRIVE_FOLDER_ID }}
+          GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
 #          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
 #          WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
 #          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
 #          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
 
-      - name: Write Google Drive credentials file
-        run: echo '${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}' > gdrive-credentials.json
-
       - name: Copy Configuration to Server
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@7e85c2e09aa21988492acd66466b5d68bda49e2b # master as of 2026-10-01
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
@@ -86,17 +87,8 @@ jobs:
           source: "darkcs-conf.yml,gdrive-credentials.json"
           target: "/etc/conf/"
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-
-      - name: Build Go application
-        run: |
-          go build -v -o darkcs
-
       - name: Deploy to server
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@7e85c2e09aa21988492acd66466b5d68bda49e2b # master as of 2026-10-01
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
@@ -105,12 +97,20 @@ jobs:
           source: "darkcs"
           target: "/usr/local/bin/"
 
+      # Fails the job when the service doesn't come back healthy (crash loop, bad config,
+      # Mongo unreachable) instead of reporting a green deploy.
       - name: Restart Application
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@c4f70287fc37c43b14b30b407224bbbc8e8c6327 # master as of 2026-10-01
+        env:
+          LISTEN_PORT: ${{ vars.LISTEN_PORT }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          envs: LISTEN_PORT
           script: |
+            set -e
             systemctl restart darkcs.service
+            curl -fsS --retry 15 --retry-delay 2 --retry-connrefused "http://127.0.0.1:${LISTEN_PORT}/healthz"
+            systemctl is-active --quiet darkcs.service

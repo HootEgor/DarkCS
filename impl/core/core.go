@@ -29,6 +29,7 @@ type Repository interface {
 	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
 	CleanupChatMessages() error
 	EnsureIndexes() error
+	Ping(ctx context.Context) error
 
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
 	DownloadFile(fileID primitive.ObjectID) (string, entity.FileMetadata, io.ReadCloser, error)
@@ -284,6 +285,15 @@ func (c *Core) Init() {
 	if err := c.repo.EnsureIndexes(); err != nil {
 		c.log.Error("failed to ensure indexes (duplicates? run cmd/dedupe-users)", sl.Err(err))
 	}
+}
+
+// Health reports whether the database is reachable. With mongo disabled there is
+// nothing to check.
+func (c *Core) Health(ctx context.Context) error {
+	if c.repo == nil {
+		return nil
+	}
+	return c.repo.Ping(ctx)
 }
 
 func (c *Core) SendMail(message *entity.MailMessage) (interface{}, error) {
