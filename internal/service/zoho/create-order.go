@@ -3,6 +3,7 @@ package services
 import (
 	"DarkCS/entity"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -124,7 +125,7 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 			Quantity:  d.Quantity,
 			Discount:  d.DiscountSum,
 			DiscountP: roundToTwoDecimalPlaces(float64(d.Discount)),
-			ListPrice: roundToTwoDecimalPlaces(d.Price + d.DiscountSum/float64(d.Quantity)),
+			ListPrice: roundToTwoDecimalPlaces(d.Price + perUnit(d.DiscountSum, d.Quantity)),
 			Total:     roundToTwoDecimalPlaces(d.TotalPrice),
 		}
 		orderedItems = append(orderedItems, item)
@@ -133,6 +134,17 @@ func convertToOrderedItems(details []entity.OrderProduct) []entity.OrderedItem {
 	return orderedItems
 }
 
+// roundToTwoDecimalPlaces rounds to kopecks. Truncating (the old behaviour) turned
+// 1234.5599999 (float error for 1234.56) into 1234.55, so Zoho totals drifted.
 func roundToTwoDecimalPlaces(value float64) float64 {
-	return float64(int(value*100)) / 100.0
+	return math.Round(value*100) / 100
+}
+
+// perUnit spreads a line amount over its quantity; a zero quantity would produce
+// Inf/NaN, which json.Marshal rejects, failing the whole order.
+func perUnit(amount float64, quantity int) float64 {
+	if quantity <= 0 {
+		return 0
+	}
+	return amount / float64(quantity)
 }

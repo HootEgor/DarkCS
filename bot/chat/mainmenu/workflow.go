@@ -3,6 +3,7 @@ package mainmenu
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
@@ -77,7 +78,27 @@ type QrStatRepository interface {
 // MainMenuWorkflow implements the main menu for chat platforms.
 type MainMenuWorkflow struct {
 	steps       map[chat.StepID]chat.Step
-	activeSteps map[chat.StepID]bool
+	activeSteps *stepFlags
+}
+
+// stepFlags holds which menu steps are enabled. It is read by every user's handler
+// goroutine and may be changed at runtime by SetStepActive, so access is locked: an
+// unsynchronized map write during reads is a fatal runtime error.
+type stepFlags struct {
+	mu sync.RWMutex
+	m  map[chat.StepID]bool
+}
+
+func (f *stepFlags) active(id chat.StepID) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.m[id]
+}
+
+func (f *stepFlags) set(id chat.StepID, active bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.m[id] = active
 }
 
 // NewMainMenuWorkflow constructs the main menu workflow.
@@ -86,7 +107,7 @@ type MainMenuWorkflow struct {
 func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiService AIService, schoolRepo SchoolRepository, qrStatRepo QrStatRepository, driveService gdrive.DriveService, log *slog.Logger) *MainMenuWorkflow {
 	w := &MainMenuWorkflow{
 		steps: make(map[chat.StepID]chat.Step),
-		activeSteps: map[chat.StepID]bool{
+		activeSteps: &stepFlags{m: map[chat.StepID]bool{
 			StepMyOffice:     true,
 			StepServiceRate:  true,
 			StepCurrentOrder: true,
@@ -94,7 +115,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 			StepMakeOrder:    false,
 			StepSelectVideo:  true,
 			StepSchoolStat:   true,
-		},
+		}},
 	}
 
 	w.steps[StepSelectSchool] = &SelectSchoolStep{schoolRepo: schoolRepo, authService: authService, zohoService: zohoService, qrStatRepo: qrStatRepo}
@@ -115,7 +136,7 @@ func NewMainMenuWorkflow(authService AuthService, zohoService ZohoService, aiSer
 // SetStepActive enables or disables a step in the main menu globally for all users.
 // Inactive steps are hidden from the menu and cannot be navigated to.
 func (w *MainMenuWorkflow) SetStepActive(stepID chat.StepID, active bool) {
-	w.activeSteps[stepID] = active
+	w.activeSteps.set(stepID, active)
 }
 
 func (w *MainMenuWorkflow) ID() chat.WorkflowID      { return WorkflowID }

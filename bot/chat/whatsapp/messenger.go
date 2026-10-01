@@ -29,7 +29,7 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 		if file.Caption != "" {
 			text = file.Caption + "\n" + text
 		}
-		return m.sender.SendMessage(chatID, text)
+		return m.send(chatID, text)
 	}
 	mediaType := "document"
 	if len(file.MIMEType) > 6 && file.MIMEType[:6] == "image/" {
@@ -49,26 +49,26 @@ func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicUR
 	if publicURL != "" {
 		return "", m.sender.SendMediaMessage(chatID, "video", publicURL, "", filename)
 	}
-	return "", m.sender.SendMessage(chatID, "[Відео: "+filename+"]")
+	return "", m.send(chatID, "[Відео: "+filename+"]")
 }
 
 func (m *Messenger) SendText(chatID, text string) error {
-	return m.sender.SendMessage(chatID, text)
+	return m.send(chatID, text)
 }
 
 func (m *Messenger) SendMenu(chatID, text string, rows [][]chat.MenuButton) error {
 	formatted := chat.FormatNumberedMenu(text, rows)
-	return m.sender.SendMessage(chatID, formatted)
+	return m.send(chatID, formatted)
 }
 
 func (m *Messenger) SendInlineOptions(chatID, text string, buttons []chat.InlineButton) error {
 	formatted := chat.FormatNumberedInline(text, buttons)
-	return m.sender.SendMessage(chatID, formatted)
+	return m.send(chatID, formatted)
 }
 
 func (m *Messenger) SendInlineGrid(chatID, text string, rows [][]chat.InlineButton) error {
 	formatted := chat.FormatNumberedInlineGrid(text, rows)
-	return m.sender.SendMessage(chatID, formatted)
+	return m.send(chatID, formatted)
 }
 
 func (m *Messenger) EditInlineGrid(chatID, messageID, text string, rows [][]chat.InlineButton) error {
@@ -76,7 +76,7 @@ func (m *Messenger) EditInlineGrid(chatID, messageID, text string, rows [][]chat
 }
 
 func (m *Messenger) SendContactRequest(chatID, text, buttonText string) error {
-	return m.sender.SendMessage(chatID, text)
+	return m.send(chatID, text)
 }
 
 func (m *Messenger) SendTyping(chatID string) error {
@@ -84,5 +84,16 @@ func (m *Messenger) SendTyping(chatID string) error {
 }
 
 func (m *Messenger) SendUploadAction(chatID string) error {
+	return nil
+}
+
+// send delivers text, split into WhatsAppTextLimit-sized chunks: longer messages are rejected by
+// the WhatsApp API, so the user would get nothing.
+func (m *Messenger) send(chatID, text string) error {
+	for _, chunk := range chat.SplitText(text, chat.WhatsAppTextLimit) {
+		if err := m.sender.SendMessage(chatID, chunk); err != nil {
+			return err
+		}
+	}
 	return nil
 }

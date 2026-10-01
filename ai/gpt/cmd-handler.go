@@ -7,6 +7,9 @@ import (
 	"DarkCS/entity"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
 )
 
 // emptyBasketMsg is returned to the model instead of an error so it can tell the user.
@@ -55,7 +58,7 @@ func (o *Overseer) HandleCommand(user *entity.User, name string, args json.RawMe
 	case "create_order":
 		return o.handleCreateOrder(user)
 	default:
-		return "", nil
+		return nil, fmt.Errorf("unknown tool %q", name)
 	}
 }
 
@@ -237,7 +240,10 @@ func (o *Overseer) handleGetUserInfo(user *entity.User) (interface{}, error) {
 //   - interface{}: Result of the clear operation
 //   - error: Any error encountered during processing
 func (o *Overseer) handleClearBasket(user *entity.User) (interface{}, error) {
-	return o.authService.ClearBasket(user.UUID), nil
+	if err := o.authService.ClearBasket(user.UUID); err != nil {
+		return nil, err
+	}
+	return "basket cleared", nil
 }
 
 // handleGetBasket retrieves the current contents of the user's shopping basket.
@@ -307,6 +313,19 @@ func (o *Overseer) handleAddToBasket(user *entity.User, args json.RawMessage) (i
 	err := json.Unmarshal(args, &resp)
 	if err != nil {
 		return nil, err
+	}
+
+	// Quantities come from the model (and indirectly from the customer's text); zero,
+	// negative or absurd values would become invalid Zoho orders.
+	var invalid []string
+	for _, product := range resp.Products {
+		if product.Quantity < 1 || product.Quantity > maxItemQuantity {
+			invalid = append(invalid, fmt.Sprintf("%s (%d)", product.Code, product.Quantity))
+		}
+	}
+	if len(invalid) > 0 {
+		return fmt.Sprintf("Nothing was added: quantity must be between 1 and %d, got %s.",
+			maxItemQuantity, strings.Join(invalid, ", ")), nil
 	}
 
 	// Extract product codes from the request
@@ -396,12 +415,47 @@ func (o *Overseer) canUserOrder(user *entity.User) (bool, error) {
 //   - interface{}: Validated basket contents or error message
 //   - error: Any error encountered during processing
 func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
+	basket, err := o.validateBasket(user)
+	if err != nil {
+		return nil, err
+	}
+	if basket == nil {
+		return emptyBasketMsg, nil
+	}
+
+	// Check if the user can place a new order
+	canOrder, err := o.canUserOrder(user)
+	if err != nil {
+		return nil, err
+	}
+
+	// If user has an active order, return a message explaining the situation
+	msg := struct {
+		Message  string      `json:"message"`
+		Products interface{} `json:"products"`
+	}{}
+
+	if !canOrder {
+		msg.Message = fmt.Sprintf("Products are validated but, user have an active orders %d, please wait until it is processed before creating a new one.", orderInProcessLimit)
+		msg.Products = entity.ProdForAssistant(basket.Products)
+		return msg, nil
+	}
+
+	msg.Message = "Products are validated and you can proceed to create an order."
+	msg.Products = entity.ProdForAssistant(basket.Products)
+
+	return msg, nil
+}
+
+// validateBasket refreshes the basket's prices and availability from the product
+// service and saves the result. Returns (nil, nil) for an empty basket.
+func (o *Overseer) validateBasket(user *entity.User) (*entity.Basket, error) {
 	basket, err := o.authService.GetBasket(user.UUID)
 	if err != nil {
 		return nil, err
 	}
 	if basket == nil || len(basket.Products) == 0 {
-		return emptyBasketMsg, nil
+		return nil, nil
 	}
 
 	// Extract product codes from the basket
@@ -446,33 +500,7 @@ func (o *Overseer) handleValidateOrder(user *entity.User) (interface{}, error) {
 	}
 
 	// Update the basket with validated products
-	basket, err = o.authService.UpdateBasket(user.UUID, validProducts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if the user can place a new order
-	canOrder, err := o.canUserOrder(user)
-	if err != nil {
-		return nil, err
-	}
-
-	// If user has an active order, return a message explaining the situation
-	msg := struct {
-		Message  string      `json:"message"`
-		Products interface{} `json:"products"`
-	}{}
-
-	if !canOrder {
-		msg.Message = fmt.Sprintf("Products are validated but, user have an active orders %d, please wait until it is processed before creating a new one.", orderInProcessLimit)
-		msg.Products = entity.ProdForAssistant(basket.Products)
-		return msg, nil
-	}
-
-	msg.Message = "Products are validated and you can proceed to create an order."
-	msg.Products = entity.ProdForAssistant(basket.Products)
-
-	return msg, nil
+	return o.authService.UpdateBasket(user.UUID, validProducts)
 }
 
 // handleCreateOrder creates a new order from the user's basket.
@@ -495,14 +523,20 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 		return "User have an active order, please wait until it is processed before creating a new one.", nil
 	}
 
-	// Get the user's basket
-	basket, err := o.authService.GetBasket(user.UUID)
+	// Re-validate instead of trusting the stored basket: prices or availability may have
+	// changed since validate_order, or it may never have been called.
+	basket, err := o.validateBasket(user)
 	if err != nil {
 		return nil, err
 	}
-	// GetBasket returns (nil, nil) for users who never added anything.
 	if basket == nil || len(basket.Products) == 0 {
 		return emptyBasketMsg, nil
+	}
+
+	// The model sometimes repeats a tool call; don't submit the same order twice.
+	key := basketKey(basket.Products)
+	if o.orderedRecently(user.UUID, key) {
+		return "This order was already created a few minutes ago; it was not submitted again.", nil
 	}
 
 	// Create a new order from the basket contents
@@ -516,7 +550,49 @@ func (o *Overseer) handleCreateOrder(user *entity.User) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	o.rememberOrder(user.UUID, key)
 
 	// Return success message and clear the basket
 	return "order created successfully", o.authService.ClearBasket(user.UUID)
+}
+
+const (
+	// maxItemQuantity bounds one basket line; larger orders go through a manager.
+	maxItemQuantity = 100
+	// duplicateOrderWindow is how long an identical order from the same user is refused.
+	duplicateOrderWindow = 10 * time.Minute
+)
+
+type recentOrder struct {
+	key string
+	at  time.Time
+}
+
+// basketKey identifies an order by its products and quantities, ignoring order of lines.
+func basketKey(products []entity.OrderProduct) string {
+	lines := make([]string, 0, len(products))
+	for _, p := range products {
+		lines = append(lines, fmt.Sprintf("%s:%d", p.Code, p.Quantity))
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, ",")
+}
+
+func (o *Overseer) orderedRecently(userUUID, key string) bool {
+	o.ordersMu.Lock()
+	defer o.ordersMu.Unlock()
+	r, ok := o.recentOrders[userUUID]
+	return ok && r.key == key && time.Since(r.at) < duplicateOrderWindow
+}
+
+func (o *Overseer) rememberOrder(userUUID, key string) {
+	o.ordersMu.Lock()
+	defer o.ordersMu.Unlock()
+	now := time.Now()
+	for u, r := range o.recentOrders {
+		if now.Sub(r.at) >= duplicateOrderWindow {
+			delete(o.recentOrders, u)
+		}
+	}
+	o.recentOrders[userUUID] = recentOrder{key: key, at: now}
 }

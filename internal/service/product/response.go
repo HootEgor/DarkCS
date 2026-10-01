@@ -4,6 +4,7 @@ import (
 	"DarkCS/entity"
 	"DarkCS/internal/lib/sl"
 	"encoding/json"
+	"fmt"
 )
 
 type InfoResponse struct {
@@ -48,11 +49,17 @@ func ParseResponse(body []byte) (*Response, error) {
 	return &response, nil
 }
 
+// ParseOrderValidateResponse returns the validated products. A response flagged
+// unsuccessful is an error only when it carries no products, so partial results the
+// service returns today keep working.
 func ParseOrderValidateResponse(body []byte) ([]entity.OrderProduct, error) {
 	var response OrderValidateResponse
 	err := json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, err
+	}
+	if !response.Success && len(response.Products) == 0 {
+		return nil, fmt.Errorf("order validation failed: %s", response.Message)
 	}
 	return response.Products, nil
 }
@@ -64,7 +71,10 @@ func (r *Service) ParseGetUserResponse(body []byte) (int, error) {
 		r.Log.With(
 			sl.Err(err),
 		).Error("parse get user response")
-		return 0, nil
+		return 0, err
+	}
+	if !response.Success {
+		return 0, fmt.Errorf("get user discount: %s", response.Message)
 	}
 	return response.User.Discount, nil
 }

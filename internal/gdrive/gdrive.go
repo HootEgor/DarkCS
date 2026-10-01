@@ -50,7 +50,10 @@ type DriveService interface {
 }
 
 type driveService struct {
-	svc      *drive.Service
+	svc *drive.Service
+	// dlSvc is used for file downloads: its client has no total request timeout, which
+	// would abort a large video mid-stream (http.Client.Timeout includes reading the body).
+	dlSvc    *drive.Service
 	folderID string
 	ttl      time.Duration
 	log      *slog.Logger
@@ -58,6 +61,10 @@ type driveService struct {
 	mu          sync.RWMutex
 	cache       []VideoItem
 	lastUpdated time.Time
+
+	// refreshMu lets only one goroutine call the Drive API when the cache expires;
+	// the others wait and then read the refreshed cache.
+	refreshMu sync.Mutex
 }
 
 // httpTimeout caps every outbound HTTP request to googleapis.com, including
@@ -173,48 +180,46 @@ func NewDriveService(credentialsFile, tokenFile, folderID string, ttl time.Durat
 		return nil, fmt.Errorf("gdrive: create service: %w", err)
 	}
 
-	return &driveService{svc: svc, folderID: folderID, ttl: ttl, log: log}, nil
+	// Download client: same transport (dial/TLS/response-header timeouts still guard a
+	// stalled connection) but no overall Timeout, so long video streams can finish.
+	dlClient := oauth2.NewClient(authCtx, tokenSource)
+	dlSvc, err := drive.NewService(context.Background(), option.WithHTTPClient(dlClient))
+	if err != nil {
+		return nil, fmt.Errorf("gdrive: create download service: %w", err)
+	}
+
+	return &driveService{svc: svc, dlSvc: dlSvc, folderID: folderID, ttl: ttl, log: log}, nil
+}
+
+// cached returns the cache and whether it is still fresh.
+func (d *driveService) cached() ([]VideoItem, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.cache, d.cache != nil && time.Since(d.lastUpdated) < d.ttl
 }
 
 // ListVideos returns the cached video list, refreshing it from Drive if the
-// cache has expired.
+// cache has expired. If the refresh fails, the stale list is served so a Drive
+// hiccup doesn't hide the training videos.
 func (d *driveService) ListVideos() ([]VideoItem, error) {
-	d.mu.RLock()
-	if d.cache != nil && time.Since(d.lastUpdated) < d.ttl {
-		videos := d.cache
-		d.mu.RUnlock()
+	if videos, fresh := d.cached(); fresh {
 		return videos, nil
 	}
-	d.mu.RUnlock()
 
-	d.log.Debug("gdrive: starting Drive API call")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	// List all non-trashed files in the folder. We intentionally omit a
-	// mimeType filter because manually-uploaded .MP4 files are often stored
-	// as application/octet-stream rather than video/mp4 in Drive.
-	q := fmt.Sprintf("'%s' in parents and trashed = false", d.folderID)
-	d.log.Debug("gdrive: calling Files.List", slog.String("folder_id", d.folderID))
-	result, err := d.svc.Files.List().
-		Q(q).
-		Fields("files(id,name,webContentLink)").
-		OrderBy("name").
-		Context(ctx).
-		Do()
-	d.log.Debug("gdrive: Files.List returned", slog.Bool("error", err != nil))
-	if err != nil {
-		return nil, fmt.Errorf("gdrive: list videos: %w", err)
+	d.refreshMu.Lock()
+	defer d.refreshMu.Unlock()
+	// Another goroutine may have refreshed while we waited.
+	if videos, fresh := d.cached(); fresh {
+		return videos, nil
 	}
 
-	videos := make([]VideoItem, 0, len(result.Files))
-	for _, f := range result.Files {
-		videos = append(videos, VideoItem{
-			ID:             f.Id,
-			Name:           f.Name,
-			WebContentLink: f.WebContentLink,
-		})
+	videos, err := d.listFromDrive()
+	if err != nil {
+		if stale, _ := d.cached(); stale != nil {
+			d.log.Warn("gdrive: refresh failed, serving cached video list", slog.String("error", err.Error()))
+			return stale, nil
+		}
+		return nil, err
 	}
 
 	d.mu.Lock()
@@ -225,11 +230,56 @@ func (d *driveService) ListVideos() ([]VideoItem, error) {
 	return videos, nil
 }
 
+// listFromDrive reads every page of the folder listing.
+func (d *driveService) listFromDrive() ([]VideoItem, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// No video mimeType filter: manually uploaded .MP4 files are often stored as
+	// application/octet-stream. Only Google-native items (folders, Docs, ...) are
+	// excluded, since they can't be downloaded as files.
+	q := fmt.Sprintf("'%s' in parents and trashed = false and not mimeType contains 'application/vnd.google-apps.'", d.folderID)
+	d.log.Debug("gdrive: calling Files.List", slog.String("folder_id", d.folderID))
+
+	var videos []VideoItem
+	pageToken := ""
+	for {
+		call := d.svc.Files.List().
+			Q(q).
+			Fields("nextPageToken, files(id,name,webContentLink)").
+			OrderBy("name").
+			PageSize(100).
+			Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		result, err := call.Do()
+		if err != nil {
+			return nil, fmt.Errorf("gdrive: list videos: %w", err)
+		}
+		for _, f := range result.Files {
+			videos = append(videos, VideoItem{
+				ID:             f.Id,
+				Name:           f.Name,
+				WebContentLink: f.WebContentLink,
+			})
+		}
+		if result.NextPageToken == "" {
+			break
+		}
+		pageToken = result.NextPageToken
+	}
+	if videos == nil {
+		videos = []VideoItem{}
+	}
+	return videos, nil
+}
+
 // DownloadVideo opens a streaming HTTP download for the specified Drive file.
 // AcknowledgeAbuse is set to allow downloading files flagged by Drive's
 // abuse detection (required for some video formats).
 func (d *driveService) DownloadVideo(id string) (io.ReadCloser, error) {
-	resp, err := d.svc.Files.Get(id).AcknowledgeAbuse(true).Download()
+	resp, err := d.dlSvc.Files.Get(id).AcknowledgeAbuse(true).Download()
 	if err != nil {
 		return nil, fmt.Errorf("gdrive: download %s: %w", id, err)
 	}

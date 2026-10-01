@@ -10,6 +10,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -58,22 +60,39 @@ func tokenFromWeb(cfg *oauth2.Config) (*oauth2.Token, error) {
 	// Use localhost redirect so the installed-app flow works without a public server.
 	cfg.RedirectURL = "http://localhost:8085/callback"
 
+	// A random state ties the callback to this run, so nothing else that can reach the
+	// port can inject its own authorization code.
+	stateBytes := make([]byte, 16)
+	if _, err := rand.Read(stateBytes); err != nil {
+		return nil, fmt.Errorf("generate state: %w", err)
+	}
+	state := hex.EncodeToString(stateBytes)
+
 	codeCh := make(chan string, 1)
-	srv := &http.Server{Addr: ":8085"}
+	// Loopback only: the redirect comes from the local browser.
+	srv := &http.Server{Addr: "127.0.0.1:8085"}
 	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != state {
+			http.Error(w, "invalid state", http.StatusBadRequest)
+			return
+		}
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			http.Error(w, "missing code", http.StatusBadRequest)
 			return
 		}
 		fmt.Fprintln(w, "Authorization complete — you can close this tab.")
-		codeCh <- code
+		// Non-blocking: a repeated callback must not hang this handler.
+		select {
+		case codeCh <- code:
+		default:
+		}
 	})
 	go func() { _ = srv.ListenAndServe() }()
 	defer srv.Shutdown(context.Background()) //nolint:errcheck
 
 	// AccessTypeOffline ensures we get a refresh_token.
-	authURL := cfg.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	authURL := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	fmt.Printf("\nOpen this URL in your browser:\n\n  %s\n\nWaiting for redirect on http://localhost:8085/callback …\n", authURL)
 
 	code := <-codeCh

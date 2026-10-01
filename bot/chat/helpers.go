@@ -129,3 +129,49 @@ func MatchNumberToInline(text string, buttons []InlineButton) string {
 	}
 	return buttons[num-1].Data
 }
+
+// Per-platform message length limits in characters (runes). Longer messages are
+// rejected by the platform APIs, so the user would get nothing.
+const (
+	TelegramTextLimit  = 4096
+	InstagramTextLimit = 1000
+	WhatsAppTextLimit  = 4096
+)
+
+// SplitText splits text into chunks of at most limit runes, preferring to break at a
+// newline, then at a space, and only mid-word when a single line is longer than limit.
+func SplitText(text string, limit int) []string {
+	runes := []rune(text)
+	if limit <= 0 || len(runes) <= limit {
+		return []string{text}
+	}
+
+	var chunks []string
+	for len(runes) > limit {
+		cut := lastIndexRune(runes[:limit], '\n')
+		if cut <= 0 {
+			cut = lastIndexRune(runes[:limit], ' ')
+		}
+		if cut <= 0 {
+			cut = limit
+		}
+		chunk := strings.TrimRight(string(runes[:cut]), " \n")
+		if chunk != "" {
+			chunks = append(chunks, chunk)
+		}
+		runes = []rune(strings.TrimLeft(string(runes[cut:]), " \n"))
+	}
+	if len(runes) > 0 {
+		chunks = append(chunks, string(runes))
+	}
+	return chunks
+}
+
+func lastIndexRune(runes []rune, r rune) int {
+	for i := len(runes) - 1; i >= 0; i-- {
+		if runes[i] == r {
+			return i
+		}
+	}
+	return -1
+}

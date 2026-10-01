@@ -12,6 +12,9 @@ import (
 	"net/http"
 )
 
+// maxRequestBytes bounds a /response request body.
+const maxRequestBytes = 40 << 20
+
 func ComposeResponse(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mod := sl.Module("http.handlers.response")
@@ -27,6 +30,9 @@ func ComposeResponse(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
+		// Base64 of a 25 MB voice message (the Whisper limit) plus the JSON around it.
+		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBytes)
+
 		var req entity.HttpUserMsg
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			logger.Error("failed to decode request body", sl.Err(err))
@@ -40,7 +46,8 @@ func ComposeResponse(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		logger = logger.With(slog.Any("message", req.Message))
+		// Length only: message text is customer content and errors are forwarded to Telegram.
+		logger = logger.With(slog.Int("message_len", len(req.Message)))
 
 		resp, err := handler.ComposeResponse(req)
 		if err != nil {

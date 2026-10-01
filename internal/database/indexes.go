@@ -69,8 +69,8 @@ var indexSpecs = []indexSpec{
 		plain(bson.D{{"smart_sender_id", 1}}),
 		plain(bson.D{{"platform", 1}, {"user_id", 1}}),
 	}},
+	// School names are stored in _id (already unique), so only the QR code lookup needs one.
 	{schoolsCollection, []mongo.IndexModel{
-		unique(bson.D{{"name", 1}}),
 		plain(bson.D{{"code", 1}, {"active", 1}}),
 	}},
 	{assistantCollection, []mongo.IndexModel{

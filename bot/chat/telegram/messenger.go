@@ -1,8 +1,11 @@
 package telegram
 
 import (
+	"errors"
 	"io"
 	"strconv"
+	"strings"
+	"time"
 
 	"DarkCS/bot/chat"
 
@@ -48,6 +51,7 @@ func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicUR
 
 	msg, err := m.api.SendVideo(id, inputFile, &tgbotapi.SendVideoOpts{
 		ProtectContent: protected,
+		RequestOpts:    uploadRequestOpts,
 	})
 	if err != nil {
 		return "", err
@@ -65,20 +69,43 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 	}
 	doc := tgbotapi.InputFileByReader(file.Filename, file.Reader)
 	_, err = m.api.SendDocument(id, doc, &tgbotapi.SendDocumentOpts{
-		Caption: file.Caption,
+		Caption:        file.Caption,
+		ProtectContent: file.Protected,
+		RequestOpts:    uploadRequestOpts,
 	})
 	return err
 }
 
+// SendText sends text with HTML parse mode, so callers may use markup such as the ТТН
+// tracking link. Text is split at the 4096-character limit. Arbitrary text (AI answers,
+// names) can contain "<" or "&" that Telegram rejects as invalid HTML, so on a parse
+// error the chunk is resent as plain text instead of being lost.
 func (m *Messenger) SendText(chatID, text string) error {
 	id, err := strconv.ParseInt(chatID, 10, 64)
 	if err != nil {
 		return err
 	}
-	_, err = m.api.SendMessage(id, text, &tgbotapi.SendMessageOpts{
-		ParseMode: "HTML",
-	})
-	return err
+	for _, chunk := range chat.SplitText(text, chat.TelegramTextLimit) {
+		_, err = m.api.SendMessage(id, chunk, &tgbotapi.SendMessageOpts{ParseMode: "HTML"})
+		if isParseError(err) {
+			_, err = m.api.SendMessage(id, chunk, nil)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// uploadRequestOpts lifts gotgbot's default 5 s request timeout for media uploads: it
+// covers the whole multipart request, including streaming the file from Google Drive,
+// so any video that takes longer than 5 s to transfer used to fail.
+var uploadRequestOpts = &tgbotapi.RequestOpts{Timeout: 10 * time.Minute}
+
+// isParseError reports whether Telegram rejected the message's HTML markup.
+func isParseError(err error) bool {
+	var tgErr *tgbotapi.TelegramError
+	return errors.As(err, &tgErr) && strings.Contains(tgErr.Description, "can't parse entities")
 }
 
 func (m *Messenger) SendMenu(chatID, text string, rows [][]chat.MenuButton) error {

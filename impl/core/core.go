@@ -4,6 +4,7 @@ import (
 	"DarkCS/bot/chat"
 	"DarkCS/entity"
 	"DarkCS/internal/lib/keymutex"
+	"DarkCS/internal/lib/ratelimit"
 	"DarkCS/internal/lib/safego"
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/ws"
@@ -142,9 +143,23 @@ type Core struct {
 	keys          *keyCache
 	wsTickets     *wsTickets
 	aiLocks       *keymutex.KeyMutex // serializes AI turns per user UUID
+	aiSlots       chan struct{}      // bounds concurrent OpenAI turns
+	aiLimiter     *ratelimit.Limiter // per-user AI request rate (nil/0 = unlimited)
 	log           *slog.Logger
 	wsHub         *ws.Hub
 	messengers    map[string]chat.Messenger
+}
+
+// defaultAIConcurrency is used until SetAILimits is called.
+const defaultAIConcurrency = 16
+
+// SetAILimits configures per-user AI rate limiting (perMinute <= 0 disables it) and the
+// number of OpenAI turns allowed at once. Call before serving requests.
+func (c *Core) SetAILimits(perMinute, concurrency int) {
+	c.aiLimiter = ratelimit.New(perMinute, time.Minute)
+	if concurrency > 0 {
+		c.aiSlots = make(chan struct{}, concurrency)
+	}
 }
 
 func New(log *slog.Logger) *Core {
@@ -153,6 +168,7 @@ func New(log *slog.Logger) *Core {
 		keys:       newKeyCache(),
 		wsTickets:  &wsTickets{m: make(map[string]wsTicket)},
 		aiLocks:    keymutex.New(),
+		aiSlots:    make(chan struct{}, defaultAIConcurrency),
 		messengers: make(map[string]chat.Messenger),
 	}
 }

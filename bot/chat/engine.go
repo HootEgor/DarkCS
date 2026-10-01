@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -52,90 +53,83 @@ func (e *ChatEngine) RegisterWorkflow(w Workflow) {
 	e.log.Info("chat engine: registered workflow", slog.String("workflow_id", string(w.ID())))
 }
 
+// restartKeywords reset the conversation on platforms without bot commands (Instagram,
+// WhatsApp), where users otherwise have no way out of a broken or confusing state.
+// Telegram has /start, handled by the bot itself.
+var restartKeywords = map[string]bool{"start": true, "/start": true, "старт": true, "почати": true}
+
 // HandleMessage processes a text message from any platform.
 func (e *ChatEngine) HandleMessage(ctx context.Context, m Messenger, platform, userID, chatID, text string) error {
 	defer e.lockUser(platform, userID)()
-	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+	m = newLoggingMessenger(m, e.messageListener, e.log, platform, userID)
 
-	state, err := e.storage.Load(ctx, platform, userID)
-	if err != nil {
-		return fmt.Errorf("loading state: %w", err)
-	}
-
-	// No active workflow — start onboarding
-	if state == nil {
+	if platform != "telegram" && restartKeywords[strings.ToLower(strings.TrimSpace(text))] {
+		if err := e.storage.Delete(ctx, platform, userID); err != nil {
+			return fmt.Errorf("deleting state: %w", err)
+		}
 		return e.startWorkflowWithData(ctx, m, platform, userID, chatID, "onboarding", nil)
 	}
 
-	w, ok := e.workflows[state.WorkflowID]
-	if !ok {
-		return fmt.Errorf("workflow not found: %s", state.WorkflowID)
-	}
-
-	step, ok := w.GetStep(state.CurrentStep)
-	if !ok {
-		return fmt.Errorf("step not found: %s", state.CurrentStep)
-	}
-
-	input := UserInput{Text: text}
-	result := step.HandleInput(ctx, m, state, input)
-	return e.processResult(ctx, m, state, w, result)
+	return e.dispatch(ctx, m, platform, userID, chatID, UserInput{Text: text}, true)
 }
 
 // HandleCallback processes a callback/inline button press from any platform.
 // messageID is the ID of the message containing the inline keyboard (used for editing).
 func (e *ChatEngine) HandleCallback(ctx context.Context, m Messenger, platform, userID, chatID, data, messageID string) error {
 	defer e.lockUser(platform, userID)()
-	m = newLoggingMessenger(m, e.messageListener, platform, userID)
-
-	state, err := e.storage.Load(ctx, platform, userID)
-	if err != nil {
-		return fmt.Errorf("loading state: %w", err)
-	}
-	if state == nil {
-		return nil
-	}
-
-	w, ok := e.workflows[state.WorkflowID]
-	if !ok {
-		return fmt.Errorf("workflow not found: %s", state.WorkflowID)
-	}
-
-	step, ok := w.GetStep(state.CurrentStep)
-	if !ok {
-		return fmt.Errorf("step not found: %s", state.CurrentStep)
-	}
-
-	input := UserInput{CallbackData: data, MessageID: messageID}
-	result := step.HandleInput(ctx, m, state, input)
-	return e.processResult(ctx, m, state, w, result)
+	m = newLoggingMessenger(m, e.messageListener, e.log, platform, userID)
+	return e.dispatch(ctx, m, platform, userID, chatID, UserInput{CallbackData: data, MessageID: messageID}, false)
 }
 
 // HandleContact processes a contact share (phone number) from any platform.
 // verified reports whether the platform confirmed the contact is the sender's own.
 func (e *ChatEngine) HandleContact(ctx context.Context, m Messenger, platform, userID, chatID, phone string, verified bool) error {
 	defer e.lockUser(platform, userID)()
-	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+	m = newLoggingMessenger(m, e.messageListener, e.log, platform, userID)
+	return e.dispatch(ctx, m, platform, userID, chatID, UserInput{Phone: phone, PhoneVerified: verified}, false)
+}
 
+// dispatch routes input to the user's current step. Caller holds the user lock.
+// startIfNone starts onboarding for users without state (text messages only).
+//
+// A state that points at a workflow or step that no longer exists (renamed or removed
+// in a deploy) is reset instead of failing on every message, which would leave the
+// user stuck with no way out on platforms without /start: an unknown step restarts its
+// workflow, an unknown workflow restarts onboarding.
+func (e *ChatEngine) dispatch(ctx context.Context, m Messenger, platform, userID, chatID string, input UserInput, startIfNone bool) error {
 	state, err := e.storage.Load(ctx, platform, userID)
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)
 	}
 	if state == nil {
+		if startIfNone {
+			return e.startWorkflowWithData(ctx, m, platform, userID, chatID, "onboarding", nil)
+		}
 		return nil
 	}
 
 	w, ok := e.workflows[state.WorkflowID]
 	if !ok {
-		return fmt.Errorf("workflow not found: %s", state.WorkflowID)
+		e.log.Warn("chat engine: unknown workflow, restarting onboarding",
+			slog.String("platform", platform), slog.String("user_id", userID),
+			slog.String("workflow_id", string(state.WorkflowID)))
+		if err = e.storage.Delete(ctx, platform, userID); err != nil {
+			return fmt.Errorf("deleting state: %w", err)
+		}
+		return e.startWorkflowWithData(ctx, m, platform, userID, state.ChatID, "onboarding", nil)
 	}
 
 	step, ok := w.GetStep(state.CurrentStep)
 	if !ok {
-		return fmt.Errorf("step not found: %s", state.CurrentStep)
+		e.log.Warn("chat engine: unknown step, restarting workflow",
+			slog.String("platform", platform), slog.String("user_id", userID),
+			slog.String("workflow_id", string(state.WorkflowID)), slog.String("step_id", string(state.CurrentStep)))
+		if err = e.storage.Delete(ctx, platform, userID); err != nil {
+			return fmt.Errorf("deleting state: %w", err)
+		}
+		return e.startWorkflowWithData(ctx, m, platform, userID, state.ChatID, w.ID(), nil)
 	}
 
-	input := UserInput{Phone: phone, PhoneVerified: verified}
 	result := step.HandleInput(ctx, m, state, input)
 	return e.processResult(ctx, m, state, w, result)
 }
@@ -154,7 +148,7 @@ func (e *ChatEngine) StartWorkflowWithData(ctx context.Context, m Messenger, pla
 // startWorkflowWithData is StartWorkflowWithData for callers already holding the user
 // lock (message handling and workflow chaining); the lock is not reentrant.
 func (e *ChatEngine) startWorkflowWithData(ctx context.Context, m Messenger, platform, userID, chatID string, workflowID WorkflowID, initialData map[string]any) error {
-	m = newLoggingMessenger(m, e.messageListener, platform, userID)
+	m = newLoggingMessenger(m, e.messageListener, e.log, platform, userID)
 
 	w, ok := e.workflows[workflowID]
 	if !ok {

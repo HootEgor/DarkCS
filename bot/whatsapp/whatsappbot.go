@@ -372,11 +372,20 @@ func (b *WhatsAppBot) downloadAndUploadMedia(listener chat.MessageListener, send
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		b.log.Error("failed to get media URL", slog.String("media_id", mediaID), slog.Int("status", resp.StatusCode))
+		return
+	}
+
 	var mediaInfo struct {
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&mediaInfo); err != nil {
 		b.log.Error("failed to decode media info", slog.String("media_id", mediaID), sl.Err(err))
+		return
+	}
+	if mediaInfo.URL == "" {
+		b.log.Error("media info has no download URL", slog.String("media_id", mediaID))
 		return
 	}
 
@@ -394,6 +403,12 @@ func (b *WhatsAppBot) downloadAndUploadMedia(listener chat.MessageListener, send
 		return
 	}
 	defer dlResp.Body.Close()
+
+	// Don't store an error page as the customer's file.
+	if dlResp.StatusCode != http.StatusOK {
+		b.log.Error("failed to download media file", slog.String("media_id", mediaID), slog.Int("status", dlResp.StatusCode))
+		return
+	}
 
 	if mimeType == "" {
 		mimeType = dlResp.Header.Get("Content-Type")

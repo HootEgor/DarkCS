@@ -9,8 +9,16 @@ import (
 )
 
 const (
-	errorResponse = "От халепа... Щось пішло не так, будь ласка, спробуйте повторити запит :("
+	errorResponse     = "От халепа... Щось пішло не так, будь ласка, спробуйте повторити запит :("
+	rateLimitedAnswer = "Ви надсилаєте повідомлення занадто часто. Будь ласка, зачекайте хвилинку і спробуйте ще раз 🙏"
 )
+
+// acquireAISlot waits for one of the global OpenAI slots and returns its release. Taken
+// after the per-user lock so one customer's queued messages can't hold every slot.
+func (c *Core) acquireAISlot() func() {
+	c.aiSlots <- struct{}{}
+	return func() { <-c.aiSlots }
+}
 
 func (c *Core) ComposeResponse(msg entity.HttpUserMsg) (interface{}, error) {
 	if msg.SmartSenderId != "" {
@@ -59,8 +67,13 @@ func (c *Core) ProcessUserRequest(user *entity.User, message string) (*entity.Ai
 		return nil, fmt.Errorf("user is blocked")
 	}
 
+	if !c.aiLimiter.Allow(user.UUID) {
+		return &entity.AiAnswer{Text: rateLimitedAnswer}, nil
+	}
+
 	// Shares the per-user AI lock with processRequest: both write the same history.
 	defer c.aiLocks.Lock(user.UUID)()
+	defer c.acquireAISlot()()
 
 	assistants := user.GetAssistants()
 	systemMsg := "Available assistants: "
@@ -97,9 +110,14 @@ func (c *Core) processRequest(msg entity.HttpUserMsg) (*entity.AiAnswer, error) 
 		return nil, fmt.Errorf("user is blocked")
 	}
 
+	if !c.aiLimiter.Allow(user.UUID) {
+		return &entity.AiAnswer{Text: rateLimitedAnswer}, nil
+	}
+
 	// One AI turn per user at a time: concurrent turns would both read the same
 	// conversation history and answer without seeing each other.
 	defer c.aiLocks.Lock(user.UUID)()
+	defer c.acquireAISlot()()
 
 	assistants := user.GetAssistants()
 	systemMsg := "Available assistants: "

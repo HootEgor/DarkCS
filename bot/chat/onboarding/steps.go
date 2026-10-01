@@ -33,8 +33,10 @@ func (s *HelloStep) Enter(ctx context.Context, m chat.Messenger, state *chat.Cha
 	return chat.StepResult{NextStep: StepRequestPhone}
 }
 
+// HandleInput re-runs Enter: users only sit on this auto-step when its transition was
+// interrupted, and returning nothing would leave them stuck.
 func (s *HelloStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
-	return chat.StepResult{}
+	return s.Enter(ctx, m, state)
 }
 
 // ChoosePhoneStep — WhatsApp only: let user pick their WA phone or enter another.
@@ -183,8 +185,9 @@ func (s *CheckUserStep) Enter(ctx context.Context, m chat.Messenger, state *chat
 	}
 }
 
+// HandleInput re-runs Enter (see HelloStep.HandleInput).
 func (s *CheckUserStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
-	return chat.StepResult{}
+	return s.Enter(ctx, m, state)
 }
 
 // RequestNameStep — Ask for the user's name.
@@ -317,6 +320,7 @@ func (s *DoneStep) Enter(ctx context.Context, m chat.Messenger, state *chat.Chat
 	}
 }
 
+// HandleInput re-runs Enter (see HelloStep.HandleInput).
 func (s *DoneStep) HandleInput(ctx context.Context, m chat.Messenger, state *chat.ChatState, input chat.UserInput) chat.StepResult {
-	return chat.StepResult{}
+	return s.Enter(ctx, m, state)
 }

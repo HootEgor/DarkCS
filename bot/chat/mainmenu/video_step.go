@@ -66,13 +66,14 @@ func (s *SelectVideoStep) Enter(ctx context.Context, m chat.Messenger, state *ch
 		if r.err != nil {
 			log.Error("select_video: list videos failed", sl.Err(r.err))
 			_ = m.SendText(state.ChatID, "Помилка завантаження списку відео. Спробуйте пізніше.")
-			return chat.StepResult{Error: r.err}
+			return chat.StepResult{NextStep: StepMainMenu}
 		}
 		videos = r.videos
 	case <-time.After(25 * time.Second):
+		// Go back to the main menu: staying here would leave the user without a keyboard.
 		log.Error("select_video: list videos timed out — Drive unreachable or credentials invalid")
 		_ = m.SendText(state.ChatID, "Помилка завантаження списку відео. Спробуйте пізніше.")
-		return chat.StepResult{}
+		return chat.StepResult{NextStep: StepMainMenu}
 	}
 
 	log.Info("select_video: videos loaded", slog.Int("count", len(videos)))
@@ -155,19 +156,20 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 		}
 	}
 
-	// Video selection.
-	if strings.HasPrefix(data, "vid_sel:") {
-		idxStr := strings.TrimPrefix(data, "vid_sel:")
-		idx, err := strconv.Atoi(idxStr)
-		if err != nil {
-			return chat.StepResult{}
-		}
+	// Video selection: "vid_id:<drive id>" (current) or "vid_sel:<index>" (buttons sent
+	// before IDs were used). An ID stays correct when the folder changes; an index
+	// would pick a different video once files are added or renamed.
+	if strings.HasPrefix(data, "vid_id:") || strings.HasPrefix(data, "vid_sel:") {
 		videos, err := s.driveService.ListVideos()
-		if err != nil || idx < 0 || idx >= len(videos) {
+		if err != nil {
 			_ = m.SendText(state.ChatID, "Помилка завантаження відео. Спробуйте пізніше.")
 			return chat.StepResult{}
 		}
-		video := videos[idx]
+		video, ok := findVideo(videos, data)
+		if !ok {
+			_ = m.SendText(state.ChatID, "Це відео більше недоступне. Оберіть інше зі списку.")
+			return chat.StepResult{}
+		}
 
 		s.mu.RLock()
 		cached := s.fileIDCache[video.ID]
@@ -223,7 +225,7 @@ func (s *SelectVideoStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 				log.Warn("select_video: video too large, retrying as document", slog.String("name", video.Name))
 				rc2, dlErr2 := s.driveService.DownloadVideo(video.ID)
 				if dlErr2 == nil {
-					fileErr := m.SendFile(state.ChatID, chat.FileMessage{Reader: rc2, Filename: video.Name, Caption: video.Name})
+					fileErr := m.SendFile(state.ChatID, chat.FileMessage{Reader: rc2, Filename: video.Name, Caption: video.Name, Protected: true})
 					rc2.Close()
 					if fileErr == nil {
 						return chat.StepResult{}
@@ -273,8 +275,12 @@ func (s *SelectVideoStep) buildPage(videos []gdrive.VideoItem, page int) [][]cha
 
 	var rows [][]chat.InlineButton
 	for i, v := range videos[start:end] {
+		data := "vid_id:" + v.ID
+		if len(data) > maxCallbackData {
+			data = fmt.Sprintf("vid_sel:%d", start+i)
+		}
 		rows = append(rows, []chat.InlineButton{
-			{Text: "📹 " + v.Name, Data: fmt.Sprintf("vid_sel:%d", start+i)},
+			{Text: "📹 " + v.Name, Data: data},
 		})
 	}
 
@@ -301,6 +307,26 @@ func (s *SelectVideoStep) buildPage(videos []gdrive.VideoItem, page int) [][]cha
 	})
 
 	return rows
+}
+
+// maxCallbackData is Telegram's limit on inline button callback data, in bytes.
+const maxCallbackData = 64
+
+// findVideo resolves a selection callback to a video by Drive ID or legacy list index.
+func findVideo(videos []gdrive.VideoItem, data string) (gdrive.VideoItem, bool) {
+	if id, ok := strings.CutPrefix(data, "vid_id:"); ok {
+		for _, v := range videos {
+			if v.ID == id {
+				return v, true
+			}
+		}
+		return gdrive.VideoItem{}, false
+	}
+	idx, err := strconv.Atoi(strings.TrimPrefix(data, "vid_sel:"))
+	if err != nil || idx < 0 || idx >= len(videos) {
+		return gdrive.VideoItem{}, false
+	}
+	return videos[idx], true
 }
 
 // isTooLarge reports whether the error is a Telegram 413 / "Request Entity Too Large".

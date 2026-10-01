@@ -10,7 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
+	"slices"
 	"time"
 )
 
@@ -67,7 +67,13 @@ type Usage struct {
 }
 
 type ResponseAPIResponse struct {
-	ID     string `json:"id"`
+	ID string `json:"id"`
+	// Status is "completed" for a full answer; "incomplete" (e.g. token limit) or
+	// "failed" leave truncated or no JSON in the output.
+	Status            string `json:"status"`
+	IncompleteDetails *struct {
+		Reason string `json:"reason"`
+	} `json:"incomplete_details,omitempty"`
 	Output []struct {
 		Type    string `json:"type"`
 		Status  string `json:"status,omitempty"`
@@ -80,12 +86,18 @@ type ResponseAPIResponse struct {
 	Usage Usage `json:"usage"`
 }
 
-// Ask sends a message to the assistant via Response API without SDK
-func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assistant) (string, error) {
+// overseerHistoryPairs is how much conversation the router sees: enough to resolve
+// follow-ups like "and the second one?", without paying for the whole history twice.
+const overseerHistoryPairs = 3
+
+// Ask sends a message to the assistant via the Responses API (raw HTTP) and stores the
+// Q/A pair in the user's conversation (except for the Overseer router).
+func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assistant) (answer string, err error) {
+	// Named results let a recovered panic surface as an error instead of an empty answer.
 	defer func() {
 		if r := recover(); r != nil {
 			o.log.With(slog.Any("panic", r)).Error("panic caught in Ask")
-			o.locker.Unlock(user.UUID) // ensure unlock
+			answer, err = "", fmt.Errorf("assistant call panicked: %v", r)
 		}
 	}()
 
@@ -104,7 +116,11 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	}
 
 	// Append recent conversation messages (oldest → newest)
-	for _, msg := range user.Conversation {
+	history := user.Conversation
+	if assistant.Name == entity.OverseerAss && len(history) > overseerHistoryPairs {
+		history = history[len(history)-overseerHistoryPairs:]
+	}
+	for _, msg := range history {
 		input = append(input,
 			MessageItem{
 				Role: "user",
@@ -218,6 +234,13 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 	if err := json.Unmarshal(body, &apiResp); err != nil {
 		return "", fmt.Errorf("failed to decode response body: %v", err)
 	}
+	if apiResp.Status != "" && apiResp.Status != "completed" {
+		reason := ""
+		if apiResp.IncompleteDetails != nil {
+			reason = apiResp.IncompleteDetails.Reason
+		}
+		return "", fmt.Errorf("response %s not completed: status %q %s", apiResp.ID, apiResp.Status, reason)
+	}
 
 	assistantText := ""
 	for _, out := range apiResp.Output {
@@ -257,6 +280,10 @@ func (o *Overseer) Ask(user *entity.User, userMsg string, assistant entity.Assis
 
 func (o *Overseer) getResponse(user *entity.User, userMsg string, assistant entity.Assistant) (string, []entity.ProductInfo, error) {
 	response, err := o.Ask(user, userMsg, assistant)
+	if err != nil {
+		// Report the real cause instead of the parse error an empty answer would produce.
+		return "", nil, err
+	}
 
 	// Now you can safely unmarshal it
 	var r entity.ResponseCode
@@ -270,14 +297,18 @@ func (o *Overseer) getResponse(user *entity.User, userMsg string, assistant enti
 	}
 
 	// Clean text
-	r.Response = regexp.MustCompile(`【\d+:\d+†[^】]+】`).ReplaceAllString(r.Response, "")
+	r.Response = citationMarker.ReplaceAllString(r.Response, "")
 
 	var products []entity.ProductInfo
 	if r.ShowCodes && len(r.Codes) > 0 {
-		products, _ = o.productService.GetProductInfo(r.Codes)
+		// Product cards are an extra; answer without them rather than failing.
+		if products, err = o.productService.GetProductInfo(r.Codes); err != nil {
+			o.log.With(slog.String("userUUID", user.UUID), sl.Err(err)).Warn("product info for answer")
+			products = nil
+		}
 	}
 
-	return r.Response, products, err
+	return r.Response, products, nil
 }
 
 func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg string) (string, error) {
@@ -305,6 +336,17 @@ func (o *Overseer) determineAssistant(user *entity.User, systemMsg, userMsg stri
 			sl.Err(err),
 		).Error("unmarshalling assistant response")
 		return response, fmt.Errorf("invalid response format")
+	}
+
+	// The router's choice is model output (and the user can try to steer it): accept only
+	// a known specialist, otherwise fall back to the consultant instead of failing.
+	specialists := []string{entity.ConsultantAss, entity.CalculatorAss, entity.OrderManagerAss}
+	if !slices.Contains(specialists, r.Assistant) {
+		o.log.With(
+			slog.String("userUUID", user.UUID),
+			slog.String("chosen", r.Assistant),
+		).Warn("router returned an unknown assistant; using consultant")
+		return entity.ConsultantAss, nil
 	}
 
 	return r.Assistant, nil

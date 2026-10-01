@@ -5,11 +5,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	neturl "net/url"
 	"time"
 )
 
 func (r *Service) GetUserDiscount(phone string) (int, error) {
-	url := fmt.Sprintf("%s/%s/%s", r.BaseURL, "client", phone)
+	url := fmt.Sprintf("%s/%s/%s", r.BaseURL, "client", neturl.PathEscape(phone))
 
 	// Create request
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -32,11 +33,11 @@ func (r *Service) GetUserDiscount(phone string) (int, error) {
 	}(resp.Body)
 
 	// Handle response
+	// Errors are returned rather than reported as a 0% discount, so callers can tell
+	// "no discount" from "service unavailable".
 	if resp.StatusCode != http.StatusOK {
-		r.Log.With(
-			slog.Any("response", resp),
-		).Error("get user discount invalid response code")
-		return 0, nil
+		r.Log.Error("get user discount invalid response code", slog.Int("status", resp.StatusCode))
+		return 0, fmt.Errorf("get user discount: status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)

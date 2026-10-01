@@ -2,6 +2,7 @@ package chat
 
 import (
 	"io"
+	"log/slog"
 	"time"
 
 	"DarkCS/entity"
@@ -14,6 +15,8 @@ type FileMessage struct {
 	MIMEType string
 	Caption  string
 	URL      string // Public download URL for platforms that require a link (Instagram, WhatsApp).
+	// Protected forbids forwarding/saving where the platform supports it (Telegram).
+	Protected bool
 }
 
 // Messenger is the platform UI adapter interface.
@@ -41,26 +44,40 @@ type Messenger interface {
 	SendUploadAction(chatID string) error
 }
 
-// loggingMessenger wraps a Messenger and saves outgoing bot messages to CRM.
+// loggingMessenger wraps a Messenger, saves outgoing bot messages to CRM (when a
+// listener is set) and logs failed sends. Steps mostly discard send errors with `_ =`,
+// so without this a rejected message (bad markup, length, blocked bot) left no trace.
 type loggingMessenger struct {
 	inner    Messenger
-	listener MessageListener
+	listener MessageListener // nil = don't save to CRM
+	log      *slog.Logger
 	platform string
 	userID   string
 }
 
-func newLoggingMessenger(inner Messenger, listener MessageListener, platform, userID string) Messenger {
-	if listener == nil {
-		return inner
-	}
+func newLoggingMessenger(inner Messenger, listener MessageListener, log *slog.Logger, platform, userID string) Messenger {
 	// Avoid double-wrapping
 	if _, ok := inner.(*loggingMessenger); ok {
 		return inner
 	}
-	return &loggingMessenger{inner: inner, listener: listener, platform: platform, userID: userID}
+	return &loggingMessenger{inner: inner, listener: listener, log: log, platform: platform, userID: userID}
+}
+
+// failed logs a send error and returns it unchanged.
+func (m *loggingMessenger) failed(op string, err error) error {
+	m.log.Warn("chat: send failed",
+		slog.String("op", op),
+		slog.String("platform", m.platform),
+		slog.String("user_id", m.userID),
+		slog.String("error", err.Error()),
+	)
+	return err
 }
 
 func (m *loggingMessenger) saveOutgoing(text string) {
+	if m.listener == nil {
+		return
+	}
 	m.listener.SaveAndBroadcastChatMessage(entity.ChatMessage{
 		Platform:  m.platform,
 		UserID:    m.userID,
@@ -74,7 +91,7 @@ func (m *loggingMessenger) saveOutgoing(text string) {
 
 func (m *loggingMessenger) SendText(chatID, text string) error {
 	if err := m.inner.SendText(chatID, text); err != nil {
-		return err
+		return m.failed("SendText", err)
 	}
 	m.saveOutgoing(text)
 	return nil
@@ -82,7 +99,7 @@ func (m *loggingMessenger) SendText(chatID, text string) error {
 
 func (m *loggingMessenger) SendFile(chatID string, file FileMessage) error {
 	if err := m.inner.SendFile(chatID, file); err != nil {
-		return err
+		return m.failed("SendFile", err)
 	}
 	text := file.Caption
 	if text == "" {
@@ -95,7 +112,7 @@ func (m *loggingMessenger) SendFile(chatID string, file FileMessage) error {
 func (m *loggingMessenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicURL, filename string, protected bool) (string, error) {
 	returnedID, err := m.inner.SendVideo(chatID, r, cachedFileID, publicURL, filename, protected)
 	if err != nil {
-		return "", err
+		return "", m.failed("SendVideo", err)
 	}
 	m.saveOutgoing("[Video: " + filename + "]")
 	return returnedID, nil
@@ -103,7 +120,7 @@ func (m *loggingMessenger) SendVideo(chatID string, r io.Reader, cachedFileID, p
 
 func (m *loggingMessenger) SendMenu(chatID, text string, rows [][]MenuButton) error {
 	if err := m.inner.SendMenu(chatID, text, rows); err != nil {
-		return err
+		return m.failed("SendMenu", err)
 	}
 	m.saveOutgoing(text)
 	return nil
@@ -111,7 +128,7 @@ func (m *loggingMessenger) SendMenu(chatID, text string, rows [][]MenuButton) er
 
 func (m *loggingMessenger) SendInlineOptions(chatID, text string, buttons []InlineButton) error {
 	if err := m.inner.SendInlineOptions(chatID, text, buttons); err != nil {
-		return err
+		return m.failed("SendInlineOptions", err)
 	}
 	m.saveOutgoing(text)
 	return nil
@@ -119,7 +136,7 @@ func (m *loggingMessenger) SendInlineOptions(chatID, text string, buttons []Inli
 
 func (m *loggingMessenger) SendInlineGrid(chatID, text string, rows [][]InlineButton) error {
 	if err := m.inner.SendInlineGrid(chatID, text, rows); err != nil {
-		return err
+		return m.failed("SendInlineGrid", err)
 	}
 	m.saveOutgoing(text)
 	return nil
@@ -131,7 +148,7 @@ func (m *loggingMessenger) EditInlineGrid(chatID, messageID, text string, rows [
 
 func (m *loggingMessenger) SendContactRequest(chatID, text, buttonText string) error {
 	if err := m.inner.SendContactRequest(chatID, text, buttonText); err != nil {
-		return err
+		return m.failed("SendContactRequest", err)
 	}
 	m.saveOutgoing(text)
 	return nil

@@ -456,6 +456,16 @@ func (b *InstaBot) downloadAndUploadAttachment(listener chat.MessageListener, se
 	}
 	defer resp.Body.Close()
 
+	// An expired CDN link returns an error page; storing it would show the manager a
+	// broken "file" in the CRM.
+	if resp.StatusCode != http.StatusOK {
+		b.log.Error("instagram attachment download failed",
+			slog.String("sender_id", senderID),
+			slog.Int("status", resp.StatusCode),
+		)
+		return
+	}
+
 	// Determine filename and MIME type
 	mimeType := resp.Header.Get("Content-Type")
 	if mimeType == "" {

@@ -87,6 +87,12 @@ type Config struct {
 		MsgUrl string `yaml:"msg_url" env-default:""`
 		ApiKey string `yaml:"api_key" env-default:""`
 	} `yaml:"zoho-functions"`
+	Limits struct {
+		// AIRequestsPerMinute caps AI answers per customer per minute; 0 = unlimited.
+		AIRequestsPerMinute int `yaml:"ai_requests_per_minute" env-default:"0"`
+		// AIConcurrency caps simultaneous OpenAI turns across all customers.
+		AIConcurrency int `yaml:"ai_concurrency" env-default:"16"`
+	} `yaml:"limits"`
 	GoogleDrive struct {
 		Enabled         bool   `yaml:"enabled" env-default:"false"`
 		CredentialsFile string `yaml:"credentials_file" env-default:""`

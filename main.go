@@ -84,6 +84,7 @@ func main() {
 	lg.Debug("debug messages enabled")
 
 	handler := core.New(lg)
+	handler.SetAILimits(conf.Limits.AIRequestsPerMinute, conf.Limits.AIConcurrency)
 	handler.SetAuthKey(conf.Listen.ApiKey)
 	handler.SetSigningSecret(fileSigningSecret(conf, lg))
 

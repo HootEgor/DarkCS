@@ -3,7 +3,9 @@ package mainmenu
 import (
 	"context"
 	"fmt"
+	"html"
 	"log/slog"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -21,6 +23,51 @@ import (
 const orderNotShownMsg = "Список замовлень застарів. Відкрийте його ще раз з меню."
 
 const schoolsPerPage = 5
+
+// School buttons identify the school by name (its _id), else by code, so a list that
+// changes between showing and tapping can't select the wrong school. The list index is
+// only used when neither fits Telegram's 64-byte callback limit, and is still accepted
+// for buttons sent before this change.
+const (
+	schoolByName  = "school_n:"
+	schoolByCode  = "school_c:"
+	schoolByIndex = "school_sel:"
+)
+
+func schoolCallback(school entity.School, index int) string {
+	if d := schoolByName + school.Name; len(d) <= maxCallbackData {
+		return d
+	}
+	if d := schoolByCode + school.Code; school.Code != "" && len(d) <= maxCallbackData {
+		return d
+	}
+	return fmt.Sprintf("%s%d", schoolByIndex, index)
+}
+
+func findSchool(schools []entity.School, data string) (entity.School, bool) {
+	switch {
+	case strings.HasPrefix(data, schoolByName):
+		name := strings.TrimPrefix(data, schoolByName)
+		for _, s := range schools {
+			if s.Name == name {
+				return s, true
+			}
+		}
+	case strings.HasPrefix(data, schoolByCode):
+		code := strings.TrimPrefix(data, schoolByCode)
+		for _, s := range schools {
+			if s.Code == code {
+				return s, true
+			}
+		}
+	case strings.HasPrefix(data, schoolByIndex):
+		idx, err := strconv.Atoi(strings.TrimPrefix(data, schoolByIndex))
+		if err == nil && idx >= 0 && idx < len(schools) {
+			return schools[idx], true
+		}
+	}
+	return entity.School{}, false
+}
 
 // SelectSchoolStep — Shows a paginated school selection when deep link type is "dl".
 // Auto-skips to main menu if no deep link is present.
@@ -95,17 +142,16 @@ func (s *SelectSchoolStep) HandleInput(ctx context.Context, m chat.Messenger, st
 	}
 
 	// Handle school selection
-	if strings.HasPrefix(data, "school_sel:") {
-		idxStr := strings.TrimPrefix(data, "school_sel:")
-		idx, err := strconv.Atoi(idxStr)
-		if err != nil {
-			return chat.StepResult{}
-		}
+	if strings.HasPrefix(data, "school_") && !strings.HasPrefix(data, "school_pg:") {
 		schools, err := s.schoolRepo.GetAllActiveSchools(ctx)
-		if err != nil || idx < 0 || idx >= len(schools) {
+		if err != nil {
 			return chat.StepResult{NextStep: StepMainMenu}
 		}
-		name := schools[idx].Name
+		school, ok := findSchool(schools, data)
+		if !ok {
+			return chat.StepResult{NextStep: StepMainMenu}
+		}
+		name := school.Name
 		_ = m.SendText(state.ChatID, fmt.Sprintf(
 			"Вітаємо, %s!\n\nОтримай -15%% на перше замовлення з промо-кодом *DARKSCHOOL* 🖤\nСкористайся протягом 14 днів на сайті 👉 riornails.com\n\nНатискай кнопку 📚Навчання та отримуй додаткові поради від нашого бренд-майстра 🖤\n\nP.S. Твоя особиста знижка -7%% вже активна, і з часом може стати ще більшою ✨",
 			name,
@@ -144,8 +190,7 @@ func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat
 	var rows [][]chat.InlineButton
 	for i, school := range schools[start:end] {
 		rows = append(rows, []chat.InlineButton{
-			// Use index as callback data to stay within Telegram's 64-byte limit.
-			{Text: school.Name, Data: fmt.Sprintf("school_sel:%d", start+i)},
+			{Text: school.Name, Data: schoolCallback(school, start+i)},
 		})
 	}
 
@@ -174,40 +219,40 @@ func (s *SelectSchoolStep) buildPage(schools []entity.School, page int) [][]chat
 // mainMenuButtonsForRole builds the main menu layout dynamically.
 // Any step absent or false in activeSteps is omitted from the menu.
 // The manager-only "School statistic" button requires both manager role and active step.
-func mainMenuButtonsForRole(isManager bool, activeSteps map[chat.StepID]bool) [][]chat.MenuButton {
+func mainMenuButtonsForRole(isManager bool, activeSteps *stepFlags) [][]chat.MenuButton {
 	var buttons [][]chat.MenuButton
 
 	var row1 []chat.MenuButton
-	if activeSteps[StepMyOffice] {
+	if activeSteps.active(StepMyOffice) {
 		row1 = append(row1, chat.MenuButton{Text: BtnMyOffice})
 	}
-	if activeSteps[StepServiceRate] {
+	if activeSteps.active(StepServiceRate) {
 		row1 = append(row1, chat.MenuButton{Text: BtnServiceRate})
 	}
 	if len(row1) > 0 {
 		buttons = append(buttons, row1)
 	}
 
-	if activeSteps[StepCurrentOrder] {
+	if activeSteps.active(StepCurrentOrder) {
 		buttons = append(buttons, []chat.MenuButton{{Text: BtnOrderStatus}})
 	}
 
 	var aiRow []chat.MenuButton
-	if activeSteps[StepAIConsultant] {
+	if activeSteps.active(StepAIConsultant) {
 		aiRow = append(aiRow, chat.MenuButton{Text: BtnAIConsultant})
 	}
-	if activeSteps[StepMakeOrder] {
+	if activeSteps.active(StepMakeOrder) {
 		aiRow = append(aiRow, chat.MenuButton{Text: BtnMakeOrder})
 	}
 	if len(aiRow) > 0 {
 		buttons = append(buttons, aiRow)
 	}
 
-	if activeSteps[StepSelectVideo] {
+	if activeSteps.active(StepSelectVideo) {
 		buttons = append(buttons, []chat.MenuButton{{Text: BtnLearning}})
 	}
 
-	if isManager && activeSteps[StepSchoolStat] {
+	if isManager && activeSteps.active(StepSchoolStat) {
 		buttons = append(buttons, []chat.MenuButton{{Text: BtnSchoolStat}})
 	}
 
@@ -237,6 +282,14 @@ func getUser(state *chat.ChatState, authService AuthService) (*entity.User, erro
 			}
 		}
 	}
+	// WhatsApp user IDs are the sender's phone number (wa_id, digits only); GetUser
+	// normalizes it to the stored "+digits" form.
+	if state.Platform == "whatsapp" {
+		user, err := authService.GetUser("", state.UserID, 0)
+		if err == nil && user != nil {
+			return user, nil
+		}
+	}
 	// Fallback: try by phone stored in state
 	phone := state.GetString("phone")
 	if phone != "" {
@@ -264,7 +317,7 @@ func (s *PreMainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, sta
 // activeSteps are hidden and unreachable.
 type MainMenuStep struct {
 	authService AuthService
-	activeSteps map[chat.StepID]bool
+	activeSteps *stepFlags
 }
 
 func (s *MainMenuStep) ID() chat.StepID { return StepMainMenu }
@@ -295,37 +348,37 @@ func (s *MainMenuStep) HandleInput(ctx context.Context, m chat.Messenger, state 
 	// manually sent button text cannot bypass a disabled step.
 	switch text {
 	case BtnMyOffice:
-		if s.activeSteps[StepMyOffice] {
+		if s.activeSteps.active(StepMyOffice) {
 			return chat.StepResult{NextStep: StepMyOffice}
 		}
 		return chat.StepResult{}
 	case BtnServiceRate:
-		if s.activeSteps[StepServiceRate] {
+		if s.activeSteps.active(StepServiceRate) {
 			return chat.StepResult{NextStep: StepServiceRate}
 		}
 		return chat.StepResult{}
 	case BtnOrderStatus:
-		if s.activeSteps[StepCurrentOrder] {
+		if s.activeSteps.active(StepCurrentOrder) {
 			return chat.StepResult{NextStep: StepCurrentOrder}
 		}
 		return chat.StepResult{}
 	case BtnAIConsultant:
-		if s.activeSteps[StepAIConsultant] {
+		if s.activeSteps.active(StepAIConsultant) {
 			return chat.StepResult{NextStep: StepAIConsultant}
 		}
 		return chat.StepResult{}
 	case BtnMakeOrder:
-		if s.activeSteps[StepMakeOrder] {
+		if s.activeSteps.active(StepMakeOrder) {
 			return chat.StepResult{NextStep: StepMakeOrder}
 		}
 		return chat.StepResult{}
 	case BtnLearning:
-		if s.activeSteps[StepSelectVideo] {
+		if s.activeSteps.active(StepSelectVideo) {
 			return chat.StepResult{NextStep: StepSelectVideo}
 		}
 		return chat.StepResult{}
 	case BtnSchoolStat:
-		if isManager && s.activeSteps[StepSchoolStat] {
+		if isManager && s.activeSteps.active(StepSchoolStat) {
 			return chat.StepResult{NextStep: StepSchoolStat}
 		}
 		return chat.StepResult{}
@@ -750,9 +803,9 @@ func (s *MakeOrderStep) HandleInput(ctx context.Context, m chat.Messenger, state
 // formatOrderMessage formats an order for display.
 // Telegram gets HTML links; other platforms get a plain URL on its own line.
 func formatOrderMessage(order *entity.OrderDetail, customerName, platform string) string {
-	msg := fmt.Sprintf("Замовник: %s\nСтатус: %s", customerName, order.Status)
+	msg := fmt.Sprintf("Замовник: %s\nСтатус: %s", esc(customerName, platform), esc(order.Status, platform))
 	if order.Subject != "" {
-		msg += fmt.Sprintf("\nНомер замовлення: %s", order.Subject)
+		msg += fmt.Sprintf("\nНомер замовлення: %s", esc(order.Subject, platform))
 	}
 	if order.TTN != "" {
 		msg += formatTTN(order.TTN, platform)
@@ -762,9 +815,9 @@ func formatOrderMessage(order *entity.OrderDetail, customerName, platform string
 
 // formatOrderMessageNumbered formats an order with a number prefix.
 func formatOrderMessageNumbered(order *entity.OrderDetail, customerName string, orderNum int, platform string) string {
-	msg := fmt.Sprintf("Замовлення №%d\n\nЗамовник: %s\nСтатус: %s", orderNum, customerName, order.Status)
+	msg := fmt.Sprintf("Замовлення №%d\n\nЗамовник: %s\nСтатус: %s", orderNum, esc(customerName, platform), esc(order.Status, platform))
 	if order.Subject != "" {
-		msg += fmt.Sprintf("\nНомер замовлення: %s", order.Subject)
+		msg += fmt.Sprintf("\nНомер замовлення: %s", esc(order.Subject, platform))
 	}
 	if order.TTN != "" {
 		msg += formatTTN(order.TTN, platform)
@@ -772,9 +825,18 @@ func formatOrderMessageNumbered(order *entity.OrderDetail, customerName string, 
 	return msg
 }
 
+// esc escapes text for Telegram, whose order messages are sent as HTML (for the ТТН
+// link); a "<" or "&" in a name would otherwise make Telegram reject the markup.
+func esc(text, platform string) string {
+	if platform == "telegram" {
+		return html.EscapeString(text)
+	}
+	return text
+}
+
 func formatTTN(ttn, platform string) string {
 	if platform == "telegram" {
-		return fmt.Sprintf("\nТТН: <a href=\"https://novaposhta.ua/tracking/%s\">%s</a>", ttn, ttn)
+		return fmt.Sprintf("\nТТН: <a href=\"https://novaposhta.ua/tracking/%s\">%s</a>", url.PathEscape(ttn), html.EscapeString(ttn))
 	}
 	return fmt.Sprintf("\nТТН: %s\nhttps://novaposhta.ua/tracking/%s", ttn, ttn)
 }
