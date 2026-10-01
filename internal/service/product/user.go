@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
-	"time"
 )
 
 func (r *Service) GetUserDiscount(phone string) (int, error) {
