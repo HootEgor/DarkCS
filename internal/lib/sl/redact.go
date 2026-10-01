@@ -42,7 +42,7 @@ func RedactURL(raw string) string {
 // errors) and secret query parameters.
 var (
 	botTokenInText    = regexp.MustCompile(`\d{6,}:[A-Za-z0-9_-]{30,}`)
-	secretQueryInText = regexp.MustCompile(`(?i)(access_token|zapikey|api_key|apikey|token|sig|client_secret|refresh_token)=[^&\s"']+`)
+	secretQueryInText = regexp.MustCompile(`(?i)\b(access_token|zapikey|api_key|apikey|token|sig|client_secret|refresh_token)=[^&\s"']+`)
 )
 
 // Redact removes Telegram bot tokens and secret query parameters from free text. It is
