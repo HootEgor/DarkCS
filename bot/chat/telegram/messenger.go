@@ -29,6 +29,9 @@ type Messenger struct {
 	// businessConnectionID, when set, sends every message on behalf of a connected
 	// Telegram Business account instead of from the bot itself.
 	businessConnectionID string
+	// threadID, when > 1, posts every message into that forum topic of a group. The
+	// General topic (1) and plain groups take no thread id.
+	threadID int64
 }
 
 // NewMessenger creates a new Telegram Messenger.
@@ -40,6 +43,20 @@ func NewMessenger(api TelegramAPI) *Messenger {
 // of the given connection (used by the CRM to reply in premium account chats).
 func NewBusinessMessenger(api TelegramAPI, businessConnectionID string) *Messenger {
 	return &Messenger{api: api, businessConnectionID: businessConnectionID}
+}
+
+// NewGroupMessenger creates a Messenger that posts into a forum topic of a group (used by
+// the CRM to reply in group chats). threadID 0 or entity.GeneralTopicID means no topic.
+func NewGroupMessenger(api TelegramAPI, threadID int64) *Messenger {
+	return &Messenger{api: api, threadID: threadID}
+}
+
+// topicID returns the message_thread_id to send with; 0 omits it.
+func (m *Messenger) topicID() int64 {
+	if m.threadID > 1 {
+		return m.threadID
+	}
+	return 0
 }
 
 // SendVideo uploads a video to Telegram and optionally protects it from forwarding.
@@ -60,6 +77,7 @@ func (m *Messenger) SendVideo(chatID string, r io.Reader, cachedFileID, publicUR
 
 	msg, err := m.api.SendVideo(id, inputFile, &tgbotapi.SendVideoOpts{
 		BusinessConnectionId: m.businessConnectionID,
+		MessageThreadId:      m.topicID(),
 		ProtectContent:       protected,
 		RequestOpts:          uploadRequestOpts,
 	})
@@ -80,6 +98,7 @@ func (m *Messenger) SendFile(chatID string, file chat.FileMessage) error {
 	doc := tgbotapi.InputFileByReader(file.Filename, file.Reader)
 	_, err = m.api.SendDocument(id, doc, &tgbotapi.SendDocumentOpts{
 		BusinessConnectionId: m.businessConnectionID,
+		MessageThreadId:      m.topicID(),
 		Caption:              file.Caption,
 		ProtectContent:       file.Protected,
 		RequestOpts:          uploadRequestOpts,
@@ -120,15 +139,16 @@ func (m *Messenger) SendTextReturningID(chatID, text string) (int64, error) {
 	return firstID, nil
 }
 
-// messageOpts adds the business connection to SendMessage options (nil allowed).
+// messageOpts adds the business connection and forum topic to SendMessage options (nil allowed).
 func (m *Messenger) messageOpts(opts *tgbotapi.SendMessageOpts) *tgbotapi.SendMessageOpts {
-	if m.businessConnectionID == "" {
+	if m.businessConnectionID == "" && m.topicID() == 0 {
 		return opts
 	}
 	if opts == nil {
 		opts = &tgbotapi.SendMessageOpts{}
 	}
 	opts.BusinessConnectionId = m.businessConnectionID
+	opts.MessageThreadId = m.topicID()
 	return opts
 }
 
@@ -283,8 +303,8 @@ func (m *Messenger) SendUploadAction(chatID string) error {
 
 // chatActionOpts returns nil for the bot itself, keeping the existing call shape.
 func (m *Messenger) chatActionOpts() *tgbotapi.SendChatActionOpts {
-	if m.businessConnectionID == "" {
+	if m.businessConnectionID == "" && m.topicID() == 0 {
 		return nil
 	}
-	return &tgbotapi.SendChatActionOpts{BusinessConnectionId: m.businessConnectionID}
+	return &tgbotapi.SendChatActionOpts{BusinessConnectionId: m.businessConnectionID, MessageThreadId: m.topicID()}
 }

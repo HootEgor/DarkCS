@@ -31,6 +31,8 @@ import (
 // relying on the default could silently drop business updates after any narrower setting.
 var allowedUpdates = []string{
 	"message",
+	"edited_message", // group chat edits (userbot_group.go)
+	"my_chat_member", // the bot added to / removed from groups
 	"callback_query",
 	"business_connection",
 	"business_message",
@@ -38,10 +40,15 @@ var allowedUpdates = []string{
 	"deleted_business_messages",
 }
 
-// businessListener stores relayed business chats; implemented by core.Core.
-type businessListener interface {
+// chatStore stores relayed (human-only) chat messages for the CRM; implemented by core.Core.
+type chatStore interface {
 	SaveAndBroadcastChatMessage(msg entity.ChatMessage)
 	UploadAndSaveChatFile(base entity.ChatMessage, reader io.Reader, filename, mimeType string, size int64) error
+}
+
+// businessListener stores relayed business chats; implemented by core.Core.
+type businessListener interface {
+	chatStore
 	SaveBusinessConnection(conn entity.BusinessConnection) error
 	GetBusinessConnection(connectionID string) (*entity.BusinessConnection, error)
 	SaveBusinessContact(contact entity.BusinessContact) error
@@ -247,30 +254,32 @@ func (b *UserBot) handleBusinessMessage(_ *tgbotapi.Bot, ctx *ext.Context) error
 
 	if fileID, filename := messageMedia(msg); fileID != "" {
 		base.Text = msg.Caption
-		return b.saveBusinessFile(base, fileID, filename)
+		return b.saveRelayedFile(b.business, base, fileID, filename)
 	}
 
 	base.Text = msg.Text
 	if base.Text == "" {
-		base.Text = businessPlaceholder(msg)
+		base.Text = relayPlaceholder(msg)
 	}
 	b.business.SaveAndBroadcastChatMessage(base)
 	return nil
 }
 
-// saveBusinessFile stores business chat media. On failure the message is still saved as
-// a placeholder so managers know something was sent; the client is never answered.
-func (b *UserBot) saveBusinessFile(base entity.ChatMessage, fileID, filename string) error {
+// saveRelayedFile stores media of a relayed (business or group) chat. On failure the
+// message is still saved as a placeholder so managers know something was sent; the
+// sender is never answered.
+func (b *UserBot) saveRelayedFile(store chatStore, base entity.ChatMessage, fileID, filename string) error {
 	body, mimeType, size, err := b.downloadFile(fileID)
 	if err == nil {
-		err = b.business.UploadAndSaveChatFile(base, body, filename, mimeType, size)
+		err = store.UploadAndSaveChatFile(base, body, filename, mimeType, size)
 		body.Close()
 	}
 	if err == nil {
 		return nil
 	}
 
-	b.log.Error("failed to store business chat file",
+	b.log.Error("failed to store relayed chat file",
+		slog.String("platform", base.Platform),
 		slog.String("user_id", base.UserID),
 		slog.String("channel", base.Channel),
 		sl.Err(err),
@@ -283,12 +292,12 @@ func (b *UserBot) saveBusinessFile(base entity.ChatMessage, fileID, filename str
 		note += "\n" + base.Text
 	}
 	base.Text = note
-	b.business.SaveAndBroadcastChatMessage(base)
+	store.SaveAndBroadcastChatMessage(base)
 	return nil
 }
 
-// businessPlaceholder describes messages without text or downloadable media.
-func businessPlaceholder(msg *tgbotapi.Message) string {
+// relayPlaceholder describes relayed messages without text or downloadable media.
+func relayPlaceholder(msg *tgbotapi.Message) string {
 	switch {
 	case msg.Sticker != nil:
 		return strings.TrimSpace("[Стікер] " + msg.Sticker.Emoji)
@@ -296,6 +305,8 @@ func businessPlaceholder(msg *tgbotapi.Message) string {
 		return strings.TrimSpace("[Контакт] " + msg.Contact.FirstName + " " + msg.Contact.PhoneNumber)
 	case msg.Location != nil:
 		return fmt.Sprintf("[Локація] %.6f, %.6f", msg.Location.Latitude, msg.Location.Longitude)
+	case msg.Poll != nil:
+		return "[Опитування] " + msg.Poll.Question
 	}
 	return "[Непідтримуваний тип повідомлення]"
 }

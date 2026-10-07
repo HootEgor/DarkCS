@@ -252,6 +252,12 @@ func main() {
 		handler.SetBusinessMessengerFactory(func(connectionID string) chat.Messenger {
 			return tgmessenger.NewBusinessMessenger(userBot.GetAPI(), connectionID)
 		})
+		// Telegram groups: relay approved groups (each forum topic a chat) and let managers reply as the bot.
+		userBot.SetGroupListener(handler)
+		handler.SetGroupMessengerFactory(func(threadID int64) chat.Messenger {
+			return tgmessenger.NewGroupMessenger(userBot.GetAPI(), threadID)
+		})
+		handler.SetGroupLeaver(userBot)
 		go func() {
 			defer safego.Recover(lg, "user telegram bot")
 			if err := userBot.Start(); err != nil {

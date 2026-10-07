@@ -76,3 +76,37 @@ func TestBotMessengerHasNoConnection(t *testing.T) {
 		t.Fatalf("bot typing must keep nil opts, got %+v", api.actionOpts)
 	}
 }
+
+func TestGroupMessengerTopic(t *testing.T) {
+	tests := []struct {
+		name       string
+		threadID   int64
+		wantThread int64
+	}{
+		{"forum topic", 77, 77},
+		{"general topic", 1, 0},
+		{"plain group", 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api := &fakeAPI{}
+			m := NewGroupMessenger(api, tt.threadID)
+
+			if err := m.SendText("-100123", "hi"); err != nil {
+				t.Fatal(err)
+			}
+			if api.msgOpts == nil || api.msgOpts.MessageThreadId != tt.wantThread || api.msgOpts.BusinessConnectionId != "" {
+				t.Fatalf("SendMessage opts = %+v", api.msgOpts)
+			}
+			if err := m.SendTyping("-100123"); err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantThread == 0 && api.actionOpts != nil {
+				t.Fatalf("typing without topic must keep nil opts, got %+v", api.actionOpts)
+			}
+			if tt.wantThread != 0 && (api.actionOpts == nil || api.actionOpts.MessageThreadId != tt.wantThread) {
+				t.Fatalf("SendChatAction opts = %+v", api.actionOpts)
+			}
+		})
+	}
+}

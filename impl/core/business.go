@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"DarkCS/entity"
-	"DarkCS/internal/lib/fileurl"
 	"DarkCS/internal/lib/sl"
 	"DarkCS/internal/lib/tgexport"
 )
@@ -42,18 +41,7 @@ func (c *Core) ListBusinessAccounts() ([]entity.BusinessConnection, error) {
 // EditBusinessMessage mirrors a message edited in a Telegram Business chat and notifies
 // CRM clients. Edits of messages the CRM never stored are ignored.
 func (c *Core) EditBusinessMessage(userID, channel string, tgMessageID int64, text string, editedAt time.Time) error {
-	msg, err := c.repo.EditChatMessageText(entity.PlatformTelegramBusiness, userID, channel, tgMessageID, text, editedAt)
-	if err != nil || msg == nil {
-		return err
-	}
-	if c.wsHub != nil {
-		for i := range msg.Attachments {
-			msg.Attachments[i].URL = fileurl.SignURL(msg.Attachments[i].FileID.Hex(), c.signingSecret, 15*time.Minute)
-		}
-		c.enrichMessageUser(msg)
-		c.wsHub.BroadcastMessageEdited(*msg)
-	}
-	return nil
+	return c.editMirroredMessage(entity.PlatformTelegramBusiness, userID, channel, tgMessageID, text, editedAt)
 }
 
 // DeleteBusinessMessages mirrors messages deleted in a Telegram Business chat. They are

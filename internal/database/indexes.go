@@ -96,6 +96,13 @@ var indexSpecs = []indexSpec{
 	{historyImportsCollection, []mongo.IndexModel{
 		unique(bson.D{{"platform", 1}, {"user_id", 1}, {"channel", 1}}),
 	}},
+	{groupsCollection, []mongo.IndexModel{
+		unique(bson.D{{"chat_id", 1}}),
+		plain(bson.D{{"status", 1}, {"created_at", -1}}),
+	}},
+	{groupTopicsCollection, []mongo.IndexModel{
+		unique(bson.D{{"chat_id", 1}, {"thread_id", 1}}),
+	}},
 }
 
 // droppedIndexes are indexes from earlier versions that conflict with the current set.

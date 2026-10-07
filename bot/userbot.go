@@ -12,6 +12,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,8 +34,9 @@ type userBotAuthService interface {
 }
 
 // UserBot is the Telegram bot for general users using the unified ChatEngine.
-// It also relays chats of connected Telegram Business accounts to the CRM
-// (see userbot_business.go); those never reach the ChatEngine.
+// It also relays chats of connected Telegram Business accounts (userbot_business.go) and
+// of approved Telegram groups/forum topics (userbot_group.go) to the CRM; those never
+// reach the ChatEngine.
 type UserBot struct {
 	log         *slog.Logger
 	api         *tgbotapi.Bot
@@ -42,6 +44,8 @@ type UserBot struct {
 	chatEngine  *chat.ChatEngine
 	authService userBotAuthService
 	business    businessListener            // nil = Telegram Business updates are ignored
+	groups      groupListener               // nil = group messages are dropped
+	namedTopics sync.Map                    // "chat:thread" topics whose name was learned (userbot_group.go)
 	updater     atomic.Pointer[ext.Updater] // set by Start, used by Stop
 }
 
@@ -88,6 +92,8 @@ func (b *UserBot) Start() error {
 	updater := ext.NewUpdater(dispatcher, nil)
 	b.updater.Store(updater)
 
+	// Group handlers go first so group traffic never reaches the private-chat handlers below.
+	b.addGroupHandlers(dispatcher)
 	dispatcher.AddHandler(handlers.NewCommand("start", b.handleStart))
 	dispatcher.AddHandler(handlers.NewCommand("reset", b.handleReset))
 	dispatcher.AddHandler(handlers.NewCallback(func(cq *tgbotapi.CallbackQuery) bool { return true }, b.handleCallback))

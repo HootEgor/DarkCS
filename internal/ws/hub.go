@@ -16,7 +16,7 @@ type ClientMessageHandler interface {
 
 // Event represents a WebSocket event sent to CRM clients.
 type Event struct {
-	Type string      `json:"type"` // "new_message", "message_edited", "messages_deleted", "typing", "read_receipt", "history_imported"
+	Type string      `json:"type"` // "new_message", "message_edited", "messages_deleted", "typing", "read_receipt", "history_imported", "group_updated"
 	Data interface{} `json:"data"`
 }
 
@@ -153,6 +153,15 @@ func (h *Hub) BroadcastHistoryImported(platform, userID, channel string, count i
 			"channel":  channel,
 			"count":    count,
 		},
+	}
+}
+
+// BroadcastGroupUpdated tells CRM clients a Telegram group was added, approved, rejected
+// or left, so pending groups can be shown for review.
+func (h *Hub) BroadcastGroupUpdated(group entity.TelegramGroup) {
+	h.broadcast <- &Event{
+		Type: "group_updated",
+		Data: group,
 	}
 }
 

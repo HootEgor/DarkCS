@@ -45,12 +45,21 @@ func (c *Core) GetActiveChats(username string) ([]entity.ChatSummary, error) {
 	}
 
 	channelNames := c.businessChannelNames()
+	groupTitles, topicNames := c.groupNames()
 
 	for i := range summaries {
 		s := &summaries[i]
 		key := entity.ChatKey(s.Platform, s.UserID, s.Channel)
 		if unreadMap != nil {
 			s.Unread = unreadMap[key]
+		}
+
+		if s.Platform == entity.PlatformTelegramGroup {
+			// Names come from the preloaded maps instead of a lookup per chat.
+			s.UserName = groupTitles[s.UserID]
+			s.ContactKey = contactKey(s.Platform, s.UserID, nil)
+			s.ChannelName = groupTopicName(topicNames[key], s.Channel)
+			continue
 		}
 
 		user := c.lookupUserByPlatform(s.Platform, s.UserID)
@@ -121,6 +130,10 @@ func (c *Core) applyMessageUser(msg *entity.ChatMessage, user *entity.User) {
 // chatDisplayNames returns the person's name and messenger handle for the CRM. Telegram
 // Business clients often never registered, so their cached Telegram profile is the fallback.
 func (c *Core) chatDisplayNames(platform, userID string, user *entity.User) (name, messengerName string) {
+	if platform == entity.PlatformTelegramGroup {
+		// A group chat is not a person: it is named after the group (authors are per message).
+		return c.groupTitle(userID), ""
+	}
 	if user != nil {
 		name = user.Name
 		switch platform {
@@ -155,6 +168,7 @@ func contactKey(platform, userID string, user *entity.User) string {
 	if platform == entity.PlatformTelegram || platform == entity.PlatformTelegramBusiness {
 		return "tg:" + userID
 	}
+	// platform:user_id also covers groups: all topics of one group share it.
 	return platform + ":" + userID
 }
 
@@ -177,8 +191,11 @@ func (c *Core) GetChatMessages(platform, userID, channel string, limit, offset i
 
 // crmMessenger returns the messenger a manager reply goes through. Telegram Business
 // chats are answered as the premium account of the channel, which must still be
-// connected with the reply right.
-func (c *Core) crmMessenger(platform, channel string) (chat.Messenger, error) {
+// connected with the reply right; group chats by the bot in the channel's topic.
+func (c *Core) crmMessenger(platform, userID, channel string) (chat.Messenger, error) {
+	if platform == entity.PlatformTelegramGroup {
+		return c.groupCrmMessenger(userID, channel)
+	}
 	if platform != entity.PlatformTelegramBusiness {
 		messenger, ok := c.messengers[platform]
 		if !ok {
@@ -212,15 +229,16 @@ type textIDSender interface {
 
 // SendCrmMessage sends a message from a manager to a user via their platform.
 func (c *Core) SendCrmMessage(platform, userID, channel, text string) error {
-	messenger, err := c.crmMessenger(platform, channel)
+	messenger, err := c.crmMessenger(platform, userID, channel)
 	if err != nil {
 		return err
 	}
 
-	// For all platforms, chatID == userID. Business replies keep their Telegram id so
-	// edits/deletions the owner makes in the app can be mirrored.
+	// For all platforms, chatID == userID. Business and group replies keep their Telegram
+	// id so later edits/deletions can be mirrored and history imports dedupe against them.
 	var tgMessageID int64
-	if s, ok := messenger.(textIDSender); ok && platform == entity.PlatformTelegramBusiness {
+	keepsTgID := platform == entity.PlatformTelegramBusiness || platform == entity.PlatformTelegramGroup
+	if s, ok := messenger.(textIDSender); ok && keepsTgID {
 		tgMessageID, err = s.SendTextReturningID(userID, text)
 	} else {
 		err = messenger.SendText(userID, text)
@@ -379,7 +397,7 @@ func (c *Core) DownloadFile(fileID primitive.ObjectID) (string, string, io.ReadC
 // SendCrmFiles sends files from a manager to a user via their platform messenger.
 // It downloads each file from GridFS, sends it via the platform, then saves a single ChatMessage.
 func (c *Core) SendCrmFiles(platform, userID, channel, caption string, attachments []entity.Attachment) error {
-	messenger, err := c.crmMessenger(platform, channel)
+	messenger, err := c.crmMessenger(platform, userID, channel)
 	if err != nil {
 		return err
 	}

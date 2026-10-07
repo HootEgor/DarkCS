@@ -43,6 +43,17 @@ type Repository interface {
 	UpsertBusinessContact(contact entity.BusinessContact) error
 	GetBusinessContact(userID string) (*entity.BusinessContact, error)
 
+	RegisterTelegramGroup(g entity.TelegramGroup) (*entity.TelegramGroup, error)
+	MarkTelegramGroupLeft(chatID int64, at time.Time) error
+	SetTelegramGroupStatus(chatID int64, status, reviewer string, at time.Time) error
+	SetTelegramGroupTitle(chatID int64, title string) error
+	GetTelegramGroup(chatID int64) (*entity.TelegramGroup, error)
+	ListTelegramGroups(status string) ([]entity.TelegramGroup, error)
+	UpsertGroupTopic(chatID, threadID int64, name string, closed *bool) error
+	NameGroupTopicIfUnknown(chatID, threadID int64, name string) error
+	ListGroupTopics(chatID int64) ([]entity.TelegramGroupTopic, error)
+	MigrateTelegramGroup(oldChatID, newChatID int64) error
+
 	EditChatMessageText(platform, userID, channel string, tgMessageID int64, text string, editedAt time.Time) (*entity.ChatMessage, error)
 	MarkChatMessagesDeleted(platform, userID, channel string, tgMessageIDs []int64, deletedAt time.Time) ([]entity.ChatMessage, error)
 
@@ -166,6 +177,10 @@ type Core struct {
 	// businessMessenger builds a messenger that writes as a Telegram Business account
 	// (by connection id); nil when the user bot is disabled.
 	businessMessenger func(connectionID string) chat.Messenger
+	// groupMessenger builds a messenger that posts into a group forum topic (0 = no topic);
+	// groupLeaver makes the bot leave rejected groups. Both nil when the user bot is disabled.
+	groupMessenger func(threadID int64) chat.Messenger
+	groupLeaver    GroupLeaver
 }
 
 // defaultAIConcurrency is used until SetAILimits is called.
@@ -253,6 +268,16 @@ func (c *Core) SetPlatformMessenger(platform string, m chat.Messenger) {
 // SetBusinessMessengerFactory enables CRM replies in Telegram Business chats.
 func (c *Core) SetBusinessMessengerFactory(f func(connectionID string) chat.Messenger) {
 	c.businessMessenger = f
+}
+
+// SetGroupMessengerFactory enables CRM replies in Telegram group chats (per forum topic).
+func (c *Core) SetGroupMessengerFactory(f func(threadID int64) chat.Messenger) {
+	c.groupMessenger = f
+}
+
+// SetGroupLeaver lets rejecting a group in the CRM make the bot leave it.
+func (c *Core) SetGroupLeaver(l GroupLeaver) {
+	c.groupLeaver = l
 }
 
 func (c *Core) Init() {

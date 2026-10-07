@@ -21,9 +21,10 @@ func channelFilter(channel string) bson.E {
 }
 
 // keepsFullHistory reports whether a platform is exempt from message trimming:
-// Telegram Business chats are low-volume B2B conversations and may hold imported history.
+// Telegram Business and group chats are human B2B conversations (business chats may also
+// hold imported history), so managers need all of it.
 func keepsFullHistory(platform string) bool {
-	return platform == entity.PlatformTelegramBusiness
+	return platform == entity.PlatformTelegramBusiness || platform == entity.PlatformTelegramGroup
 }
 
 // SaveChatMessage inserts a chat message and trims the chat to 100 messages

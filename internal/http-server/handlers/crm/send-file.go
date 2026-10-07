@@ -1,7 +1,6 @@
 package crm
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -109,7 +108,7 @@ func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		err := handler.SendCrmFiles(platform, userID, chatChannel(r), caption, attachments)
-		if errors.Is(err, entity.ErrChannelUnavailable) {
+		if isChannelUnavailable(err) {
 			render.Status(r, http.StatusConflict)
 			render.JSON(w, r, response.Error(err.Error()))
 			return

@@ -30,11 +30,24 @@ type Core interface {
 	ListBusinessAccounts() ([]entity.BusinessConnection, error)
 	GetHistoryStatus(platform, userID, channel string) (*entity.ChatHistoryStatus, error)
 	ImportChatHistory(username, platform, userID, channel string, r io.Reader) (*entity.ChatHistoryImportResult, error)
+	ListTelegramGroups(status string) ([]entity.TelegramGroup, error)
+	ApproveGroup(chatID int64, username string) (*entity.TelegramGroup, error)
+	RejectGroup(chatID int64, username string) (*entity.TelegramGroup, error)
+	ListGroupTopics(chatID int64) ([]entity.TelegramGroupTopic, error)
+	RenameGroupTopic(chatID, threadID int64, name string) error
+}
+
+// isChannelUnavailable reports errors meaning the chat cannot be written to right now
+// (premium account disconnected, group not approved or bot removed); their text is
+// meant for the manager and they map to 409.
+func isChannelUnavailable(err error) bool {
+	return errors.Is(err, entity.ErrChannelUnavailable) || errors.Is(err, entity.ErrGroupUnavailable)
 }
 
 // chatChannel reads the optional ?channel= query that, with platform and user_id,
-// identifies a chat. Only Telegram Business chats have one (the premium account owner id);
-// clients that never send it keep addressing the default channel.
+// identifies a chat. Only Telegram Business chats (the premium account owner id) and
+// group chats (the forum topic id) have one; clients that never send it keep addressing
+// the default channel.
 func chatChannel(r *http.Request) string {
 	return r.URL.Query().Get("channel")
 }
@@ -142,7 +155,7 @@ func SendMessage(log *slog.Logger, handler Core) http.HandlerFunc {
 		}
 
 		err := handler.SendCrmMessage(platform, userID, chatChannel(r), req.Text)
-		if errors.Is(err, entity.ErrChannelUnavailable) {
+		if isChannelUnavailable(err) {
 			render.Status(r, http.StatusConflict)
 			render.JSON(w, r, response.Error(err.Error()))
 			return

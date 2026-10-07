@@ -7,10 +7,12 @@ import (
 )
 
 // Chat platforms. PlatformTelegramBusiness is a private chat of a connected Telegram
-// Business (Premium) account: the bot only relays it to the CRM, people reply.
+// Business (Premium) account and PlatformTelegramGroup a Telegram group (or one forum
+// topic of it) the bot was added to: the bot only relays both to the CRM, people reply.
 const (
 	PlatformTelegram         = "telegram"
 	PlatformTelegramBusiness = "telegram_business"
+	PlatformTelegramGroup    = "telegram_group"
 	PlatformInstagram        = "instagram"
 	PlatformWhatsApp         = "whatsapp"
 )
@@ -21,6 +23,8 @@ const (
 // Instagram and WhatsApp chats and is never stored then (legacy documents have no field);
 // for telegram_business it is the business account owner's Telegram user id, so one
 // client writing to several premium accounts gets a separate chat per account.
+// For telegram_group, user_id is the group chat id and channel the forum topic id
+// ("1" = General topic, empty for a group without topics), so every topic is its own chat.
 type ChatMessage struct {
 	ID          primitive.ObjectID `json:"id" bson:"_id,omitempty"`
 	Platform    string             `json:"platform" bson:"platform"`
@@ -32,9 +36,15 @@ type ChatMessage struct {
 	Text        string             `json:"text" bson:"text"`
 	Attachments []Attachment       `json:"attachments,omitempty" bson:"attachments,omitempty"`
 	CreatedAt   time.Time          `json:"created_at" bson:"created_at"`
-	// TgMessageID is the Telegram message id (telegram_business only); it deduplicates
-	// history imported from a Telegram Desktop export.
+	// TgMessageID is the Telegram message id (telegram_business and telegram_group); it
+	// matches later edits and deduplicates history imported from a Telegram Desktop export.
 	TgMessageID int64 `json:"tg_message_id,omitempty" bson:"tg_message_id,omitempty"`
+	// AuthorID, AuthorName and AuthorUsername identify the member who wrote a group chat
+	// message (telegram_group only; a group has many writers, so user_id is not a person).
+	// The CRM chooses whether to show the display name or the @username.
+	AuthorID       int64  `json:"author_id,omitempty" bson:"author_id,omitempty"`
+	AuthorName     string `json:"author_name,omitempty" bson:"author_name,omitempty"`
+	AuthorUsername string `json:"author_username,omitempty" bson:"author_username,omitempty"`
 	// Imported marks messages loaded from a chat history export rather than received live.
 	Imported bool `json:"imported,omitempty" bson:"imported,omitempty"`
 	// EditedAt, OriginalText and DeletedAt mirror edits and deletions made in Telegram
