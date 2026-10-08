@@ -118,6 +118,7 @@ func (m *MongoDB) InsertImportedMessages(msgs []entity.ChatMessage) (int, error)
 	}
 	docs := make([]any, len(msgs))
 	for i := range msgs {
+		stampInserted(&msgs[i])
 		docs[i] = msgs[i]
 	}
 
@@ -162,11 +163,13 @@ func businessMessageFilter(platform, userID, channel string, tgMessageIDs ...int
 // updated message, or nil when the message is not stored (e.g. older than the connection).
 func (m *MongoDB) EditChatMessageText(platform, userID, channel string, tgMessageID int64, text string, editedAt time.Time) (*entity.ChatMessage, error) {
 	// A pipeline update so original_text is only set once; $literal keeps a text that
-	// starts with "$" from being read as a field path.
+	// starts with "$" from being read as a field path. updated_at is the server-side
+	// change time (not editedAt, which Telegram reports and may be in the past).
 	update := mongo.Pipeline{{{Key: "$set", Value: bson.D{
 		{"original_text", bson.D{{"$ifNull", bson.A{"$original_text", "$text"}}}},
 		{"text", bson.D{{"$literal", text}}},
 		{"edited_at", editedAt},
+		{"updated_at", time.Now().UTC()},
 	}}}}
 	var msg entity.ChatMessage
 	err := m.collection(chatMessagesCollection).FindOneAndUpdate(m.ctx,
@@ -208,7 +211,7 @@ func (m *MongoDB) MarkChatMessagesDeleted(platform, userID, channel string, tgMe
 	}
 	_, err = collection.UpdateMany(m.ctx,
 		bson.D{{"_id", bson.D{{"$in", ids}}}},
-		bson.D{{"$set", bson.D{{"deleted_at", deletedAt}}}},
+		bson.D{{"$set", bson.D{{"deleted_at", deletedAt}, {"updated_at", time.Now().UTC()}}}},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("mongodb mark messages deleted: %w", err)

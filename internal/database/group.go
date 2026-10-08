@@ -222,9 +222,10 @@ func (m *MongoDB) MigrateTelegramGroup(oldChatID, newChatID int64) error {
 	); err != nil {
 		return fmt.Errorf("mongodb migrate group topics: %w", err)
 	}
+	// updated_at moves so incremental consumers re-pull the messages under their new chat id.
 	if _, err := m.collection(chatMessagesCollection).UpdateMany(m.ctx,
 		bson.D{{"platform", entity.PlatformTelegramGroup}, {"user_id", oldID}},
-		bson.D{{"$set", bson.D{{"user_id", newID}, {"chat_id", newID}}}},
+		bson.D{{"$set", bson.D{{"user_id", newID}, {"chat_id", newID}, {"updated_at", time.Now().UTC()}}}},
 	); err != nil {
 		return fmt.Errorf("mongodb migrate group messages: %w", err)
 	}

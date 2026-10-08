@@ -1,12 +1,16 @@
 package crm
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -21,10 +25,11 @@ import (
 type Core interface {
 	GetActiveChats(username string) ([]entity.ChatSummary, error)
 	GetChatMessages(platform, userID, channel string, limit, offset int) ([]entity.ChatMessage, error)
-	SendCrmMessage(platform, userID, channel, text string) error
+	ListMessagesSince(ctx context.Context, since time.Time, afterID primitive.ObjectID, platforms []string, limit int) ([]entity.ChatMessage, error)
+	SendCrmMessage(platform, userID, channel, text, operatorID string) error
 	DownloadFile(fileID primitive.ObjectID) (filename, mimeType string, reader io.ReadCloser, err error)
 	UploadFile(filename string, reader io.Reader, meta entity.FileMetadata) (primitive.ObjectID, int64, error)
-	SendCrmFiles(platform, userID, channel, caption string, attachments []entity.Attachment) error
+	SendCrmFiles(platform, userID, channel, caption, operatorID string, attachments []entity.Attachment) error
 	FileSigningSecret() string
 	IssueWsTicket(username string) (string, error)
 	ListBusinessAccounts() ([]entity.BusinessConnection, error)
@@ -50,6 +55,123 @@ func isChannelUnavailable(err error) bool {
 // the default channel.
 func chatChannel(r *http.Request) string {
 	return r.URL.Query().Get("channel")
+}
+
+// Operator identity sent by the CRM on replies. The header is optional (older clients
+// and integrations send none); a value that is too long or has characters outside the
+// allowed set is dropped rather than rejected, so a bad header never blocks a send.
+const (
+	operatorIDHeader = "X-Operator-Id"
+	maxOperatorIDLen = 64
+)
+
+var operatorIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// operatorID returns the validated X-Operator-Id header value, or "" when absent or invalid.
+func operatorID(r *http.Request) string {
+	v := strings.TrimSpace(r.Header.Get(operatorIDHeader))
+	if v == "" || len(v) > maxOperatorIDLen || !operatorIDPattern.MatchString(v) {
+		return ""
+	}
+	return v
+}
+
+// Incremental listing limits (GET /crm/messages).
+const (
+	defaultSinceLimit = 200
+	maxSinceLimit     = 500
+)
+
+// messagesSincePage is the data of GET /crm/messages: a page of changed messages and the
+// cursor to continue from. Next is nil when the page is empty.
+type messagesSincePage struct {
+	Messages []entity.ChatMessage `json:"messages"`
+	Next     *messagesCursor      `json:"next"`
+	HasMore  bool                 `json:"has_more"`
+}
+
+// messagesCursor is passed back as ?since=&after_id= to continue after the last row of a
+// page. Since is RFC3339 with fractional seconds: Mongo stores milliseconds, and a
+// cursor rounded to whole seconds would re-read the last second's rows every pull.
+type messagesCursor struct {
+	Since   string `json:"since"`
+	AfterID string `json:"after_id"`
+}
+
+// ListMessages returns messages changed since a cursor, across all chats, for external
+// consumers that mirror the message store incrementally (edits and soft deletes included).
+// Endpoint: GET /api/v1/crm/messages?since=RFC3339[&after_id=hex][&limit=200][&platforms=a,b]
+func ListMessages(log *slog.Logger, handler Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+
+		sinceRaw := q.Get("since")
+		if sinceRaw == "" {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, response.Error("since is required (RFC3339)"))
+			return
+		}
+		since, err := time.Parse(time.RFC3339Nano, sinceRaw)
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, response.Error("since must be an RFC3339 time"))
+			return
+		}
+
+		var afterID primitive.ObjectID
+		if raw := q.Get("after_id"); raw != "" {
+			afterID, err = primitive.ObjectIDFromHex(raw)
+			if err != nil {
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, response.Error("after_id must be a hex ObjectID"))
+				return
+			}
+		}
+
+		limit := defaultSinceLimit
+		if l := q.Get("limit"); l != "" {
+			v, err := strconv.Atoi(l)
+			if err != nil || v <= 0 {
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, response.Error("limit must be a positive integer"))
+				return
+			}
+			limit = min(v, maxSinceLimit)
+		}
+
+		var platforms []string
+		for _, p := range strings.Split(q.Get("platforms"), ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				platforms = append(platforms, p)
+			}
+		}
+
+		messages, err := handler.ListMessagesSince(r.Context(), since, afterID, platforms, limit)
+		if err != nil {
+			log.Error("failed to list messages since",
+				slog.String("since", sinceRaw),
+				slog.String("after_id", afterID.Hex()),
+				slog.String("error", err.Error()),
+			)
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, response.Error("Failed to list messages"))
+			return
+		}
+
+		page := messagesSincePage{Messages: messages, HasMore: len(messages) == limit}
+		if page.Messages == nil {
+			page.Messages = []entity.ChatMessage{}
+		}
+		if n := len(messages); n > 0 {
+			last := messages[n-1]
+			page.Next = &messagesCursor{
+				Since:   last.UpdatedAt.UTC().Format(time.RFC3339Nano),
+				AfterID: last.ID.Hex(),
+			}
+		}
+
+		render.JSON(w, r, response.Ok(page))
+	}
 }
 
 // IssueWsTicket returns a one-time ticket for opening the CRM socket as
@@ -154,7 +276,7 @@ func SendMessage(log *slog.Logger, handler Core) http.HandlerFunc {
 			return
 		}
 
-		err := handler.SendCrmMessage(platform, userID, chatChannel(r), req.Text)
+		err := handler.SendCrmMessage(platform, userID, chatChannel(r), req.Text, operatorID(r))
 		if isChannelUnavailable(err) {
 			render.Status(r, http.StatusConflict)
 			render.JSON(w, r, response.Error(err.Error()))

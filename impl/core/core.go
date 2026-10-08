@@ -25,6 +25,7 @@ type Repository interface {
 
 	SaveChatMessage(msg entity.ChatMessage) error
 	GetChatMessages(platform, userID, channel string, limit, offset int) ([]entity.ChatMessage, error)
+	ListMessagesSince(ctx context.Context, since time.Time, afterID primitive.ObjectID, platforms []string, limit int) ([]entity.ChatMessage, error)
 	GetActiveChats() ([]entity.ChatSummary, error)
 	CountUnreadPerChat(receipts map[string]time.Time) (map[string]int, error)
 	EnsureIndexes() error

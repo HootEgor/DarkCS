@@ -19,6 +19,7 @@ const maxFilesPerRequest = 20
 // Endpoint: POST /api/v1/crm/chats/{platform}/{user_id}/send-file[?channel=]
 // Content-Type: multipart/form-data
 // Fields: files (multiple), caption (optional text)
+// Optional header X-Operator-Id: the CRM operator sending, stored on the message.
 func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		platform := chi.URLParam(r, "platform")
@@ -107,7 +108,7 @@ func SendFile(log *slog.Logger, handler Core) http.HandlerFunc {
 			})
 		}
 
-		err := handler.SendCrmFiles(platform, userID, chatChannel(r), caption, attachments)
+		err := handler.SendCrmFiles(platform, userID, chatChannel(r), caption, operatorID(r), attachments)
 		if isChannelUnavailable(err) {
 			render.Status(r, http.StatusConflict)
 			render.JSON(w, r, response.Error(err.Error()))

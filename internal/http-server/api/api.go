@@ -219,6 +219,7 @@ func New(ctx context.Context, conf *config.Config, log *slog.Logger, handler Han
 				r.Use(crmOnly)
 				r.Post("/ws-ticket", crm.IssueWsTicket(log, handler))
 				r.Get("/chats", crm.GetChats(log, handler))
+				r.Get("/messages", crm.ListMessages(log, handler))
 				r.Get("/chats/{platform}/{user_id}/messages", crm.GetMessages(log, handler))
 				r.Post("/chats/{platform}/{user_id}/send", crm.SendMessage(log, handler))
 				r.Post("/chats/{platform}/{user_id}/send-file", crm.SendFile(log, handler))

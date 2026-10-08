@@ -2,11 +2,13 @@ package repository
 
 import (
 	"DarkCS/entity"
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -27,6 +29,18 @@ func keepsFullHistory(platform string) bool {
 	return platform == entity.PlatformTelegramBusiness || platform == entity.PlatformTelegramGroup
 }
 
+// stampInserted makes updated_at equal created_at on insert (filling created_at when a
+// caller left it zero), so the change cursor of ListMessagesSince starts at the message's
+// own time. Done here rather than at every construction site so no insert path can miss it.
+func stampInserted(msg *entity.ChatMessage) {
+	if msg.CreatedAt.IsZero() {
+		msg.CreatedAt = time.Now()
+	}
+	if msg.UpdatedAt.IsZero() {
+		msg.UpdatedAt = msg.CreatedAt
+	}
+}
+
 // SaveChatMessage inserts a chat message and trims the chat to 100 messages
 // (except for platforms that keep their full history).
 func (m *MongoDB) SaveChatMessage(msg entity.ChatMessage) error {
@@ -38,6 +52,7 @@ func (m *MongoDB) SaveChatMessage(msg entity.ChatMessage) error {
 
 	collection := connection.Database(m.database).Collection(chatMessagesCollection)
 
+	stampInserted(&msg)
 	_, err = collection.InsertOne(m.ctx, msg)
 	if err != nil {
 		return fmt.Errorf("mongodb insert chat message: %w", err)
@@ -106,6 +121,51 @@ func (m *MongoDB) GetChatMessages(platform, userID, channel string, limit, offse
 		return nil, fmt.Errorf("mongodb decode chat messages: %w", err)
 	}
 
+	return messages, nil
+}
+
+// ListMessagesSince returns messages changed after the (since, afterID) cursor, oldest
+// change first, for incremental pulls by an external CRM. A message is "changed" when
+// its updated_at moved: insert, edit, soft delete or group migration. Soft-deleted
+// messages are included on purpose so the consumer sees deletions. The cursor is
+// updated_at > since, or updated_at == since with _id > afterID when afterID is set;
+// without afterID an equal updated_at is excluded, so the caller must pass both values
+// of the previous page's last row to not skip same-instant rows. An empty platforms
+// slice means every platform.
+func (m *MongoDB) ListMessagesSince(ctx context.Context, since time.Time, afterID primitive.ObjectID, platforms []string, limit int) ([]entity.ChatMessage, error) {
+	var cursorFilter bson.D
+	if afterID.IsZero() {
+		cursorFilter = bson.D{{"updated_at", bson.D{{"$gt", since}}}}
+	} else {
+		cursorFilter = bson.D{{"$or", bson.A{
+			bson.D{{"updated_at", bson.D{{"$gt", since}}}},
+			bson.D{{"updated_at", since}, {"_id", bson.D{{"$gt", afterID}}}},
+		}}}
+	}
+	filter := cursorFilter
+	if len(platforms) > 0 {
+		in := make(bson.A, len(platforms))
+		for i, p := range platforms {
+			in[i] = p
+		}
+		filter = bson.D{{"$and", bson.A{cursorFilter, bson.D{{"platform", bson.D{{"$in", in}}}}}}}
+	}
+
+	// The sort matches the {updated_at: 1, _id: 1} index so the cursor is a range scan.
+	opts := options.Find().
+		SetSort(bson.D{{"updated_at", 1}, {"_id", 1}}).
+		SetLimit(int64(limit))
+
+	cursor, err := m.collection(chatMessagesCollection).Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("mongodb find messages since: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var messages []entity.ChatMessage
+	if err = cursor.All(ctx, &messages); err != nil {
+		return nil, fmt.Errorf("mongodb decode messages since: %w", err)
+	}
 	return messages, nil
 }
 

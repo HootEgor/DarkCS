@@ -71,6 +71,7 @@ POST /api/v1/crm/chats/{platform}/{user_id}/send-file?channel=5551112222     mul
 ```
 
 - Without `channel`, the default channel is used. This is what old chats need.
+- **Optional header `X-Operator-Id`** on `send` and `send-file`: the id of the CRM operator sending the reply (up to 64 characters of `A-Z a-z 0-9 _ -`). It is stored as `operator_id` on the message. A missing or malformed header is ignored, never rejected.
 - **New error on send:** **HTTP 409** with `status_message` = `premium account is disconnected or the bot has no right to reply`. It is returned when the premium account disconnected the bot or did not grant it the reply right. Show this message to the manager.
 - Telegram also allows a business bot to reply only in chats that had an incoming message in the last 24 hours. Outside that window Telegram rejects the send, and the API returns the generic 500 `Failed to send message`. A hint in the UI is enough: "If sending fails, reply from the phone".
 
@@ -84,6 +85,8 @@ New optional fields on `ChatMessage`:
 | `edited_at` | Set when the message was edited in Telegram (by the client or the premium account). `text` holds the new text. |
 | `original_text` | The text before the first edit. Present only on edited messages. |
 | `deleted_at` | Set when the message was deleted in Telegram. The message stays stored so the CRM keeps the record (see 2.6). |
+| `updated_at` | Change cursor (see 2.7): equals `created_at` on insert, moves on edit and delete. |
+| `operator_id` | The CRM operator who sent a `sender: "manager"` reply, taken from the `X-Operator-Id` header of `send` / `send-file`. Absent when the header was not sent or the reply came from the Telegram app. |
 | `contact_key` | Present on WS `new_message` events, so live messages can be routed into a contact group without refetching. |
 
 Messages from a premium chat:
@@ -186,6 +189,37 @@ Edits and deletions made in a premium chat are mirrored into the CRM. This cover
   - files sent from the CRM;
   - the 2nd and later parts of a CRM text longer than 4096 characters, which Telegram splits into several messages.
 - Edits and deletions are not mirrored for the bot, Instagram or WhatsApp.
+
+### 2.7 `GET /api/v1/crm/messages` — incremental pull (new)
+
+For systems that mirror the message store (dialog analysis in comex). Returns every message whose `updated_at` moved after a cursor, across all chats, oldest change first. Inserts, edits, soft deletes and imported history all move `updated_at`, so one cursor catches them all. **Soft-deleted messages are returned** (with `deleted_at`); mirror the deletion instead of dropping the row.
+
+```
+GET /api/v1/crm/messages?since=2026-10-01T00:00:00Z[&after_id=<hex>][&limit=200][&platforms=telegram_business,telegram_group]
+```
+
+| Param | Meaning |
+|---|---|
+| `since` | **Required.** RFC3339 (fractional seconds allowed). Rows with `updated_at > since`. |
+| `after_id` | Optional hex ObjectID. With it, rows with `updated_at == since` and `_id > after_id` are included too. Always pass both values of `next` when continuing. |
+| `limit` | Default 200, max 500. |
+| `platforms` | Comma-separated platform filter. Empty = all platforms. |
+
+Response `data`:
+
+```json
+{
+  "messages": [ { "id": "...", "platform": "telegram_business", "updated_at": "2026-10-01T09:12:44.123Z", "operator_id": "op-17", "...": "..." } ],
+  "next": { "since": "2026-10-01T09:12:44.123Z", "after_id": "66fb0c2e9a1b2c3d4e5f6a7b" },
+  "has_more": true
+}
+```
+
+- `messages` are ordinary `ChatMessage`s with signed attachment URLs (15 min). `user_name`, `messenger_name` and `contact_key` are **not** filled on this route; key contacts by `platform` + `user_id` (+ `channel`).
+- `next` is the cursor of the last row (`null` on an empty page). Store it and send it back as `?since=&after_id=` on the next pull.
+- `has_more` is `true` when the page is full (`limit` rows); keep pulling until it is `false`.
+- Non-business chats keep only their newest 100 messages; trimmed messages are hard-deleted and do not appear as deletions here. Telegram Business and group chats are never trimmed.
+- **HTTP 400** when `since` is missing or not RFC3339, `after_id` is not a hex ObjectID, or `limit` is not a positive integer.
 
 ## 3. UI suggestions
 

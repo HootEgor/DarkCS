@@ -36,6 +36,10 @@ type ChatMessage struct {
 	Text        string             `json:"text" bson:"text"`
 	Attachments []Attachment       `json:"attachments,omitempty" bson:"attachments,omitempty"`
 	CreatedAt   time.Time          `json:"created_at" bson:"created_at"`
+	// UpdatedAt is the change cursor for incremental consumers (GET /crm/messages): it
+	// equals CreatedAt on insert (live or imported) and moves on every later mutation
+	// (edit, soft delete, group migration). Never older than CreatedAt.
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 	// TgMessageID is the Telegram message id (telegram_business and telegram_group); it
 	// matches later edits and deduplicates history imported from a Telegram Desktop export.
 	TgMessageID int64 `json:"tg_message_id,omitempty" bson:"tg_message_id,omitempty"`
@@ -50,12 +54,15 @@ type ChatMessage struct {
 	// EditedAt, OriginalText and DeletedAt mirror edits and deletions made in Telegram
 	// Business chats. Deleted messages are kept (soft delete) so the CRM keeps a record;
 	// OriginalText is the text before the first edit.
-	EditedAt      *time.Time `json:"edited_at,omitempty" bson:"edited_at,omitempty"`
-	OriginalText  string     `json:"original_text,omitempty" bson:"original_text,omitempty"`
-	DeletedAt     *time.Time `json:"deleted_at,omitempty" bson:"deleted_at,omitempty"`
-	UserName      string     `json:"user_name,omitempty" bson:"-"`
-	MessengerName string     `json:"messenger_name,omitempty" bson:"-"`
-	ContactKey    string     `json:"contact_key,omitempty" bson:"-"`
+	EditedAt     *time.Time `json:"edited_at,omitempty" bson:"edited_at,omitempty"`
+	OriginalText string     `json:"original_text,omitempty" bson:"original_text,omitempty"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty" bson:"deleted_at,omitempty"`
+	// OperatorID identifies the CRM operator who sent a manager reply (the X-Operator-Id
+	// request header); empty for bot, client and imported messages.
+	OperatorID    string `json:"operator_id,omitempty" bson:"operator_id,omitempty"`
+	UserName      string `json:"user_name,omitempty" bson:"-"`
+	MessengerName string `json:"messenger_name,omitempty" bson:"-"`
+	ContactKey    string `json:"contact_key,omitempty" bson:"-"`
 }
 
 // ChatKey returns the unique "platform:user_id[:channel]" key of a chat. Legacy chats

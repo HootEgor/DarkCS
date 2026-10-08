@@ -79,6 +79,8 @@ var indexSpecs = []indexSpec{
 	{chatMessagesCollection, []mongo.IndexModel{
 		plain(bson.D{{"platform", 1}, {"user_id", 1}, {"created_at", -1}}),
 		plain(bson.D{{"created_at", -1}}),
+		// Change cursor of ListMessagesSince (GET /crm/messages); _id breaks ties.
+		plain(bson.D{{"updated_at", 1}, {"_id", 1}}),
 		// Telegram message ids dedupe history imported from Telegram Desktop exports.
 		uniqueWhere(bson.D{{"platform", 1}, {"channel", 1}, {"user_id", 1}, {"tg_message_id", 1}},
 			bson.M{"tg_message_id": bson.M{"$gt": 0}}),
@@ -138,5 +140,27 @@ func (m *MongoDB) EnsureIndexes() error {
 			m.log.Debug("index ensured", slog.String("collection", spec.collection), slog.String("index", name))
 		}
 	}
+	if err := m.backfillMessageUpdatedAt(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
+}
+
+// backfillMessageUpdatedAt gives messages written before updated_at existed a cursor
+// value equal to their created_at. It runs on every start but matches nothing once done;
+// a pipeline update is needed to copy one field into another server-side.
+func (m *MongoDB) backfillMessageUpdatedAt(ctx context.Context) error {
+	res, err := m.collection(chatMessagesCollection).UpdateMany(ctx,
+		bson.D{{"updated_at", bson.D{{"$exists", false}}}},
+		mongo.Pipeline{{{Key: "$set", Value: bson.D{{"updated_at", "$created_at"}}}}},
+	)
+	if err != nil {
+		return fmt.Errorf("backfill %s updated_at: %w", chatMessagesCollection, err)
+	}
+	level := slog.LevelDebug
+	if res.ModifiedCount > 0 {
+		level = slog.LevelInfo
+	}
+	m.log.Log(ctx, level, "chat messages updated_at backfill", slog.Int64("modified", res.ModifiedCount))
+	return nil
 }

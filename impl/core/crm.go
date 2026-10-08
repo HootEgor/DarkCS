@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -179,14 +180,30 @@ func (c *Core) GetChatMessages(platform, userID, channel string, limit, offset i
 	if err != nil {
 		return nil, err
 	}
+	c.signAttachments(messages)
+	return messages, nil
+}
 
+// ListMessagesSince returns messages changed after the (since, afterID) cursor across
+// chats (see repository ListMessagesSince), with signed attachment URLs. The transient
+// user_name/messenger_name/contact_key fields stay empty: filling them costs a user
+// lookup per message, and the consumer keys contacts by platform + user_id itself.
+func (c *Core) ListMessagesSince(ctx context.Context, since time.Time, afterID primitive.ObjectID, platforms []string, limit int) ([]entity.ChatMessage, error) {
+	messages, err := c.repo.ListMessagesSince(ctx, since, afterID, platforms, limit)
+	if err != nil {
+		return nil, err
+	}
+	c.signAttachments(messages)
+	return messages, nil
+}
+
+// signAttachments fills short-lived download URLs on every attachment of messages.
+func (c *Core) signAttachments(messages []entity.ChatMessage) {
 	for i := range messages {
 		for j := range messages[i].Attachments {
 			messages[i].Attachments[j].URL = fileurl.SignURL(messages[i].Attachments[j].FileID.Hex(), c.signingSecret, 15*time.Minute)
 		}
 	}
-
-	return messages, nil
 }
 
 // crmMessenger returns the messenger a manager reply goes through. Telegram Business
@@ -227,8 +244,9 @@ type textIDSender interface {
 	SendTextReturningID(chatID, text string) (int64, error)
 }
 
-// SendCrmMessage sends a message from a manager to a user via their platform.
-func (c *Core) SendCrmMessage(platform, userID, channel, text string) error {
+// SendCrmMessage sends a message from a manager to a user via their platform. operatorID
+// is the CRM operator behind the reply (may be empty) and is stored on the message.
+func (c *Core) SendCrmMessage(platform, userID, channel, text, operatorID string) error {
 	messenger, err := c.crmMessenger(platform, userID, channel)
 	if err != nil {
 		return err
@@ -248,6 +266,7 @@ func (c *Core) SendCrmMessage(platform, userID, channel, text string) error {
 	}
 
 	// Store as outgoing message with sender="manager"
+	now := time.Now()
 	msg := entity.ChatMessage{
 		Platform:    platform,
 		UserID:      userID,
@@ -256,8 +275,10 @@ func (c *Core) SendCrmMessage(platform, userID, channel, text string) error {
 		Direction:   "outgoing",
 		Sender:      "manager",
 		Text:        text,
-		CreatedAt:   time.Now(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 		TgMessageID: tgMessageID,
+		OperatorID:  operatorID,
 	}
 
 	if err := c.repo.SaveChatMessage(msg); err != nil {
@@ -395,8 +416,9 @@ func (c *Core) DownloadFile(fileID primitive.ObjectID) (string, string, io.ReadC
 }
 
 // SendCrmFiles sends files from a manager to a user via their platform messenger.
-// It downloads each file from GridFS, sends it via the platform, then saves a single ChatMessage.
-func (c *Core) SendCrmFiles(platform, userID, channel, caption string, attachments []entity.Attachment) error {
+// It downloads each file from GridFS, sends it via the platform, then saves a single
+// ChatMessage carrying operatorID (the CRM operator behind the send; may be empty).
+func (c *Core) SendCrmFiles(platform, userID, channel, caption, operatorID string, attachments []entity.Attachment) error {
 	messenger, err := c.crmMessenger(platform, userID, channel)
 	if err != nil {
 		return err
@@ -437,6 +459,7 @@ func (c *Core) SendCrmFiles(platform, userID, channel, caption string, attachmen
 		attachments[i].URL = fileurl.SignURL(attachments[i].FileID.Hex(), c.signingSecret, 15*time.Minute)
 	}
 
+	now := time.Now()
 	msg := entity.ChatMessage{
 		Platform:    platform,
 		UserID:      userID,
@@ -446,7 +469,9 @@ func (c *Core) SendCrmFiles(platform, userID, channel, caption string, attachmen
 		Sender:      "manager",
 		Text:        caption,
 		Attachments: attachments,
-		CreatedAt:   time.Now(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		OperatorID:  operatorID,
 	}
 
 	if err := c.repo.SaveChatMessage(msg); err != nil {
@@ -468,6 +493,14 @@ func (c *Core) SendCrmFiles(platform, userID, channel, caption string, attachmen
 // SaveAndBroadcastChatMessage saves a chat message and broadcasts it via WebSocket.
 // If the user has a Zoho contact ID, the message is also buffered for Zoho Functions.
 func (c *Core) SaveAndBroadcastChatMessage(msg entity.ChatMessage) {
+	// The repository stamps updated_at too; doing it here as well keeps the broadcast
+	// copy identical to what was stored.
+	if msg.CreatedAt.IsZero() {
+		msg.CreatedAt = time.Now()
+	}
+	if msg.UpdatedAt.IsZero() {
+		msg.UpdatedAt = msg.CreatedAt
+	}
 	if err := c.repo.SaveChatMessage(msg); err != nil {
 		c.log.Error("failed to save chat message",
 			slog.String("platform", msg.Platform),
