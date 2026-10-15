@@ -185,16 +185,48 @@ func (c *Core) GetChatMessages(platform, userID, channel string, limit, offset i
 }
 
 // ListMessagesSince returns messages changed after the (since, afterID) cursor across
-// chats (see repository ListMessagesSince), with signed attachment URLs. The transient
-// user_name/messenger_name/contact_key fields stay empty: filling them costs a user
-// lookup per message, and the consumer keys contacts by platform + user_id itself.
+// chats (see repository ListMessagesSince), with signed attachment URLs and the chat's
+// person in human-readable form (user_name, messenger_name, user_phone; the group title
+// for groups): the consumer keys contacts by platform + user_id, but people match and
+// read them by name, @username and phone. contact_key stays empty.
 func (c *Core) ListMessagesSince(ctx context.Context, since time.Time, afterID primitive.ObjectID, platforms []string, limit int) ([]entity.ChatMessage, error) {
 	messages, err := c.repo.ListMessagesSince(ctx, since, afterID, platforms, limit)
 	if err != nil {
 		return nil, err
 	}
 	c.signAttachments(messages)
+	c.labelMessagePeople(messages)
 	return messages, nil
+}
+
+// labelMessagePeople fills the display fields of a page of messages with one user
+// lookup per chat person (a page holds many messages of few chats) and one group
+// listing for the whole page.
+func (c *Core) labelMessagePeople(messages []entity.ChatMessage) {
+	type person struct{ name, handle, phone string }
+	people := make(map[string]person)
+	var titles map[string]string
+	for i := range messages {
+		m := &messages[i]
+		if m.Platform == entity.PlatformTelegramGroup {
+			if titles == nil {
+				titles, _ = c.groupNames()
+			}
+			m.UserName = titles[m.UserID]
+			continue
+		}
+		key := m.Platform + ":" + m.UserID
+		p, ok := people[key]
+		if !ok {
+			user := c.lookupUserByPlatform(m.Platform, m.UserID)
+			p.name, p.handle = c.chatDisplayNames(m.Platform, m.UserID, user)
+			if user != nil {
+				p.phone = user.Phone
+			}
+			people[key] = p
+		}
+		m.UserName, m.MessengerName, m.UserPhone = p.name, p.handle, p.phone
+	}
 }
 
 // signAttachments fills short-lived download URLs on every attachment of messages.

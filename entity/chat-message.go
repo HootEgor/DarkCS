@@ -63,6 +63,9 @@ type ChatMessage struct {
 	UserName      string `json:"user_name,omitempty" bson:"-"`
 	MessengerName string `json:"messenger_name,omitempty" bson:"-"`
 	ContactKey    string `json:"contact_key,omitempty" bson:"-"`
+	// UserPhone is the phone a registered user shared with the bot; filled only on the
+	// incremental feed (GET /crm/messages), where consumers match people by it.
+	UserPhone string `json:"user_phone,omitempty" bson:"-"`
 }
 
 // ChatKey returns the unique "platform:user_id[:channel]" key of a chat. Legacy chats
